@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from typing import Optional, Any, Dict, Callable
 from datetime import datetime
 from flask import current_app
+from app import db
 from sqlalchemy import create_engine, event, pool, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError, IntegrityError
@@ -376,60 +377,61 @@ class ConcurrentDatabaseManager:
                     
         self.execute_with_retry(transaction_operation, operations, readonly=False)
 
-    def get_database_info(self) -> Dict[str, Any]:
-        """Get information about the database configuration"""
-        def info_operation(conn):
+    def get_database_info(self, bind_key: str = None) -> Dict[str, Any]:
+        """Get information about the database configuration for the default engine or a specific bind"""
+        from flask import current_app as flask_current_app
+
+        # Helper to run the info operation on a given connection/engine
+        def _info_from_conn(conn):
             result = {}
-            
             # Get basic database info
-            result['sqlite_version'] = conn.execute(text("SELECT sqlite_version()")).scalar()
-            result['journal_mode'] = conn.execute(text("PRAGMA journal_mode")).scalar()
-            result['synchronous'] = conn.execute(text("PRAGMA synchronous")).scalar()
-            result['cache_size'] = conn.execute(text("PRAGMA cache_size")).scalar()
-            
+            try:
+                result['sqlite_version'] = conn.execute(text("SELECT sqlite_version()")).scalar()
+            except Exception:
+                result['sqlite_version'] = None
+            try:
+                result['journal_mode'] = conn.execute(text("PRAGMA journal_mode")).scalar()
+            except Exception:
+                result['journal_mode'] = None
+            try:
+                result['synchronous'] = conn.execute(text("PRAGMA synchronous")).scalar()
+            except Exception:
+                result['synchronous'] = None
+            try:
+                result['cache_size'] = conn.execute(text("PRAGMA cache_size")).scalar()
+            except Exception:
+                result['cache_size'] = None
+
             # Check if CR-SQLite is available
             try:
                 # Method 1: Try to check concurrent writes pragma first (most reliable)
                 try:
-                    # First check if the pragma exists (this indicates CR-SQLite is loaded)
                     concurrent_writes = conn.execute(text("PRAGMA crsql_concurrent_writes")).scalar()
-                    
                     if concurrent_writes is not None:
-                        # If pragma works, CR-SQLite is definitely loaded
                         result['crsqlite_version'] = 'extension_loaded'
                         result['crsqlite_source'] = 'DLL'
-                        
-                        # Check if concurrent writes are actually enabled
-                        if concurrent_writes == 1:
-                            result['concurrent_writes'] = 'enabled'
-                        else:
-                            result['concurrent_writes'] = 'disabled'
-                        
-                        # Try to get actual version if available
+                        result['concurrent_writes'] = 'enabled' if concurrent_writes == 1 else 'disabled'
                         try:
                             crsql_version = conn.execute(text("SELECT crsql_version()")).scalar()
-                            result['crsqlite_version'] = crsql_version
+                            result['crsqlite_version'] = crsql_version or result['crsqlite_version']
                         except Exception:
-                            # Version function not available, but extension is loaded
                             pass
                     else:
                         result['crsqlite_version'] = None
                         result['crsqlite_source'] = None
-                        
-                except Exception as pragma_error:
-                    # If pragma fails completely, CR-SQLite is likely not loaded
+                except Exception:
                     result['concurrent_writes'] = None
                     result['crsqlite_version'] = None
                     result['crsqlite_source'] = None
-                
+
                 # Method 2: Check for CR-SQLite tables if pragma didn't work
                 if result['crsqlite_version'] is None:
                     try:
-                        tables = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crsql_%'")).fetchall()
-                        if tables:
+                        tables = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crsql_%'"))
+                        rows = tables.fetchall() if hasattr(tables, 'fetchall') else []
+                        if rows:
                             result['crsqlite_version'] = 'extension_loaded'
-                            result['crsqlite_source'] = f'DLL (tables: {[t[0] for t in tables]})'
-                            # If tables exist, try to enable concurrent writes
+                            result['crsqlite_source'] = f'DLL (tables: {[t[0] for t in rows]})'
                             try:
                                 conn.execute(text("PRAGMA crsql_concurrent_writes=1"))
                                 result['concurrent_writes'] = 'enabled'
@@ -437,22 +439,38 @@ class ConcurrentDatabaseManager:
                                 result['concurrent_writes'] = 'tables_only'
                     except Exception:
                         pass
-                
-                # Set final defaults
-                if result['crsqlite_version'] is None:
+
+                if result.get('crsqlite_version') is None:
                     result['crsqlite_version'] = None
                     result['concurrent_writes'] = None
                     result['crsqlite_source'] = 'not_available'
-                    
             except Exception as e:
                 logger.error(f"Error checking CR-SQLite status: {e}")
                 result['crsqlite_version'] = None
                 result['concurrent_writes'] = None
                 result['crsqlite_source'] = f'error: {str(e)}'
-                
+
             return result
-            
-        return self.execute_with_retry(info_operation, readonly=True)
+
+        # If bind_key is provided, inspect the corresponding engine directly
+        if bind_key:
+            try:
+                app_obj = flask_current_app._get_current_object()
+                try:
+                    engine = db.get_engine(app_obj, bind=bind_key)
+                except Exception:
+                    try:
+                        engine = db.session.get_bind(bind=bind_key)
+                    except Exception:
+                        engine = db.engine
+                with engine.connect() as conn:
+                    return _info_from_conn(conn)
+            except Exception as e:
+                logger.error(f"Error getting database info for bind {bind_key}: {e}")
+                return {'error': str(e)}
+
+        # Default behavior: use existing concurrent connection logic for primary engine
+        return self.execute_with_retry(lambda conn: _info_from_conn(conn), readonly=True)
 
     def optimize_database(self) -> None:
         """Optimize database for concurrent operations"""
@@ -471,14 +489,137 @@ class ConcurrentDatabaseManager:
             
         self.execute_with_retry(wal_operation, readonly=False)
 
-    def get_connection_stats(self) -> Dict[str, Any]:
-        """Get connection pool statistics"""
-        return {
-            'pool_size': self.engine.pool.size() if hasattr(self.engine.pool, 'size') else 'N/A',
-            'checked_in': self.engine.pool.checkedin() if hasattr(self.engine.pool, 'checkedin') else 'N/A',
-            'checked_out': self.engine.pool.checkedout() if hasattr(self.engine.pool, 'checkedout') else 'N/A',
-            'overflow': self.engine.pool.overflow() if hasattr(self.engine.pool, 'overflow') else 'N/A',
-        }
+    def enable_crsqlite_on_bind(self, bind_key: str = None) -> dict:
+        """Attempt to enable/load CR-SQLite for a given bind (or default if None).
+
+        Sets up an event listener so CR-SQLite loads automatically on every connection.
+        Returns a dict with status and messages.
+        """
+        from flask import current_app as flask_current_app
+        res = {'success': False, 'message': '', 'loaded': False, 'probe_value': None}
+        try:
+            app_obj = flask_current_app._get_current_object()
+            try:
+                engine = db.get_engine(app_obj, bind=bind_key)
+            except Exception:
+                try:
+                    engine = db.session.get_bind(bind=bind_key)
+                except Exception:
+                    engine = db.engine
+
+            if not CRSQLITE_DLL_PATH or not os.path.exists(CRSQLITE_DLL_PATH):
+                res['message'] = 'CR-SQLite DLL not found or not configured'
+                return res
+
+            # Remove existing crsqlite listeners for this engine to prevent duplicates
+            try:
+                # Get all connect listeners for this engine
+                existing = []
+                if hasattr(event.Events, '_key_to_collection'):
+                    for listener_fn in list(event.Events._key_to_collection.get(('connect', engine), [])):
+                        if hasattr(listener_fn, '__name__') and 'crsqlite' in listener_fn.__name__:
+                            existing.append(listener_fn)
+                for fn in existing:
+                    event.remove(engine, "connect", fn)
+                if existing:
+                    logger.info(f"Removed {len(existing)} existing CR-SQLite listener(s)")
+            except Exception as e:
+                logger.debug(f"Could not remove old listeners (OK if first time): {e}")
+
+            # Define the listener function
+            def load_crsqlite_for_bind(dbapi_connection, connection_record):
+                """Load CR-SQLite extension on each connection"""
+                try:
+                    dbapi_connection.enable_load_extension(True)
+                    dll_norm = os.path.normpath(CRSQLITE_DLL_PATH)
+                    dll_noext = dll_norm.replace('.dll', '')
+                    try:
+                        dbapi_connection.load_extension(dll_noext)
+                    except Exception:
+                        dbapi_connection.load_extension(dll_norm)
+                    dbapi_connection.enable_load_extension(False)
+                    
+                    # Enable concurrent writes
+                    dbapi_connection.execute("PRAGMA crsql_concurrent_writes=1")
+                    logger.debug(f"CR-SQLite loaded for bind {bind_key or 'default'}")
+                except Exception as e:
+                    logger.warning(f"Failed to load CR-SQLite on connection for bind {bind_key}: {e}")
+
+            # Register the event listener
+            event.listens_for(engine, "connect")(load_crsqlite_for_bind)
+            res['loaded'] = True
+            res['message'] = 'Event listener registered for CR-SQLite on all future connections'
+
+            # Test that it works on a new connection
+            try:
+                with engine.connect() as test_conn:
+                    # Check if CR-SQLite is actually available
+                    try:
+                        probe_val = test_conn.execute(text("PRAGMA crsql_concurrent_writes")).scalar()
+                    except Exception:
+                        try:
+                            rv = test_conn.execute(text("SELECT crsql_version()"))
+                            row = rv.fetchone()
+                            probe_val = row[0] if row else None
+                        except Exception:
+                            probe_val = None
+
+                    res['probe_value'] = probe_val
+                    if probe_val is not None:
+                        res['success'] = True
+                        res['message'] = f'CR-SQLite enabled and verified (value={probe_val}). Will load on all future connections.'
+                    else:
+                        res['message'] = 'Event listener registered but CR-SQLite not detected on test connection. Server restart may be required.'
+            except Exception as e:
+                res['message'] = f'Event listener registered but test connection failed: {e}. Server restart recommended.'
+
+        except Exception as e:
+            logger.exception(f"Error enabling CR-SQLite on bind {bind_key}: {e}")
+            res['message'] = str(e)
+        return res
+
+    def get_connection_stats(self, bind_key: str = None) -> Dict[str, Any]:
+        """Get connection pool statistics for the default engine or a specific bind.
+
+        Returns a dict with keys: pool_size, checked_in, checked_out, overflow. If the
+        underlying pool doesn't expose an attribute, returns 'N/A' for that value.
+        """
+        from flask import current_app as flask_current_app
+        engine = None
+        try:
+            if bind_key:
+                try:
+                    engine = db.get_engine(flask_current_app._get_current_object(), bind=bind_key)
+                except Exception:
+                    engine = None
+            else:
+                engine = self.engine
+
+            if not engine:
+                return {'pool_size': 'N/A', 'checked_in': 'N/A', 'checked_out': 'N/A', 'overflow': 'N/A'}
+
+            pool_obj = getattr(engine, 'pool', None)
+            if not pool_obj:
+                return {'pool_size': 'N/A', 'checked_in': 'N/A', 'checked_out': 'N/A', 'overflow': 'N/A'}
+
+            def safe_get(attr_name):
+                try:
+                    attr = getattr(pool_obj, attr_name)
+                    return attr() if callable(attr) else attr
+                except Exception:
+                    return 'N/A'
+
+            # Common QueuePool attributes: size, checkedin, checkedout, overflow
+            return {
+                'pool_size': safe_get('size'),
+                'checked_in': safe_get('checkedin'),
+                'checked_out': safe_get('checkedout'),
+                'overflow': safe_get('overflow')
+            }
+
+        except Exception as e:
+            logger.exception(f"Error getting connection stats for bind {bind_key}: {e}")
+            return {'pool_size': 'N/A', 'checked_in': 'N/A', 'checked_out': 'N/A', 'overflow': 'N/A'}
 
 # Global instance
 concurrent_db_manager = ConcurrentDatabaseManager()

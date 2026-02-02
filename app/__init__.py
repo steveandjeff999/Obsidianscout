@@ -648,6 +648,9 @@ def create_app(test_config=None):
             'misc': 'sqlite:///' + os.path.join(app.instance_path, 'misc.db')
         },
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        # Enable managing instance DB files from admin UI
+        DB_FILE_MANAGEMENT_ENABLED=True,
+        DB_BACKUP_RETENTION=10,
         SQLALCHEMY_ENGINE_OPTIONS={
             'pool_pre_ping': True,
             'pool_recycle': 1800,        # Reduced to 30 minutes
@@ -703,6 +706,13 @@ def create_app(test_config=None):
         except Exception as temp_error:
             print(f"Critical: Could not create alternative instance directory: {temp_error}")
             print("Application may not function correctly.")
+
+    # Ensure DB backup directory exists and default is set
+    app.config.setdefault('DB_BACKUP_DIR', os.path.join(app.instance_path, 'backup'))
+    try:
+        os.makedirs(app.config['DB_BACKUP_DIR'], exist_ok=True)
+    except Exception:
+        pass
     
     # Load game configuration from JSON file
     try:

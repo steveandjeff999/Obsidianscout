@@ -260,26 +260,83 @@ document.addEventListener('DOMContentLoaded', function() {
 
     try{ renderSparklines(); }catch(e){}
 
-    // Re-use existing sync button logic (keeps compatibility with backend)
+    // Sync button with async status polling
     const syncBtn = document.getElementById('syncEventBtn');
     const syncSpinner = document.getElementById('syncSpinner');
     if (syncBtn){
         syncBtn.addEventListener('click', function(evt){
             evt.preventDefault();
-            syncBtn.disabled = true; if (syncSpinner) syncSpinner.style.display = '';
+            syncBtn.disabled = true; 
+            if (syncSpinner) syncSpinner.style.display = '';
+            
+            // Show initial toast
+            const progressToast = document.createElement('div'); 
+            progressToast.className='toast show'; 
+            progressToast.innerHTML=`<div class="toast-header"><strong class="me-auto">Sync</strong><small>Now</small></div><div class="toast-body">Starting sync in background...</div>`;
+            document.body.appendChild(progressToast);
+            
             fetch('/api/sync-event', { method:'POST', credentials:'same-origin' })
             .then(r=>r.json()).then(data=>{
-                if (data && data.success) {
-                    // show a simple toast (base template has toasts)
-                    const t = document.createElement('div'); t.className='toast show'; t.innerHTML=`<div class="toast-header"><strong class="me-auto">Sync</strong><small>Now</small><button type="button" class="btn-close" data-bs-dismiss="toast"></button></div><div class="toast-body">Sync started/completed. Refreshing...</div>`; document.body.appendChild(t);
-                    // Wait briefly so user sees the toast, then reload to show new data
-                    setTimeout(()=>{ try{ t.remove(); }catch(e){} },2000);
-                    setTimeout(()=>{ window.location.reload(); },2200);
+                if (data && data.success && data.sync_id) {
+                    // Update toast with sync ID
+                    progressToast.querySelector('.toast-body').textContent = `Sync running (ID: ${data.sync_id.substring(0,8)}...). Site remains usable!`;
+                    
+                    // Poll for status
+                    let pollCount = 0;
+                    const maxPolls = 60; // 60 * 2 seconds = 2 minutes max
+                    
+                    const pollInterval = setInterval(() => {
+                        pollCount++;
+                        
+                        fetch(`/api/sync-status/${data.sync_id}`, { credentials: 'same-origin' })
+                        .then(r => r.json())
+                        .then(status => {
+                            if (status.status === 'complete') {
+                                clearInterval(pollInterval);
+                                progressToast.querySelector('.toast-body').textContent = 'Sync completed! Refreshing page...';
+                                setTimeout(() => { 
+                                    try { progressToast.remove(); } catch(e) {}
+                                    window.location.reload(); 
+                                }, 1500);
+                            } else if (status.status === 'error') {
+                                clearInterval(pollInterval);
+                                progressToast.querySelector('.toast-body').textContent = `Sync error: ${status.error || 'Unknown error'}`;
+                                setTimeout(() => { try { progressToast.remove(); } catch(e) {} }, 5000);
+                                syncBtn.disabled = false;
+                                if (syncSpinner) syncSpinner.style.display = 'none';
+                            } else if (status.status === 'running') {
+                                // Update progress message
+                                progressToast.querySelector('.toast-body').textContent = status.progress || 'Syncing...';
+                            }
+                            
+                            // Stop polling after max attempts
+                            if (pollCount >= maxPolls) {
+                                clearInterval(pollInterval);
+                                progressToast.querySelector('.toast-body').textContent = 'Sync taking longer than expected. Check status later.';
+                                setTimeout(() => { try { progressToast.remove(); } catch(e) {} }, 5000);
+                                syncBtn.disabled = false;
+                                if (syncSpinner) syncSpinner.style.display = 'none';
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Status poll error:', err);
+                        });
+                    }, 2000); // Poll every 2 seconds
+                    
                 } else {
-                    const err = (data && data.error) ? data.error : 'Sync failed';
-                    const t = document.createElement('div'); t.className='toast show'; t.innerHTML=`<div class="toast-header"><strong class="me-auto">Sync</strong><small>Now</small><button type="button" class="btn-close" data-bs-dismiss="toast"></button></div><div class="toast-body">${err}</div>`; document.body.appendChild(t); setTimeout(()=>{ try{ t.remove(); }catch(e){} },5000);
+                    const err = (data && data.error) ? data.error : 'Sync failed to start';
+                    progressToast.querySelector('.toast-body').textContent = err;
+                    setTimeout(() => { try { progressToast.remove(); } catch(e) {} }, 5000);
+                    syncBtn.disabled = false;
+                    if (syncSpinner) syncSpinner.style.display = 'none';
                 }
-            }).catch(err=>{ console.error(err); }).finally(()=>{ syncBtn.disabled=false; if (syncSpinner) syncSpinner.style.display='none'; });
+            }).catch(err=>{ 
+                console.error(err);
+                progressToast.querySelector('.toast-body').textContent = 'Network error starting sync';
+                setTimeout(() => { try { progressToast.remove(); } catch(e) {} }, 5000);
+                syncBtn.disabled = false;
+                if (syncSpinner) syncSpinner.style.display = 'none';
+            });
         });
     }
 });

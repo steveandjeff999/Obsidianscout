@@ -196,6 +196,69 @@
         </div>
     </div>
 
+    <!-- Instance DB Files -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-database"></i> Instance DB Files</h5>
+                    <small class="text-muted">Manage .db files in the instance folder (backups, enable WAL)</small>
+                    <button class="btn btn-sm btn-outline-primary float-right" onclick="refreshDbFiles()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="card-body" id="instance-db-files">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>File</th>
+                                <th>Size</th>
+                                <th>Modified</th>
+                                <th>Integrity</th>
+                                <th>Journal</th>
+                                <th>CR-SQLite</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="db-files-tbody">
+                            {% for f in db_files %}
+                            <tr>
+                                <td>{{ f.name }}</td>
+                                <td>{{ f.size }} bytes</td>
+                                <td>{{ f.mtime }}</td>
+                                <td>{{ f.integrity }}</td>
+                                <td>{{ f.journal_mode or '' }}</td>
+                                <td>
+                                    {% if f.concurrent_writes == 'enabled' %}
+                                        <span class="badge badge-success">Enabled</span>
+                                    {% elif f.concurrent_writes == 'disabled' %}
+                                        <span class="badge badge-warning">Disabled</span>
+                                    {% else %}
+                                        <span class="badge badge-secondary">Not Available</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="backupDbFile('{{ f.name }}')">Backup</button>
+                                    {% if f.journal_mode != 'wal' %}
+                                        <button class="btn btn-sm btn-success" onclick="setDbJournal('{{ f.name }}', 'wal')">Enable WAL</button>
+                                    {% else %}
+                                        <button class="btn btn-sm btn-secondary" disabled>WAL Enabled</button>
+                                    {% endif %}
+                                    {% if f.concurrent_writes != 'enabled' %}
+                                        <button class="btn btn-sm btn-primary" onclick="enableCrSqlite('{{ f.name }}')">Enable CR-SQLite</button>
+                                    {% else %}
+                                        <button class="btn btn-sm btn-secondary" disabled>CR-SQLite Enabled</button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- CR-SQLite Status -->
     <div class="row mt-4">
         <div class="col-12">
@@ -272,27 +335,39 @@ function refreshStats() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Update pool stats table
-                let statsHtml = `
-                    <table class="table table-sm">
-                        <tr>
-                            <td><strong>Pool Size:</strong></td>
-                            <td>${data.pool_stats.pool_size}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Checked In:</strong></td>
-                            <td>${data.pool_stats.checked_in}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Checked Out:</strong></td>
-                            <td>${data.pool_stats.checked_out}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Overflow:</strong></td>
-                            <td>${data.pool_stats.overflow}</td>
-                        </tr>
-                    </table>
-                `;
+                // data.pool_stats may be a map of bind keys (default, users, etc.)
+                const ps = data.pool_stats || {};
+                let statsHtml = '';
+                if (ps.default) {
+                    statsHtml += `<h6>Default Bind</h6>`;
+                    statsHtml += `<table class="table table-sm">
+                        <tr><td><strong>Pool Size:</strong></td><td>${ps.default.pool_size}</td></tr>
+                        <tr><td><strong>Checked In:</strong></td><td>${ps.default.checked_in}</td></tr>
+                        <tr><td><strong>Checked Out:</strong></td><td>${ps.default.checked_out}</td></tr>
+                        <tr><td><strong>Overflow:</strong></td><td>${ps.default.overflow}</td></tr>
+                    </table>`;
+                } else if (ps.pool_size !== undefined) {
+                    // legacy single-object response
+                    statsHtml += `<table class="table table-sm">
+                        <tr><td><strong>Pool Size:</strong></td><td>${ps.pool_size}</td></tr>
+                        <tr><td><strong>Checked In:</strong></td><td>${ps.checked_in}</td></tr>
+                        <tr><td><strong>Checked Out:</strong></td><td>${ps.checked_out}</td></tr>
+                        <tr><td><strong>Overflow:</strong></td><td>${ps.overflow}</td></tr>
+                    </table>`;
+                }
+
+                // Per-bind tables
+                for (const [bind, val] of Object.entries(ps)) {
+                    if (bind === 'default') continue;
+                    statsHtml += `<h6>Bind: ${bind}</h6>`;
+                    statsHtml += `<table class="table table-sm">
+                        <tr><td><strong>Pool Size:</strong></td><td>${val.pool_size}</td></tr>
+                        <tr><td><strong>Checked In:</strong></td><td>${val.checked_in}</td></tr>
+                        <tr><td><strong>Checked Out:</strong></td><td>${val.checked_out}</td></tr>
+                        <tr><td><strong>Overflow:</strong></td><td>${val.overflow}</td></tr>
+                    </table>`;
+                }
+
                 document.getElementById('pool-stats').innerHTML = statsHtml;
             } else {
                 alert('Error refreshing stats: ' + data.error);
@@ -378,8 +453,23 @@ function testConcurrentOps() {
     .then(data => {
         if (data.success) {
             let message = 'Concurrent operations test completed!\n\n';
-            message += `User count: ${data.results.user_count}\n`;
-            message += `Write test: ${data.results.write_test}`;
+            // Backwards-compatible: if results contains user_count, show it
+            if (data.results && (data.results.user_count !== undefined || data.results.write_test !== undefined)) {
+                message += `User count: ${data.results.user_count || 'N/A'}\n`;
+                message += `Write test: ${data.results.write_test || 'N/A'}`;
+            } else if (data.results) {
+                // New format: per-bind results
+                for (const [bind, res] of Object.entries(data.results)) {
+                    message += `Bind: ${bind}\n`;
+                    if (res.error) {
+                        message += `  Error: ${res.error}\n`;
+                        continue;
+                    }
+                    message += `  Read OK: ${res.read_ok ? 'Yes' : 'No'}\n`;
+                    message += `  Write OK: ${res.write_ok ? 'Yes' : 'No'}\n`;
+                    message += `  Concurrent Writes: ${res.concurrent_writes || 'N/A'}\n`;
+                }
+            }
             alert(message);
         } else {
             alert('Error: ' + data.error);
@@ -528,5 +618,136 @@ document.getElementById('importForm').addEventListener('submit', function(e) {
 
 // Auto-refresh stats every 30 seconds
 setInterval(refreshStats, 30000);
+
+// Instance DB files management
+function renderDbFilesTable(files) {
+    const tbody = document.getElementById('db-files-tbody');
+    tbody.innerHTML = '';
+    files.forEach(f => {
+        const tr = document.createElement('tr');
+        const crs = f.concurrent_writes || null;
+        const crsHtml = crs === 'enabled' ? `<span class="badge badge-success">Enabled</span>` : (crs === 'disabled' ? `<span class="badge badge-warning">Disabled</span>` : `<span class="badge badge-secondary">Not Available</span>`);
+        const walBtn = (f.journal_mode !== 'wal') ? `<button class="btn btn-sm btn-success" onclick="setDbJournal('${f.name}','wal')">Enable WAL</button>` : `<button class="btn btn-sm btn-secondary" disabled>WAL Enabled</button>`;
+        const crBtn = (crs !== 'enabled') ? `<button class="btn btn-sm btn-primary" onclick="enableCrSqlite('${f.name}')">Enable CR-SQLite</button>` : `<button class="btn btn-sm btn-secondary" disabled>CR-SQLite Enabled</button>`;
+        tr.innerHTML = `
+            <td>${f.name}</td>
+            <td>${f.size} bytes</td>
+            <td>${f.mtime}</td>
+            <td>${f.integrity}</td>
+            <td>${f.journal_mode || ''}</td>
+            <td>${crsHtml}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-secondary" onclick="backupDbFile('${f.name}')">Backup</button>
+                ${walBtn}
+                ${crBtn}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function refreshDbFiles() {
+    fetch('{{ url_for("db_admin.api_database_files") }}')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                renderDbFilesTable(data.files || []);
+            } else {
+                alert('Error fetching db files: ' + (data.error || 'unknown'));
+            }
+        })
+        .catch(e => { console.error(e); alert('Error fetching db files'); });
+}
+
+function backupDbFile(filename) {
+    if (!confirm('Create a timestamped backup for ' + filename + '?')) return;
+    showLoading();
+    fetch('{{ url_for("db_admin.backup_database_file") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({ filename })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Backup created: ' + data.backup);
+            refreshDbFiles();
+        } else {
+            alert('Backup failed: ' + (data.error || 'unknown'));
+        }
+    })
+    .catch(e => { console.error(e); alert('Error creating backup') })
+    .finally(() => hideLoading());
+}
+
+function setDbJournal(filename, mode) {
+    if (!confirm('Set journal mode ' + mode + ' for ' + filename + '?')) return;
+    showLoading();
+    fetch('{{ url_for("db_admin.set_journal") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({ filename, mode })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Journal mode set: ' + data.mode);
+            refreshDbFiles();
+        } else {
+            alert('Failed to set journal mode: ' + (data.error || 'unknown'));
+        }
+    })
+    .catch(e => { console.error(e); alert('Error setting journal mode') })
+    .finally(() => hideLoading());
+}
+
+function enableCrSqlite(filename) {
+    if (!confirm('Attempt to enable CR-SQLite for ' + filename + '?\n\nThis will set up an event listener to load CR-SQLite on every new connection.')) return;
+    showLoading();
+    fetch('{{ url_for("db_admin.enable_crsqlite") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({ filename })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            let msg = 'CR-SQLite enabled successfully!\n\n' + (data.message || 'success');
+            if (data.probe_value !== undefined && data.probe_value !== null) {
+                msg += '\n\nVerified on test connection (value: ' + data.probe_value + ')';
+                msg += '\n\n✓ CR-SQLite is working and will load on all future connections.';
+            } else {
+                msg += '\n\n⚠️ Event listener is set up, but verification failed.';
+                msg += '\nTry refreshing the page or restarting the server.';
+            }
+            alert(msg);
+            setTimeout(() => refreshDbFiles(), 500);
+        } else {
+            let msg = 'Failed to enable CR-SQLite:\n\n' + (data.error || data.message || 'unknown error');
+            if (data.probe_value !== undefined) {
+                msg += '\n\nProbe value: ' + (data.probe_value === null ? 'null (not detected)' : data.probe_value);
+            }
+            msg += '\n\nPossible solutions:';
+            msg += '\n• Restart the server to apply CR-SQLite extension loading';
+            msg += '\n• Check that CR-SQLite DLL is in the instance/crsqlite/ folder';
+            msg += '\n• Verify WAL mode is enabled first';
+            alert(msg);
+        }
+    })
+    .catch(e => { console.error(e); alert('Error enabling CR-SQLite: ' + e) })
+    .finally(() => hideLoading());
+}
+
+// Initial load
+refreshDbFiles();
 </script>
 {% endblock %}

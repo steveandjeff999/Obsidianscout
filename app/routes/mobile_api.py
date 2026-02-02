@@ -12,6 +12,7 @@ import json
 import jwt
 import base64
 import uuid
+import threading
 import math
 import statistics
 
@@ -5381,18 +5382,16 @@ def get_sync_status():
 @token_required
 def mobile_trigger_sync():
     """
-    Trigger a combined teams + matches sync (same behavior as admin `/api/sync-event`).
+    Trigger a combined teams + matches sync in background (non-blocking).
 
     Security: Only users with `admin` or `analytics` roles may trigger this via mobile token.
 
-    Response JSON mirrors the admin endpoint:
+    Response JSON returns sync_id to check status:
     {
-      "success": true|false,
-      "results": {
-         "teams_sync": {"success": bool, "message": str, "flashes": [ {"category": str, "message": str} ] },
-         "matches_sync": { ... },
-         "alliance_sync": {"triggered": bool, ... }
-      }
+      "success": true,
+      "sync_id": "uuid",
+      "message": "Sync started...",
+      "status_url": "/api/mobile/sync/status/<sync_id>"
     }
     """
     # Require admin or analytics role on the mobile user
@@ -5400,93 +5399,151 @@ def mobile_trigger_sync():
     if not user or not (user.has_role('admin') or user.has_role('analytics')):
         return jsonify({'success': False, 'error': 'Insufficient permissions', 'error_code': 'INSUFFICIENT_PERMISSIONS'}), 403
 
-    results = {
-        'teams_sync': {'success': False, 'message': '', 'flashes': []},
-        'matches_sync': {'success': False, 'message': '', 'flashes': []},
-        'alliance_sync': {'success': False, 'message': '', 'triggered': False}
-    }
-
-    try:
-        # If alliance mode active, run alliance sync for the active alliance (safe to call)
-        from app.utils.alliance_data import get_active_alliance_id
-        alliance_id = get_active_alliance_id()
-        if alliance_id:
-            try:
-                from app.routes.scouting_alliances import perform_alliance_api_sync_for_alliance
-                sync_result = perform_alliance_api_sync_for_alliance(alliance_id)
-                results['alliance_sync']['triggered'] = True
-                results['alliance_sync']['success'] = sync_result.get('success', False)
-                results['alliance_sync']['message'] = sync_result.get('message', 'Alliance sync attempted')
-                results['alliance_sync']['teams_added'] = sync_result.get('teams_added', 0)
-                results['alliance_sync']['teams_updated'] = sync_result.get('teams_updated', 0)
-                results['alliance_sync']['matches_added'] = sync_result.get('matches_added', 0)
-                results['alliance_sync']['matches_updated'] = sync_result.get('matches_updated', 0)
-            except Exception as e:
-                current_app.logger.exception('Alliance sync failed')
-                results['alliance_sync']['triggered'] = True
-                results['alliance_sync']['success'] = False
-                results['alliance_sync']['message'] = str(e)
-
-        # Teams sync
-        from app.routes import teams as teams_bp
+    # Import sync tracking from main routes
+    from app.routes.main import active_syncs, active_syncs_lock
+    
+    # Generate unique sync ID
+    sync_id = str(uuid.uuid4())
+    
+    # Initialize sync status
+    with active_syncs_lock:
+        active_syncs[sync_id] = {
+            'status': 'running',
+            'progress': 'Starting mobile sync...',
+            'results': {
+                'teams_sync': {'success': False, 'message': '', 'flashes': []},
+                'matches_sync': {'success': False, 'message': '', 'flashes': []},
+                'alliance_sync': {'success': False, 'message': '', 'triggered': False}
+            },
+            'started_at': datetime.now(timezone.utc).isoformat(),
+            'triggered_by': 'mobile'
+        }
+    
+    def run_sync_background():
+        """Background thread function to perform the actual sync"""
         try:
-            try:
-                _ = get_flashed_messages(with_categories=True)
-            except Exception:
-                pass
-
-            teams_resp = teams_bp.sync_from_config()
-            try:
-                flashes = get_flashed_messages(with_categories=True)
-            except Exception:
-                flashes = []
-
-            results['teams_sync']['success'] = True
-            results['teams_sync']['message'] = 'Teams sync attempted.'
-            results['teams_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
+            # Create app context for background thread
+            with current_app.app_context():
+                results = active_syncs[sync_id]['results']
+                
+                # Check if alliance mode is active
+                from app.utils.alliance_data import get_active_alliance_id
+                alliance_id = get_active_alliance_id()
+                
+                if alliance_id:
+                    with active_syncs_lock:
+                        active_syncs[sync_id]['progress'] = 'Syncing alliance data...'
+                    
+                    try:
+                        from app.routes.scouting_alliances import perform_alliance_api_sync_for_alliance
+                        sync_result = perform_alliance_api_sync_for_alliance(alliance_id)
+                        results['alliance_sync']['triggered'] = True
+                        results['alliance_sync']['success'] = sync_result.get('success', False)
+                        results['alliance_sync']['message'] = sync_result.get('message', 'Alliance sync attempted')
+                        results['alliance_sync']['teams_added'] = sync_result.get('teams_added', 0)
+                        results['alliance_sync']['teams_updated'] = sync_result.get('teams_updated', 0)
+                        results['alliance_sync']['matches_added'] = sync_result.get('matches_added', 0)
+                        results['alliance_sync']['matches_updated'] = sync_result.get('matches_updated', 0)
+                    except Exception as e:
+                        current_app.logger.exception('Alliance sync failed')
+                        results['alliance_sync']['triggered'] = True
+                        results['alliance_sync']['success'] = False
+                        results['alliance_sync']['message'] = str(e)
+                
+                # Sync teams
+                with active_syncs_lock:
+                    active_syncs[sync_id]['progress'] = 'Syncing teams...'
+                
+                from app.routes import teams as teams_bp
+                try:
+                    teams_resp = teams_bp.sync_from_config()
+                    results['teams_sync']['success'] = True
+                    results['teams_sync']['message'] = 'Teams sync completed'
+                except Exception as e:
+                    current_app.logger.exception('Teams sync failed')
+                    results['teams_sync']['success'] = False
+                    results['teams_sync']['message'] = str(e)
+                
+                # Sync matches
+                with active_syncs_lock:
+                    active_syncs[sync_id]['progress'] = 'Syncing matches...'
+                
+                from app.routes import matches as matches_bp
+                try:
+                    matches_resp = matches_bp.sync_from_config()
+                    results['matches_sync']['success'] = True
+                    results['matches_sync']['message'] = 'Matches sync completed'
+                except Exception as e:
+                    current_app.logger.exception('Matches sync failed')
+                    results['matches_sync']['success'] = False
+                    results['matches_sync']['message'] = str(e)
+                
+                # Mark as complete
+                with active_syncs_lock:
+                    active_syncs[sync_id]['status'] = 'complete'
+                    active_syncs[sync_id]['progress'] = 'Sync complete'
+                    active_syncs[sync_id]['completed_at'] = datetime.now(timezone.utc).isoformat()
+                
+                # Emit completion event via SocketIO
+                try:
+                    from app import socketio
+                    overall_success = (results['teams_sync']['success'] or 
+                                     results['matches_sync']['success'] or 
+                                     results['alliance_sync'].get('success', False))
+                    socketio.emit('sync_complete', {
+                        'sync_id': sync_id,
+                        'success': overall_success,
+                        'results': results,
+                        'source': 'mobile'
+                    })
+                except Exception:
+                    pass
+                
+                print(f"Mobile background sync {sync_id} completed")
+                
         except Exception as e:
-            current_app.logger.exception('Teams sync failed')
-            results['teams_sync']['success'] = False
-            results['teams_sync']['message'] = str(e)
-            try:
-                flashes = get_flashed_messages(with_categories=True)
-            except Exception:
-                flashes = []
-            results['teams_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
+            current_app.logger.exception(f'Mobile background sync {sync_id} failed')
+            with active_syncs_lock:
+                active_syncs[sync_id]['status'] = 'error'
+                active_syncs[sync_id]['progress'] = f'Error: {str(e)}'
+                active_syncs[sync_id]['error'] = str(e)
+    
+    # Start background thread
+    sync_thread = threading.Thread(target=run_sync_background, daemon=True)
+    sync_thread.start()
+    
+    # Return immediately with sync ID
+    return jsonify({
+        'success': True,
+        'sync_id': sync_id,
+        'message': 'Sync started in background. Check status with /api/mobile/sync/status endpoint.',
+        'status_url': f'/api/mobile/sync/status/{sync_id}'
+    })
 
-        # Matches sync
-        from app.routes import matches as matches_bp
-        try:
-            try:
-                _ = get_flashed_messages(with_categories=True)
-            except Exception:
-                pass
 
-            matches_resp = matches_bp.sync_from_config()
-            try:
-                flashes = get_flashed_messages(with_categories=True)
-            except Exception:
-                flashes = []
-
-            results['matches_sync']['success'] = True
-            results['matches_sync']['message'] = 'Matches sync attempted.'
-            results['matches_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
-        except Exception as e:
-            current_app.logger.exception('Matches sync failed')
-            results['matches_sync']['success'] = False
-            results['matches_sync']['message'] = str(e)
-            try:
-                flashes = get_flashed_messages(with_categories=True)
-            except Exception:
-                flashes = []
-            results['matches_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
-
-        overall_success = results['teams_sync']['success'] or results['matches_sync']['success'] or results['alliance_sync'].get('success', False)
-        return jsonify({'success': overall_success, 'results': results})
-
-    except Exception as e:
-        current_app.logger.exception('Mobile-triggered sync failed')
-        return jsonify({'success': False, 'error': str(e)}), 500
+@mobile_api.route('/sync/status/<sync_id>', methods=['GET'])
+@token_required
+def mobile_sync_status_check(sync_id):
+    """Check the status of a background sync operation from mobile"""
+    # Import sync tracking from main routes
+    from app.routes.main import active_syncs, active_syncs_lock
+    
+    with active_syncs_lock:
+        sync_info = active_syncs.get(sync_id)
+    
+    if not sync_info:
+        return jsonify({'success': False, 'error': 'Sync ID not found'}), 404
+    
+    return jsonify({
+        'success': True,
+        'sync_id': sync_id,
+        'status': sync_info['status'],
+        'progress': sync_info['progress'],
+        'results': sync_info.get('results'),
+        'started_at': sync_info.get('started_at'),
+        'completed_at': sync_info.get('completed_at'),
+        'error': sync_info.get('error')
+    })
 
 
 @mobile_api.route('/notifications/scheduled', methods=['GET'])

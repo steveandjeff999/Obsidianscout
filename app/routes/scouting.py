@@ -1491,12 +1491,44 @@ def view_text_elements():
 @login_required
 def qualitative_scouting():
     """Display qualitative scouting form"""
-    # Get all matches for dropdown, filtered by scouting team
-    matches = filter_matches_by_scouting_team().join(Event).order_by(
-        Event.start_date.desc(),
-        Match.match_type,
-        Match.match_number
-    ).all()
+    # Get game configuration and current event (respect alliance config)
+    game_config = get_effective_game_config()
+    current_event_code = game_config.get('current_event_code') if isinstance(game_config, dict) else None
+    current_event = None
+    if current_event_code:
+        current_event = get_event_by_code(current_event_code)
+
+    # Respect alliance mode
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+
+    # Determine matches to show: prefer current_event if available
+    if is_alliance_mode:
+        # Use alliance-specific match set when in alliance mode
+        if current_event:
+            matches, _ = get_all_matches_for_alliance(event_id=current_event.id)
+        else:
+            matches, _ = get_all_matches_for_alliance()
+    else:
+        if current_event:
+            # Use event code matching to handle cross-team event lookups
+            from sqlalchemy import func as sqlfunc
+            evt_code = getattr(current_event, 'code', None)
+            if evt_code:
+                matches = filter_matches_by_scouting_team().join(
+                    Event, Match.event_id == Event.id
+                ).filter(sqlfunc.upper(Event.code) == evt_code.upper()).order_by(
+                    Event.start_date.desc(), Match.match_type, Match.match_number
+                ).all()
+            else:
+                matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).order_by(
+                    Event.start_date.desc(), Match.match_type, Match.match_number
+                ).all()
+        else:
+            # No current_event: show all matches filtered by scouting team
+            matches = filter_matches_by_scouting_team().join(Event).order_by(
+                Event.start_date.desc(), Match.match_type, Match.match_number
+            ).all()
     
     # Get existing qualitative scouting data
     existing_data = QualitativeScoutingData.query.filter_by(

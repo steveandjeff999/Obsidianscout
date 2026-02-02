@@ -1,12 +1,4 @@
 {
-  "lastRead": {
-    "dm:admin": "a05f9dbd-45ea-4122-9cd8-45848474657e"
-  },
-  "unreadCount": 4,
-  "lastSource": {
-    "type": "dm",
-    "id": "Seth Herod"
-  },
-  "notified": true,
-  "lastNotified": "2026-02-01T23:39:29.934280+00:00"
+  "lastDmUser": "harry&marv",
+  "unreadCount": 0
 }
