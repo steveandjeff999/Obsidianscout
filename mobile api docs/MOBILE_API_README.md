@@ -99,9 +99,11 @@ Automated test script that:
 │   ├── refresh                     [POST]   Refresh token
 │   └── verify                      [GET]    Verify token validity
 ├── teams                           [GET]    List teams
+├── teams/current                   [GET]    List teams for current event
 ├── teams/<id>                      [GET]    Team details
 ├── events                          [GET]    List events
 ├── matches                         [GET]    List matches
+├── matches/current                 [GET]    List matches for current event
 ├── scouting/
 │   ├── submit                      [POST]   Submit single entry
 │   ├── bulk-submit                 [POST]   Submit multiple entries

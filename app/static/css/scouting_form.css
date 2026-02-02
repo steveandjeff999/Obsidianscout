@@ -75,9 +75,6 @@
     .counter-container.counter-grid .counter-input{ min-width:70px; max-width:80px; font-size:1rem; }
     .counter-input{max-width:80px}
 }
-.rating-star{color:#e9ecef;cursor:pointer;font-size:1.25rem;transition:transform .08s ease, color .12s ease}
-.rating-star:hover{transform:translateY(-2px)}
-.rating-star.active{color:var(--scout-unknown);text-shadow:0 1px 0 rgba(0,0,0,.12)}
 
 .save-indicator{transition:opacity .25s ease}
 .form-saved{outline:5px solid rgba(45,212,191,.08);transition:outline .25s ease}
@@ -224,6 +221,12 @@ body.dark-mode .scouting-form .points-display .card {
     backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
     border: 1px solid var(--topbar-border-dark, rgba(255,255,255,0.06));
 }
+
+/* Dark mode rating stars */
+body.dark-mode .rating-star { color: #475569; }
+body.dark-mode .rating-star:hover { color: #fbbf24; }
+body.dark-mode .rating-star.active { color: #f59e0b; }
+body.dark-mode .rating-star.hover { color: #fcd34d; }
 
 /* Slightly reduce shadow for glass effect and keep crisp separation from page background */
 .scouting-form .card { box-shadow: 0 8px 22px rgba(2,6,23,0.04); }
@@ -417,9 +420,28 @@ body.scout-page-bg { background: radial-gradient(circle at 20% 20%, #eff6ff, #f8
 .counter-container.counter-grid { display: grid; grid-template-columns: repeat(3, auto); grid-auto-rows: minmax(44px, auto); gap: 0.5rem; justify-content: center; }
 .counter-container.counter-grid .counter-input { width: 72px; height: 52px; }
 
-.rating-star { color: #e2e8f0; cursor: pointer; font-size: 1.2rem; transition: transform 0.08s ease, color 0.12s ease; }
-.rating-star:hover { transform: translateY(-2px); }
-.rating-star.active { color: #f59e0b; text-shadow: 0 1px 0 rgba(0,0,0,0.12); }
+.rating-container { display: flex; gap: 0.75rem; align-items: center; justify-content: center; padding: 0.5rem 0; flex-wrap: wrap; }
+.rating-star { 
+    color: #cbd5e1; 
+    cursor: pointer; 
+    font-size: 2.5rem; 
+    transition: transform 0.12s ease, color 0.12s ease; 
+    display: inline-block;
+    min-width: 2.5rem;
+    text-align: center;
+    line-height: 1;
+}
+.rating-star:hover { 
+    transform: translateY(-3px) scale(1.15); 
+    color: #fbbf24; 
+}
+.rating-star.active { 
+    color: #f59e0b !important; 
+    text-shadow: 0 2px 4px rgba(245,158,11,0.3); 
+}
+.rating-star.hover { 
+    color: #fcd34d !important; 
+}
 
 #auto-period-reminder-banner { background: #f59e0b !important; color: #111827 !important; border: none; border-radius: 0; position: fixed; top: 0; left: 0; right: 0; z-index: 1040; box-shadow: 0 10px 24px rgba(0,0,0,0.18); }
 #auto-period-reminder-banner .fa-exclamation-triangle { color: #92400e; }

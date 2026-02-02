@@ -326,9 +326,11 @@ JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'fallback-key')
 | `/api/mobile/auth/refresh` | POST | Yes | Refresh token |
 | `/api/mobile/auth/verify` | GET | Yes | Verify token |
 | `/api/mobile/teams` | GET | Yes | Get teams list |
+| `/api/mobile/teams/current` | GET | Yes | Get teams for current event |
 | `/api/mobile/teams/<id>` | GET | Yes | Get team details |
 | `/api/mobile/events` | GET | Yes | Get events |
 | `/api/mobile/matches` | GET | Yes | Get matches |
+| `/api/mobile/matches/current` | GET | Yes | Get matches for current event |
 | `/api/mobile/scouting/submit` | POST | Yes | Submit scouting data |
 | `/api/mobile/scouting/bulk-submit` | POST | Yes | Bulk submit (offline sync) |
 | `/api/mobile/scouting/history` | GET | Yes | Get user's scouting history |

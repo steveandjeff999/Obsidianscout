@@ -45,7 +45,30 @@ from app.utils.database_init import initialize_database, check_database_health
 # ============================================================================
 USE_WAITRESS = False # Change this to False to use Flask development server with SSL
 
+# Toggle file-based logging of all mobile API requests/responses.
+# Set to True to enable writing incoming / outgoing mobile API traffic to a file.
+MOBILE_API_LOG_TO_FILE = True  # Toggle this to True to enable logging
+# Path to the log file (relative to the script directory by default)
+MOBILE_API_LOG_FILE = os.path.join(script_dir, 'instance', 'mobile_api_requests.log')
+# Maximum number of characters to write for bodies; larger payloads will be truncated.
+MOBILE_API_LOG_MAX_BODY = 5000
+# Threading lock to ensure file writes are atomic
+MOBILE_API_LOG_LOCK = threading.Lock()
+
 app = create_app()
+
+def mobile_api_file_log(prefix, message):
+    """Helper to write mobile API request/response details to a file safely."""
+    if not MOBILE_API_LOG_TO_FILE:
+        return
+    try:
+        os.makedirs(os.path.dirname(MOBILE_API_LOG_FILE), exist_ok=True)
+        timestamp = datetime.utcnow().isoformat() + 'Z'
+        with MOBILE_API_LOG_LOCK:
+            with open(MOBILE_API_LOG_FILE, 'a', encoding='utf-8') as f:
+                f.write(f"{timestamp} [{prefix}]\n{message}\n\n")
+    except Exception as e:
+        print(f"Failed to write mobile API log: {e}")
 
 # Setup auth redirect handler
 @app.before_request
@@ -66,6 +89,23 @@ def check_first_run():
                     print(f"  Body preview: {preview}")
             except Exception:
                 pass
+
+        # If enabled, write detailed mobile API requests to file (redact Authorization header)
+        try:
+            if MOBILE_API_LOG_TO_FILE and request.path.startswith('/api/mobile'):
+                headers = {k: ('REDACTED' if k.lower() == 'authorization' else v) for k, v in request.headers.items()}
+                req_body = ''
+                if request.method in ('POST', 'PUT', 'PATCH'):
+                    try:
+                        req_body = request.get_data(as_text=True) or ''
+                    except Exception:
+                        req_body = '[unavailable]'
+                    if len(req_body) > MOBILE_API_LOG_MAX_BODY:
+                        req_body = req_body[:MOBILE_API_LOG_MAX_BODY] + '... [truncated]'
+                log_msg = f"{request.method} {request.path}?{q}\nRemote: {remote}\nHeaders: {headers}\nBody:\n{req_body}"
+                mobile_api_file_log('REQUEST', log_msg)
+        except Exception as e:
+            print(f"Failed to log mobile API request to file: {e}")
     except Exception as e:
         print(f"  Failed to log incoming request: {e}")
 
@@ -116,6 +156,25 @@ def log_response(response):
         remote = request.remote_addr or request.environ.get('REMOTE_ADDR')
         # Use response.status for human readable status
         print(f"Outgoing response to {remote}: {request.method} {request.path} -> {response.status}")
+        # If enabled, write mobile API responses to file as well
+        try:
+            if MOBILE_API_LOG_TO_FILE and request.path.startswith('/api/mobile'):
+                content_type = response.headers.get('Content-Type', '')
+                if content_type and content_type.startswith('image/'):
+                    resp_body = f"[binary {content_type} omitted]"
+                else:
+                    try:
+                        resp_body = response.get_data(as_text=True) or ''
+                    except Exception:
+                        resp_body = '[unavailable]'
+                    if len(resp_body) > MOBILE_API_LOG_MAX_BODY:
+                        resp_body = resp_body[:MOBILE_API_LOG_MAX_BODY] + '... [truncated]'
+                resp_headers = dict(response.headers)
+                status = response.status
+                log_msg = f"{request.method} {request.path} -> {status}\nRemote: {remote}\nHeaders: {resp_headers}\nBody:\n{resp_body}"
+                mobile_api_file_log('RESPONSE', log_msg)
+        except Exception as e:
+            print(f"Failed to log mobile API response to file: {e}")
     except Exception:
         pass
     return response

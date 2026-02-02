@@ -1939,6 +1939,10 @@ def save_game_config(alliance_id):
         except Exception:
             original_config_before = {}
 
+        # Capture old event code for comparison
+        old_event_code = original_config_before.get('current_event_code') if original_config_before else None
+        new_event_code = config_data.get('current_event_code')
+
         # Validate and save the configuration
         alliance.shared_game_config = json.dumps(config_data, indent=2)
         alliance.game_config_team = current_team  # Mark that config is set
@@ -1949,12 +1953,31 @@ def save_game_config(alliance_id):
         
         db.session.commit()
         
+        # Clear event cache if current_event_code changed to ensure background sync picks up new event
+        try:
+            from app.utils.sync_status import clear_event_cache
+            clear_event_cache(current_team)
+        except Exception:
+            pass
+        
         # Emit Socket.IO event to notify alliance members
         socketio.emit('alliance_config_updated', {
             'alliance_id': alliance_id,
             'config_type': 'game',
             'message': f'Game configuration updated by Team {current_team}'
         }, room=f'alliance_{alliance_id}')
+        
+        # If event code changed, broadcast to all clients to reload immediately
+        if old_event_code != new_event_code and new_event_code:
+            try:
+                socketio.emit('event_changed', {
+                    'old_event_code': old_event_code,
+                    'new_event_code': new_event_code,
+                    'event_name': new_event_code,
+                    'scouting_team': current_team
+                }, namespace='/')
+            except Exception:
+                pass
         
         flash('Alliance game configuration saved successfully!', 'success')
 

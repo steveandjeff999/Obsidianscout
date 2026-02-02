@@ -361,6 +361,18 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                                     {% endfor %}
                                 {% endif %}
                             </select>
+                        {% elif element.type == 'rating' %}
+                            <label class="form-label fw-semibold text-white text-center d-block">{{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}</label>
+                            {% if element.description %}<small class="text-muted d-block mb-2 text-center">{{ element.description }}</small>{% endif %}
+                            <div class="rating-container mb-2 d-flex justify-content-center gap-2">
+                                {% set max_rating = element.max|default(5) %}
+                                {% set current_rating = form_data.get(element.id, element.default)|int %}
+                                {% for i in range(1, max_rating + 1) %}
+                                    <i class="rating-star fas fa-star fs-3 {% if current_rating >= i %}active{% endif %}" data-value="{{ i }}" data-rating-id="{{ element.id }}" role="button" tabindex="0" aria-label="Rate {{ i }}"></i>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="{{ element.id }}" id="{{ element.id }}" value="{{ current_rating }}">
+                            <div class="small text-muted text-center">Click a star to rate (1-{{ max_rating }})</div>
                         {% endif %}
                     </div>
                 </div>
@@ -426,6 +438,18 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                                     {% endfor %}
                                 {% endif %}
                             </select>
+                        {% elif element.type == 'rating' %}
+                            <label class="form-label fw-semibold text-white text-center d-block">{{ element.name }}</label>
+                            {% if element.description %}<small class="text-muted d-block mb-2 text-center">{{ element.description }}</small>{% endif %}
+                            <div class="rating-container mb-2 d-flex justify-content-center gap-2">
+                                {% set max_rating = element.max|default(5) %}
+                                {% set current_rating = form_data.get(element.id, element.default)|int %}
+                                {% for i in range(1, max_rating + 1) %}
+                                    <i class="rating-star fas fa-star fs-3 {% if current_rating >= i %}active{% endif %}" data-value="{{ i }}" data-rating-id="{{ element.id }}" role="button" tabindex="0" aria-label="Rate {{ i }}"></i>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="{{ element.id }}" id="{{ element.id }}" value="{{ current_rating }}">
+                            <div class="small text-muted text-center">Click a star to rate (1-{{ max_rating }})</div>
                         {% endif %}
                     </div>
                 </div>
@@ -490,6 +514,18 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                                     {% endfor %}
                                 {% endif %}
                             </select>
+                        {% elif element.type == 'rating' %}
+                            <label class="form-label fw-semibold text-white text-center d-block">{{ element.name }}</label>
+                            {% if element.description %}<small class="text-muted d-block mb-2 text-center">{{ element.description }}</small>{% endif %}
+                            <div class="rating-container mb-2 d-flex justify-content-center gap-2">
+                                {% set max_rating = element.max|default(5) %}
+                                {% set current_rating = form_data.get(element.id, element.default)|int %}
+                                {% for i in range(1, max_rating + 1) %}
+                                    <i class="rating-star fas fa-star fs-3 {% if current_rating >= i %}active{% endif %}" data-value="{{ i }}" data-rating-id="{{ element.id }}" role="button" tabindex="0" aria-label="Rate {{ i }}"></i>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="{{ element.id }}" id="{{ element.id }}" value="{{ current_rating }}">
+                            <div class="small text-muted text-center">Click a star to rate (1-{{ max_rating }})</div>
                         {% endif %}
                     </div>
                 </div>
@@ -518,26 +554,32 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                 <small class="text-muted">Changing here will overwrite the pre-match pick.</small>
             </div>
 
+            {% if game_config.post_match and game_config.post_match.rating_elements %}
             <div class="row g-3 mb-3">
                 {% for element in game_config.post_match.rating_elements %}
                 <div class="col-lg-4 col-md-6">
-                    <div class="glass-card p-3 h-100">
-                        <label class="form-label fw-semibold text-white">{{ element.name }}</label>
+                    <div class="glass-card p-3 h-100 text-center">
+                        <label class="form-label fw-semibold text-white mb-3">{{ element.name }}</label>
                         <div class="rating-container mb-2">
                             {% for i in range(1, element.max + 1) %}
                             <i class="rating-star fas fa-star {% if (form_data.get(element.id, element.default)|int) >= i %}active{% endif %}" data-value="{{ i }}" data-rating-id="{{ element.id }}" role="button" tabindex="0" aria-label="Rate {{ i }}"></i>
                             {% endfor %}
                         </div>
                         <input type="hidden" name="{{ element.id }}" id="{{ element.id }}" value="{{ form_data.get(element.id, element.default) }}">
-                        <small class="text-muted">{{ element.description }}</small>
+                        {% if element.description %}
+                        <small class="text-muted d-block mt-2">{{ element.description }}</small>
+                        {% endif %}
+                        <small class="text-muted d-block mt-1">Click a star to rate (1-{{ element.max }})</small>
                     </div>
                 </div>
                 {% endfor %}
             </div>
+            {% endif %}
 
             <div class="glass-card p-3">
                 <h6 class="text-white mb-3"><i class="fas fa-comment-alt me-2"></i>Comments & Notes</h6>
                 <div class="row g-3">
+                    {% if game_config.post_match and game_config.post_match.text_elements %}
                     {% for element in game_config.post_match.text_elements %}
                     <div class="col-md-6">
                         <label for="{{ element.id }}" class="form-label fw-semibold text-white">{{ element.name }}</label>
@@ -549,6 +591,11 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                         {% endif %}
                     </div>
                     {% endfor %}
+                    {% else %}
+                    <div class="col-12">
+                        <p class="text-muted text-center mb-0">No text elements configured</p>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

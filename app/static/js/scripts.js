@@ -935,31 +935,49 @@ function initializeCounters() {
 function initializeRatings() {
     const ratingContainers = document.querySelectorAll('.rating-container');
     
+    console.log('[Rating Init] Found', ratingContainers.length, 'rating containers');
+    
     ratingContainers.forEach(container => {
         const stars = container.querySelectorAll('.rating-star');
         const hiddenInput = container.parentElement.querySelector('input[type="hidden"]');
         
-        // Show current rating on load
-        if (hiddenInput && hiddenInput.value) {
-            const currentRating = parseInt(hiddenInput.value);
-            stars.forEach((s, i) => {
-                if (stars.length - i <= currentRating) {
-                    s.classList.add('active');
+        console.log('[Rating Init] Container has', stars.length, 'stars, hidden input:', hiddenInput ? hiddenInput.id : 'none');
+        
+        // Function to update stars based on rating value
+        function updateStarsDisplay(rating) {
+            stars.forEach((star, index) => {
+                // index is 0-based, so index 0 = value 1, index 1 = value 2, etc.
+                const starValue = parseInt(star.getAttribute('data-value')) || (index + 1);
+                if (starValue <= rating) {
+                    star.classList.add('active');
+                } else {
+                    star.classList.remove('active');
                 }
             });
         }
         
-        // Update rating when clicking stars
+        // Show current rating on load
+        if (hiddenInput && hiddenInput.value) {
+            const currentRating = parseInt(hiddenInput.value);
+            console.log('[Rating Init] Setting initial rating to', currentRating);
+            updateStarsDisplay(currentRating);
+        }
+        
+        // Update rating when clicking/interacting with stars
         stars.forEach((star, index) => {
             // Show rating preview on hover
             star.addEventListener('mouseenter', () => {
-                // Reset all stars
+                // Reset all stars hover state
                 stars.forEach(s => s.classList.remove('hover'));
                 
-                // Highlight stars up to the hovered one
-                for (let i = 0; i <= index; i++) {
-                    stars[i].classList.add('hover');
-                }
+                // Highlight stars up to the hovered one (inclusive)
+                const hoverRating = parseInt(star.getAttribute('data-value')) || (index + 1);
+                stars.forEach((s, i) => {
+                    const starValue = parseInt(s.getAttribute('data-value')) || (i + 1);
+                    if (starValue <= hoverRating) {
+                        s.classList.add('hover');
+                    }
+                });
             });
             
             // Reset on mouse leave
@@ -969,7 +987,10 @@ function initializeRatings() {
             
             // Set rating on click
             star.addEventListener('click', () => {
-                const rating = stars.length - index;
+                // Use data-value attribute for the rating
+                const rating = parseInt(star.getAttribute('data-value')) || (index + 1);
+                
+                console.log('[Rating] Star clicked, setting rating to', rating);
                 
                 // Update hidden input
                 if (hiddenInput) {
@@ -979,21 +1000,21 @@ function initializeRatings() {
                 
                 // Update visual state with animation
                 stars.forEach((s, i) => {
-                    s.classList.remove('active');
                     s.classList.remove('animate-star');
                 });
                 
                 setTimeout(() => {
+                    updateStarsDisplay(rating);
                     stars.forEach((s, i) => {
-                        if (i >= index) {
-                            s.classList.add('active');
+                        const starValue = parseInt(s.getAttribute('data-value')) || (i + 1);
+                        if (starValue <= rating) {
                             s.classList.add('animate-star');
                         }
                     });
                 }, 10);
                 
                 // Show feedback toast
-                showToast(`Rating set to ${rating} stars`, 'info');
+                showToast(`Rating set to ${rating} ${rating === 1 ? 'star' : 'stars'}`, 'info');
             });
         });
     });

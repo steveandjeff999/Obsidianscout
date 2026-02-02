@@ -229,9 +229,65 @@ def index():
         # Use global match_sort_key for proper ordering (handles X-Y playoff format)
         matches = sorted(matches, key=match_sort_key)
     else:
-        # If no event selected, don't show any matches
-        matches = []
-        flash("No current event selected. Use the dropdown to select an event or configure a default event code.", "warning")
+        # No event selected - show all matches for the scouting team (All Events option)
+        alliance_id = get_active_alliance_id()
+        from app.utils.team_isolation import get_current_scouting_team_number
+        current_scouting_team = get_current_scouting_team_number()
+        
+        if alliance_id:
+            # Alliance mode - get all matches from alliance scouting data
+            matches, _ = get_all_matches_for_alliance()
+        else:
+            # Build base query for all matches (filtered by scouting team)
+            query = filter_matches_by_scouting_team()
+            
+            # Defensive check: ensure we only show matches for current scouting team
+            if current_scouting_team is not None:
+                query = query.filter(Match.scouting_team_number == current_scouting_team)
+            else:
+                query = query.filter(Match.scouting_team_number.is_(None))
+        
+        # Apply optional filters from the request
+        q = (request.args.get('q') or '').strip()
+        match_type = (request.args.get('match_type') or '').strip()
+
+        if alliance_id:
+            # We're operating on a Python list of Match objects (already loaded)
+            if match_type:
+                matches = [m for m in matches if (m.match_type or '').lower() == match_type.lower()]
+            if q:
+                if q.isdigit():
+                    qnum = int(q)
+                    matches = [m for m in matches if (m.match_number == qnum or (m.red_alliance and q in m.red_alliance) or (m.blue_alliance and q in m.blue_alliance))]
+                else:
+                    matches = [m for m in matches if ((m.red_alliance and q.lower() in m.red_alliance.lower()) or (m.blue_alliance and q.lower() in m.blue_alliance.lower()))]
+        else:
+            if match_type:
+                # Case-insensitive match type filtering
+                try:
+                    query = query.filter(Match.match_type.ilike(match_type))
+                except Exception:
+                    # Fallback to exact compare if ilike not available
+                    query = query.filter(Match.match_type == match_type)
+
+            if q:
+                # If numeric, allow matching by match number OR team numbers in alliances
+                if q.isdigit():
+                    try:
+                        qnum = int(q)
+                        query = query.filter(or_(Match.match_number == qnum,
+                                                  Match.red_alliance.like(f"%{q}%"),
+                                                  Match.blue_alliance.like(f"%{q}%")))
+                    except Exception:
+                        query = query.filter(or_(Match.red_alliance.ilike(f"%{q}%"), Match.blue_alliance.ilike(f"%{q}%")))
+                else:
+                    query = query.filter(or_(Match.red_alliance.ilike(f"%{q}%"), Match.blue_alliance.ilike(f"%{q}%")))
+
+            # Execute query and sort in Python using our custom ordering
+            matches = query.all()
+
+        # Use global match_sort_key for proper ordering (handles X-Y playoff format)
+        matches = sorted(matches, key=match_sort_key)
     
     # Compute display scores: prefer API (match.red_score/blue_score) and fall back to local scouting data
     display_scores = {}
@@ -522,12 +578,21 @@ def sync_from_config():
                     match.winner = match_data.get('winner', match.winner)
                     match.red_score = match_data.get('red_score', match.red_score)
                     match.blue_score = match_data.get('blue_score', match.blue_score)
+                    match.display_match_number = match_data.get('display_match_number', match.display_match_number)
                     # Ensure scouting_team_number is set (in case it was None before)
                     assign_scouting_team_to_model(match)
                     matches_updated += 1
                 else:
-                    # Add new match
-                    match = Match(**match_data)
+                    # Add new match - filter out non-model fields before creating
+                    # Valid Match model fields
+                    valid_fields = {
+                        'match_number', 'match_type', 'event_id', 'red_alliance', 'blue_alliance',
+                        'red_score', 'blue_score', 'winner', 'timestamp', 'scheduled_time',
+                        'predicted_time', 'actual_time', 'display_match_number', 'scouting_team_number'
+                    }
+                    # Filter match_data to only include valid fields
+                    filtered_data = {k: v for k, v in match_data.items() if k in valid_fields}
+                    match = Match(**filtered_data)
                     assign_scouting_team_to_model(match)  # Assign current scouting team
                     db.session.add(match)
                     matches_added += 1

@@ -3645,6 +3645,35 @@
                 updateAllianceStatusNav(data.alliance_status, data.alliance_info);
             });
             
+            // ======== EVENT CHANGE HANDLER ========
+            // Listen for current event changes to update UI immediately sitewide
+            window.socket.on('event_changed', function(data) {
+                console.log('Current event changed:', data);
+                
+                // Update local config cache with new event code
+                if (window.currentConfig && window.currentConfig.game_config) {
+                    window.currentConfig.game_config.current_event_code = data.new_event_code;
+                }
+                
+                // Dispatch custom event so pages can react
+                window.dispatchEvent(new CustomEvent('eventChanged', {
+                    detail: {
+                        old_event_code: data.old_event_code,
+                        new_event_code: data.new_event_code,
+                        event_name: data.event_name,
+                        scouting_team: data.scouting_team
+                    }
+                }));
+                
+                // Show notification and reload the page to reflect the change
+                showGlobalConfigNotification('Current event changed to: ' + data.event_name, 'event_change');
+                
+                // Reload the page after a brief delay to let the notification show
+                setTimeout(function() {
+                    window.location.reload();
+                }, 1500);
+            });
+            
             // ======== ALLIANCE AUTO-SYNC HANDLERS ========
             // Listen for automatic alliance data sync
             window.socket.on('alliance_data_sync_auto', function(data) {

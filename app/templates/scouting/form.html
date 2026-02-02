@@ -111,8 +111,19 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Cache bust: 2026-02-01-v4 -->
 <!-- Inject game config into page for offline use -->
 <script>
+    // FORCE CACHE CLEAR - Remove old broken cached templates
+    try {
+        const oldVersion = localStorage.getItem('form_template_version');
+        if (oldVersion !== 'v4-2026-02-01') {
+            console.log('[Cache Clear] Clearing old cached form template');
+            localStorage.removeItem('scouting_form_html_template');
+            localStorage.setItem('form_template_version', 'v4-2026-02-01');
+        }
+    } catch (e) { console.warn('Could not clear cache:', e); }
+    
     window.gameConfig = {{ game_config | tojson | safe }};
 </script>
 
@@ -183,6 +194,19 @@
             }
 
             formContent.innerHTML = formHTML;
+            
+            // Debug: Check if rating containers exist in DOM
+            const ratingContainersInDOM = document.querySelectorAll('.rating-container');
+            console.log('[After HTML Injection] Rating containers in DOM:', ratingContainersInDOM.length);
+            if (ratingContainersInDOM.length > 0) {
+                ratingContainersInDOM.forEach((container, idx) => {
+                    console.log(`[Rating Container ${idx}]`, {
+                        elementId: container.dataset.elementId,
+                        starCount: container.querySelectorAll('.rating-star').length,
+                        html: container.innerHTML.substring(0, 200)
+                    });
+                });
+            }
             
             // Determine alliance color from match schedule
             const alliance = determineAlliance(team.team_number, match);
@@ -667,6 +691,8 @@
         
         // Generate individual form element matching online styling
         function generateFormElement(element, periodKey) {
+            console.log('[Generate Element]', { id: element.id, type: element.type, periodKey: periodKey });
+            
             const id = element.id || element.name || 'element_' + Math.random();
             const label = element.name || element.label || id;
             const type = element.type || 'text';
@@ -676,7 +702,7 @@
             let html = `<div class="mb-4 form-element" data-element-type="${type}" data-period="${periodKey}">`;
             
             switch (type) {
-                case 'counter':
+                case 'counter': {
                     const pointsValue = element.points_value || 0;
                     html += `
                         <label class="form-label fw-bold">${label}</label>
@@ -701,6 +727,7 @@
                         `;
                     }
                     break;
+                }
                     
                 case 'boolean':
                 case 'checkbox':
@@ -731,23 +758,41 @@
                     html += `</select>`;
                     break;
                     
-                case 'rating':
+                case 'rating': {
+                    // Generate stars based on min/max values, default to 1-5 if not specified
+                    const minRating = element.min || 1;
+                    const maxRating = element.max || 5;
+                    const currentRating = parseInt(defaultValue) || minRating;
+                    
+                    console.log('[Rating HTML Gen]', {
+                        id: id,
+                        label: label,
+                        minRating: minRating,
+                        maxRating: maxRating,
+                        currentRating: currentRating
+                    });
+                    
                     html += `
-                        <label class="form-label fw-bold">${label}</label>
-                        ${description ? `<div class="form-text mb-2">${description}</div>` : ''}
-                        <div class="rating-group d-flex gap-2" data-rating-id="${id}">
+                        <div class="card mb-3">
+                            <div class="card-body text-center">
+                                <label class="form-label fw-bold">${label}</label>
+                                ${description ? `<div class="form-text mb-3">${description}</div>` : ''}
+                                <div class="rating-container mb-2" data-element-id="${id}">
                     `;
-                    for (let i = 1; i <= 5; i++) {
-                        html += `
-                            <input type="radio" class="btn-check" id="${id}_${i}" name="${id}" value="${i}" 
-                                   ${i == defaultValue ? 'checked' : ''}>
-                            <label class="btn btn-outline-warning" for="${id}_${i}">
-                                <i class="fas fa-star"></i> ${i}
-                            </label>
-                        `;
+                    
+                    for (let i = minRating; i <= maxRating; i++) {
+                        const isActive = i <= currentRating ? 'active' : '';
+                        html += `<i class="rating-star fas fa-star ${isActive}" data-value="${i}" data-rating-id="${id}" role="button" tabindex="0" aria-label="Rate ${i}"></i>`;
                     }
-                    html += `</div>`;
+                    html += `
+                                </div>
+                                <input type="hidden" name="${id}" id="${id}" value="${currentRating}">
+                                <div class="small text-muted mt-2">Click a star to rate (${minRating}-${maxRating})</div>
+                            </div>
+                        </div>
+                    `;
                     break;
+                }
                     
                 case 'textarea':
                     html += `
@@ -764,6 +809,7 @@
                         ${description ? `<div class="form-text mb-2">${description}</div>` : ''}
                         <input type="text" class="form-control" id="${id}" name="${id}" value="${defaultValue}">
                     `;
+                    break;
             }
             
             html += `</div>`;

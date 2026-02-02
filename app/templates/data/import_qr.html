@@ -7,19 +7,7 @@
     {% import '_help_icon.html' as help %}
     <h1>Import QR Code Data {{ help.help_icon('Paste or scan QR code payloads to import scouting data quickly from mobile devices or export files.', 'Import QR') }}</h1>
     
-    <div class="card mb-4">
-        <div class="card-body">
-            <h5 class="card-title">Manual QR Entry</h5>
-            <form method="POST">
-                <div class="mb-3">
-                    <label for="qr_data" class="form-label">QR Code Data</label>
-                    <textarea class="form-control" id="qr_data" name="qr_data" rows="5" required></textarea>
-                    <div class="form-text">Paste the QR code data here</div>
-                </div>
-                <button type="submit" class="btn btn-primary">Import Data</button>
-            </form>
-        </div>
-    </div>
+
 
     <!-- QR code scanner implementation -->
     <div class="card mb-4">
@@ -40,13 +28,54 @@
                     <i class="fas fa-sync-alt"></i>
                 </button>
                 <button id="start-scanner" class="btn btn-primary">Start Scanner</button>
-                <button id="stop-scanner" class="btn btn-secondary d-none">Stop Scanner</button>
+                <button id="stop-scanner" class="btn btn-secondary" disabled>Stop Scanner</button>
             </div>
             <div class="mt-2">
                 <small id="camera-count" class="text-muted">(Detecting cameras...)</small>
             </div>
             <div class="mt-3">
                 <p class="text-muted small">Position the QR code within the camera view to scan.</p>
+            </div>
+
+            <!-- Scanned items list for multi-scan feature -->
+            <div id="scanned-section" class="card mt-3">
+                <div class="card-body">
+                    <h6 class="card-title">Scanned Codes <small class="text-muted" id="scanned-count">(0)</small></h6>
+                    <ul id="scanned-list" class="list-group mb-2"></ul>
+
+                    <div class="d-flex gap-2">
+                        <button id="upload-all" class="btn btn-success">Upload All</button>
+                        <button id="clear-list" class="btn btn-outline-secondary">Clear List</button>
+                        <button id="insert-selected" class="btn btn-primary d-none">Insert Selected</button>
+                    </div>
+                    <div class="mt-2 small text-muted">You may scan multiple QR codes. When ready, click <strong>Upload All</strong> to process them in batch.</div>
+                </div>
+            </div>
+
+            <!-- Manual entry (moved below scanner) -->
+            <div id="manual-entry" class="card mt-3">
+                <div class="card-body">
+                    <h5 class="card-title">Manual QR Entry</h5>
+
+                    <div class="mb-3">
+                        <label for="qr_data" class="form-label">QR Code Data <small class="text-muted">(supports multiple entries separated by a blank line)</small></label>
+                        <textarea class="form-control" id="qr_data" name="qr_data" rows="6" placeholder="Paste multiple QR payloads separated by a blank line. You can also paste multiple single-line payloads each on a new line."></textarea>
+                        <div class="form-text">Use <strong>Add to Queue</strong> to add entries to the scanned list. Then click <strong>Upload All</strong> to process them.</div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button id="add-to-queue" class="btn btn-primary">Add to Queue</button>
+                        <button id="import-single" class="btn btn-outline-secondary">Import Single (legacy)</button>
+                    </div>
+
+                    <!-- Simplified manual controls: add directly to queue and clear input -->
+                    <div class="mt-3">
+                        <div class="d-flex gap-2">
+                            <button id="clear-input" class="btn btn-outline-secondary">Clear Input</button>
+                        </div>
+                        <div class="mt-2 small text-muted">Paste payloads and click <strong>Add to Queue</strong>. Valid entries are added; invalid entries are ignored with a warning. Use <strong>Clear Input</strong> to clear the manual textarea.</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -73,6 +102,36 @@ document.addEventListener('DOMContentLoaded', function() {
     let html5QrCode;
     let availableCameras = [];
     let selectedCameraId = null;
+    let scannedItems = []; // Array to hold multiple scanned QR payloads
+
+    // Local storage helpers to persist scanned queue across reloads
+    const SCAN_STORAGE_KEY = 'qr_scanned_items';
+    function saveScannedItems() {
+        try {
+            localStorage.setItem(SCAN_STORAGE_KEY, JSON.stringify(scannedItems));
+        } catch (e) {
+            console.warn('Failed to save scanned items to localStorage', e);
+        }
+    }
+
+    function loadScannedItems() {
+        try {
+            const raw = localStorage.getItem(SCAN_STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    scannedItems = parsed;
+                    renderScannedList();
+                    if (scannedItems.length) {
+                        showTempMessage(`<strong>Restored</strong> ${scannedItems.length} queued scan(s) from local cache.`, 'info', 1800);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to load scanned items from localStorage', e);
+        }
+    }
+
 
     // Function to initialize cameras and populate the dropdown
     async function initCameras() {
@@ -162,39 +221,98 @@ document.addEventListener('DOMContentLoaded', function() {
         this.innerHTML = '<i class="fas fa-sync-alt"></i>';
     });
 
-    function onScanSuccess(decodedText, decodedResult) {
-        // Stop scanning
-        html5QrCode.stop().then(() => {
-            console.log('QR Code scanning stopped.');
-            startButton.style.display = 'inline-block';
-            stopButton.style.display = 'none';
-            
-            // Display success message
-            resultsContainer.innerHTML = `
-                <div class="alert alert-success">
-                    <strong>QR Code detected!</strong> Data has been inserted into the form.
+    function renderScannedList() {
+        const list = document.getElementById('scanned-list');
+        const count = document.getElementById('scanned-count');
+        list.innerHTML = '';
+        scannedItems.forEach((item, idx) => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item d-flex justify-content-between align-items-start';
+            li.dataset.index = idx;
+
+            // Create summary for the payload if possible
+            let summary = parseQrSummary(item);
+
+            li.innerHTML = `
+                <div>
+                    <div class="fw-bold small">${summary.title}</div>
+                    <div class="small text-muted">${summary.detail}</div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-secondary btn-insert" title="Insert into manual editor">Edit</button>
+                    <button class="btn btn-sm btn-outline-danger btn-remove" title="Remove">Remove</button>
                 </div>
             `;
-            
-            // Set decoded text to textarea
-            qrDataTextarea.value = decodedText;
-            
-            // Try to validate if it's JSON data
-            try {
-                const jsonData = JSON.parse(decodedText);
-                console.log('Valid JSON data detected in QR code');
-            } catch (error) {
-                // If not valid JSON, add a warning to the results
-                resultsContainer.innerHTML += `
-                    <div class="alert alert-warning mt-2">
-                        <strong>Note:</strong> The QR data doesn't appear to be in JSON format. 
-                        Make sure this is the correct data format.
-                    </div>
-                `;
-            }
-        }).catch((err) => {
-            console.error('Failed to stop QR Code scanning.', err);
+
+            // Insert listener for edit
+            li.querySelector('.btn-insert').addEventListener('click', () => {
+                qrDataTextarea.value = item;
+                qrDataTextarea.focus();
+            });
+
+            // Remove listener
+            li.querySelector('.btn-remove').addEventListener('click', () => {
+                scannedItems.splice(idx, 1);
+                saveScannedItems();
+                renderScannedList();
+            });
+
+            list.appendChild(li);
         });
+        count.textContent = `(${scannedItems.length})`;
+    }
+
+    function parseQrSummary(decodedText) {
+        // Try to parse common fields for a concise summary
+        try {
+            const payload = JSON.parse(decodedText);
+            if (payload.team_id || payload.team_number || payload.t) {
+                const team = payload.team_id || payload.team_number || payload.t;
+                const match = payload.match_id || payload.match_number || payload.m || payload.mt || 'Unknown';
+                const scout = payload.scout_name || payload.s || 'QR Import';
+                return { title: `Team ${team} — Match ${match}`, detail: `Scout: ${scout}` };
+            }
+            // Fallback to event/match detection
+            if (payload.match_number) {
+                return { title: `Match ${payload.match_number}`, detail: JSON.stringify(payload).slice(0, 120) };
+            }
+            return { title: 'QR Payload', detail: JSON.stringify(payload).slice(0, 120) };
+        } catch (e) {
+            // Non-JSON payload
+            const snippet = decodedText.length > 120 ? decodedText.slice(0, 120) + '…' : decodedText;
+            return { title: 'Raw QR Data', detail: snippet };
+        }
+    }
+
+    function showTempMessage(html, type='info', duration=1200) {
+        resultsContainer.innerHTML = `<div class="alert alert-${type}">${html}</div>`;
+        setTimeout(() => {
+            resultsContainer.innerHTML = `<div class="alert alert-info"><strong>Scanner active!</strong> Position a QR code in the viewfinder.</div>`;
+        }, duration);
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        // Do not stop scanning; queue the payload for batch upload
+        if (!decodedText) return;
+
+        if (scannedItems.includes(decodedText)) {
+            showTempMessage('<strong>Already scanned</strong> This code is already in the queue.', 'warning');
+            return;
+        }
+
+        scannedItems.push(decodedText);
+        saveScannedItems();
+        renderScannedList();
+
+        // Brief confirmation message
+        showTempMessage('<strong>Scanned!</strong> Added to upload queue.', 'success', 800);
+
+        // If the payload doesn't appear to be valid JSON, warn the user in the results area
+        try {
+            JSON.parse(decodedText);
+        } catch (err) {
+            resultsContainer.innerHTML += `\n<div class="alert alert-warning mt-2"><strong>Note:</strong> This QR data does not appear to be valid JSON.</div>`;
+        }
     }
 
     // Add a canvas for image processing as part of scan attempts
@@ -402,6 +520,208 @@ document.addEventListener('DOMContentLoaded', function() {
         return enhancedData;
     }
 
+    // Upload all scanned items (batch upload)
+    const importUrl = '{{ url_for("data.import_qr") }}';
+    document.getElementById('upload-all').addEventListener('click', async function() {
+        if (scannedItems.length === 0) {
+            showTempMessage('No scanned codes to upload', 'warning', 1200);
+            return;
+        }
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Uploading...';
+        try {
+            const response = await fetch(importUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ data: scannedItems })
+            });
+            const result = await response.json();
+            if (result && result.success) {
+                const results = result.results || [];
+                let html = '<div class="alert alert-success"><strong>Upload complete.</strong><ul class="mb-0">';
+                results.forEach(r => {
+                    html += `<li>${r.message || (r.success ? 'Success' : 'Failure')}</li>`;
+                });
+                html += '</ul></div>';
+                resultsContainer.innerHTML = html;
+                // If results correspond 1:1 with queued items, keep only failures in the queue
+                if (results.length === scannedItems.length) {
+                    const remaining = [];
+                    for (let i=0;i<results.length;i++) {
+                        if (!results[i].success) remaining.push(scannedItems[i]);
+                    }
+                    scannedItems = remaining;
+                    saveScannedItems();
+                    renderScannedList();
+                } else {
+                    // Unknown mapping - clear entire queue
+                    scannedItems = [];
+                    localStorage.removeItem(SCAN_STORAGE_KEY);
+                    renderScannedList();
+                }
+            } else {
+                const message = result.message || 'Upload failed';
+                resultsContainer.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> ${message}</div>`;
+            }
+        } catch (err) {
+            console.error('Upload failed', err);
+            resultsContainer.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> ${err.message}</div>`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'Upload All';
+        }
+    });
+
+    document.getElementById('clear-list').addEventListener('click', function() {
+        if (confirm('Clear all scanned codes from the queue?')) {
+            scannedItems = [];
+            localStorage.removeItem(SCAN_STORAGE_KEY);
+            renderScannedList();
+            showTempMessage('Cleared scanned list', 'info', 800);
+        }
+    });
+
+    // Manual entry parser (kept for simplified Add-to-Queue behavior)
+    function parseManualEntries(text) {
+        const results = [];
+        if (!text || !text.trim()) return results;
+
+        // Try NDJSON (one JSON object per line)
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (lines.length > 1) {
+            let allLinesJson = true;
+            const parsedLines = [];
+            for (const l of lines) {
+                try {
+                    parsedLines.push(JSON.parse(l));
+                } catch (e) {
+                    allLinesJson = false;
+                    break;
+                }
+            }
+            if (allLinesJson) {
+                lines.forEach((l, i) => results.push({ raw: l, valid: true, parsed: parsedLines[i] }));
+                return results;
+            }
+        }
+
+        // Try blank-line separated blocks
+        const blocks = text.split(/\r?\n\s*\r?\n/).map(b => b.trim()).filter(Boolean);
+        if (blocks.length > 1) {
+            let allBlocksJson = true;
+            const parsedBlocks = [];
+            for (const b of blocks) {
+                try {
+                    parsedBlocks.push(JSON.parse(b));
+                } catch (e) {
+                    allBlocksJson = false;
+                    break;
+                }
+            }
+            if (allBlocksJson) {
+                blocks.forEach((b, i) => results.push({ raw: b, valid: true, parsed: parsedBlocks[i] }));
+                return results;
+            }
+        }
+
+        // Try to extract concatenated JSON objects by matching braces
+        let depth = 0;
+        let start = -1;
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+            if (ch === '{') {
+                if (depth === 0) start = i;
+                depth++;
+            } else if (ch === '}') {
+                depth--;
+                if (depth === 0 && start !== -1) {
+                    const substr = text.substring(start, i + 1).trim();
+                    try {
+                        const parsed = JSON.parse(substr);
+                        results.push({ raw: substr, valid: true, parsed });
+                    } catch (e) {
+                        results.push({ raw: substr, valid: false, error: e.message });
+                    }
+                    start = -1;
+                }
+            }
+        }
+        if (results.length > 0) return results;
+
+        // Try single JSON object
+        try {
+            const parsed = JSON.parse(text);
+            results.push({ raw: text.trim(), valid: true, parsed });
+            return results;
+        } catch (e) {
+            // Not JSON - treat each non-empty line as a raw entry (best-effort)
+            lines.forEach(l => {
+                try {
+                    const p = JSON.parse(l);
+                    results.push({ raw: l, valid: true, parsed: p });
+                } catch (ee) {
+                    results.push({ raw: l, valid: false, error: 'Not JSON' });
+                }
+            });
+            return results;
+        }
+    }
+
+    // Add-to-Queue: parse input, add valid entries directly, warn for invalids
+    document.getElementById('add-to-queue').addEventListener('click', function() {
+        const text = qrDataTextarea.value || '';
+        const parsed = parseManualEntries(text);
+        if (!parsed || parsed.length === 0) {
+            showTempMessage('No valid entries found to add', 'warning', 1200);
+            return;
+        }
+        let added = 0, duplicates = 0, invalid = 0;
+        parsed.forEach(p => {
+            if (!p.valid) { invalid++; return; }
+            if (scannedItems.includes(p.raw)) { duplicates++; return; }
+            scannedItems.push(p.raw);
+            added++;
+        });
+        renderScannedList();
+        saveScannedItems();
+        // Clear manual input only when at least one item was added
+        if (added) {
+            qrDataTextarea.value = '';
+        }
+        let msg = '';
+        if (added) msg += `<strong>Added</strong> ${added} item(s). `;
+        if (duplicates) msg += `<strong>Ignored</strong> ${duplicates} duplicate(s). `;
+        if (invalid) msg += `<strong>Warning:</strong> ${invalid} invalid item(s) ignored.`;
+        if (msg) {
+            const type = invalid && !added ? 'warning' : (invalid ? 'info' : 'success');
+            showTempMessage(msg, type, 2000);
+        }
+    });
+
+    // Clear Input
+    document.getElementById('clear-input').addEventListener('click', function() {
+        if (!qrDataTextarea.value.trim()) { showTempMessage('Input is already empty', 'info', 800); return; }
+        if (confirm('Clear manual input?')) {
+            qrDataTextarea.value = '';
+            showTempMessage('Manual input cleared', 'info', 800);
+        }
+    });
+
+    // Legacy import (single POST via form submit)
+    document.getElementById('import-single').addEventListener('click', function() {
+        const txt = qrDataTextarea.value.trim();
+        if (!txt) { showTempMessage('No QR code data to import', 'warning', 1000); return; }
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = importUrl;
+        const input = document.createElement('input');
+        input.type = 'hidden'; input.name = 'qr_data'; input.value = txt;
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+    });
+
     startButton.addEventListener('click', function() {
         resultsContainer.innerHTML = '';
         html5QrCode = new Html5Qrcode("qr-reader");
@@ -451,15 +771,24 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log("Using camera config:", JSON.stringify(cameraConfig));
         
-        // Start scanner with selected camera
+        // Start scanner with selected camera (improved with checks and button states)
+        if (typeof Html5Qrcode === 'undefined') {
+            resultsContainer.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> QR library not loaded. Please ensure html5-qrcode is available.</div>`;
+            return;
+        }
+
+        html5QrCode = new Html5Qrcode("qr-reader");
+
+        // Disable start & enable stop while we attempt to start
+        startButton.disabled = true;
+        stopButton.disabled = false;
+
         html5QrCode.start(
             cameraConfig,
             advancedConfig,
             onScanSuccess,
             onScanFailure
         ).then(() => {
-            startButton.style.display = 'none';
-            stopButton.style.display = 'inline-block';
             resultsContainer.innerHTML = `
                 <div class="alert alert-info">
                     <strong>Scanner active!</strong> Position a QR code in the viewfinder.
@@ -468,15 +797,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }).catch((err) => {
             // If selected camera fails, try with environment facing mode
             console.error('Failed with selected camera, trying environment mode:', err);
-            
+
             html5QrCode.start(
                 { facingMode: "environment" },
                 getAdvancedConfig(),
                 onScanSuccess,
                 onScanFailure
             ).then(() => {
-                startButton.style.display = 'none';
-                stopButton.style.display = 'inline-block';
                 resultsContainer.innerHTML = `
                     <div class="alert alert-info">
                         <strong>Scanner active (environment camera)!</strong> Position a QR code in the viewfinder.
@@ -490,15 +817,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     onScanSuccess,
                     onScanFailure
                 ).then(() => {
-                    startButton.style.display = 'none';
-                    stopButton.style.display = 'inline-block';
                     resultsContainer.innerHTML = `
                         <div class="alert alert-info">
                             <strong>Scanner active (front camera)!</strong> Position a QR code in the viewfinder.
                         </div>
                     `;
                 }).catch((userErr) => {
-                    // If all fail, show error
+                    // If all fail, show error and restore buttons
                     resultsContainer.innerHTML = `
                         <div class="alert alert-danger">
                             <strong>Error:</strong> Failed to start scanner with any camera.
@@ -508,26 +833,50 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     `;
                     console.error('Failed to start QR Code scanning with any camera:', err, envErr, userErr);
+                    startButton.disabled = false;
+                    stopButton.disabled = true;
                 });
             });
         });
     });
 
     stopButton.addEventListener('click', function() {
+        const finalizeStop = () => {
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            resultsContainer.innerHTML = `
+                <div class="alert alert-secondary">
+                    <strong>Scanner stopped.</strong> Click "Start Scanner" to scan again.
+                </div>
+            `;
+        };
+
         if (html5QrCode) {
             html5QrCode.stop().then(() => {
-                startButton.style.display = 'inline-block';
-                stopButton.style.display = 'none';
-                resultsContainer.innerHTML = `
-                    <div class="alert alert-secondary">
-                        <strong>Scanner stopped.</strong> Click "Start Scanner" to scan again.
-                    </div>
-                `;
+                finalizeStop();
             }).catch((err) => {
-                console.error('Failed to stop QR Code scanning.', err);
+                console.error('Failed to stop QR Code scanning via library stop(). Attempting fallback to stop tracks.', err);
+                // Fallback: stop any video tracks
+                const videoElement = document.querySelector('#qr-reader video');
+                if (videoElement && videoElement.srcObject) {
+                    const tracks = videoElement.srcObject.getTracks();
+                    tracks.forEach(t => t.stop());
+                }
+                finalizeStop();
             });
+        } else {
+            // No html5QrCode instance - try to stop any existing video streams
+            const videoElement = document.querySelector('#qr-reader video');
+            if (videoElement && videoElement.srcObject) {
+                const tracks = videoElement.srcObject.getTracks();
+                tracks.forEach(t => t.stop());
+            }
+            finalizeStop();
         }
     });
+
+    // Restore any queued scans saved in localStorage so refresh doesn't lose them
+    try { loadScannedItems(); } catch (e) { console.warn('Could not restore scanned items', e); }
 });
 </script>
 {% endblock %}

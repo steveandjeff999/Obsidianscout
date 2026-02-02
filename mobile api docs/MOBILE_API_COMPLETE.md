@@ -196,9 +196,11 @@ print(secrets.token_urlsafe(32))
 | `/api/mobile/auth/refresh` | POST | Refresh token |
 | `/api/mobile/auth/verify` | GET | Verify token |
 | `/api/mobile/teams` | GET | List teams |
+| `/api/mobile/teams/current` | GET | List teams for current event |
 | `/api/mobile/teams/<id>` | GET | Team details |
 | `/api/mobile/events` | GET | List events |
 | `/api/mobile/matches` | GET | List matches |
+| `/api/mobile/matches/current` | GET | List matches for current event |
 | `/api/mobile/scouting/submit` | POST | Submit scouting |
 | `/api/mobile/scouting/bulk-submit` | POST | Bulk submit |
 | `/api/mobile/scouting/history` | GET | User history |

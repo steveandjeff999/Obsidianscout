@@ -48,7 +48,9 @@ When passing `event_id` parameters, you can use:
 
 The following endpoints automatically resolve raw event codes:
 - `GET /api/mobile/teams?event_id=OKTU`
+- `GET /api/mobile/teams/current` (uses current event from config)
 - `GET /api/mobile/matches?event_id=OKTU`
+- `GET /api/mobile/matches/current` (uses current event from config)
 - `GET /api/mobile/scouting/all?event_id=OKTU`
 - `POST /api/mobile/graphs/generate-graph` (event_id in payload)
 - `POST /api/mobile/graphs/graph-series` (event_id in payload)
@@ -905,6 +907,107 @@ Authorization: Bearer <token>
 
 ---
 
+## Teams
+
+### Get Teams
+
+Retrieve teams for a specific event (or current event if no event_id specified).
+
+**Endpoint:** `GET /api/mobile/teams`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+- `event_id` (optional) - Event ID, year-prefixed code (e.g., `2026OKTU`), or raw code (e.g., `OKTU`)
+- `limit` (optional, default: 100, max: 500) - Number of results per page
+- `offset` (optional, default: 0) - Pagination offset
+
+> **Event Resolution:** If no `event_id` is provided, the API automatically returns teams for your team's current event as configured in `game_config.json`. If you pass a raw event code like `OKTU`, the API automatically resolves it to the year-prefixed version (e.g., `2026OKTU`) based on your team's configured season.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "teams": [
+    {
+      "id": 1,
+      "team_number": 5454,
+      "team_name": "The Bionics",
+      "location": "Oklahoma City, OK"
+    },
+    {
+      "id": 2,
+      "team_number": 1234,
+      "team_name": "Team Name",
+      "location": "City, State"
+    }
+  ],
+  "count": 2,
+  "total": 45
+}
+```
+
+**Error Codes:**
+- `TEAMS_ERROR` - Failed to retrieve teams
+
+### Get Teams for Current Event
+
+Retrieve teams for the current event. This is a convenience endpoint that explicitly returns teams for your team's currently configured event.
+
+**Endpoint:** `GET /api/mobile/teams/current`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+- `limit` (optional, default: 100, max: 500) - Number of results per page
+- `offset` (optional, default: 0) - Pagination offset
+
+> **Current Event Resolution:** The API automatically determines your current event based on your team's `game_config.json` configuration. If your team is in alliance mode, it uses the alliance's shared configuration. Falls back to the most recent event if no current event is configured.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "teams": [
+    {
+      "id": 1,
+      "team_number": 5454,
+      "team_name": "The Bionics",
+      "location": "Oklahoma City, OK"
+    },
+    {
+      "id": 2,
+      "team_number": 1234,
+      "team_name": "Team Name",
+      "location": "City, State"
+    }
+  ],
+  "count": 2,
+  "total": 45,
+  "event": {
+    "id": 5,
+    "name": "Oklahoma Regional",
+    "code": "2026OKTU"
+  }
+}
+```
+
+**Notes:**
+- Returns empty teams array if no current event is configured
+- Respects alliance mode and shared event configurations
+- Includes event information in response
+
+**Error Codes:**
+- `TEAMS_CURRENT_ERROR` - Failed to retrieve current teams
+
+---
+
 ## Matches
 
 ### Get Matches
@@ -938,12 +1041,73 @@ Authorization: Bearer <token>
       "blue_alliance": "9012,3456,7890",
       "red_score": 125,
       "blue_score": 110,
-      "winner": "red"
+      "winner": "red",
+      "scheduled_time": "2026-03-15T10:30:00Z",
+      "predicted_time": "2026-03-15T10:32:00Z",
+      "actual_time": "2026-03-15T10:33:45Z"
     }
   ],
   "count": 1
 }
 ```
+
+**Error Codes:**
+- `MISSING_EVENT_ID` - event_id parameter is required
+- `MATCHES_ERROR` - Failed to retrieve matches
+
+### Get Matches for Current Event
+
+Retrieve matches for the current event. This is a convenience endpoint that explicitly returns matches for your team's currently configured event.
+
+**Endpoint:** `GET /api/mobile/matches/current`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+- `match_type` (optional) - Filter by match type (e.g., "Qualification", "Playoff")
+- `team_number` (optional) - Filter by team number to show only matches involving that team
+
+> **Current Event Resolution:** The API automatically determines your current event based on your team's `game_config.json` configuration. If your team is in alliance mode, it uses the alliance's shared configuration. Falls back to the most recent event if no current event is configured.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "matches": [
+    {
+      "id": 1,
+      "match_number": 1,
+      "match_type": "Qualification",
+      "red_alliance": "5454,1234,5678",
+      "blue_alliance": "9012,3456,7890",
+      "red_score": 125,
+      "blue_score": 110,
+      "winner": "red",
+      "scheduled_time": "2026-03-15T10:30:00Z",
+      "predicted_time": "2026-03-15T10:32:00Z",
+      "actual_time": "2026-03-15T10:33:45Z"
+    }
+  ],
+  "count": 1,
+  "event": {
+    "id": 5,
+    "name": "Oklahoma Regional",
+    "code": "2026OKTU"
+  }
+}
+```
+
+**Notes:**
+- Returns empty matches array if no current event is configured
+- Respects alliance mode and shared event configurations
+- Includes event information in response
+- Time fields may be null if not available
+
+**Error Codes:**
+- `MATCHES_CURRENT_ERROR` - Failed to retrieve current matches
 
 ---
 
