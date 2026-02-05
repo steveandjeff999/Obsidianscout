@@ -530,6 +530,24 @@ function initPageTransitions() {
 function initializeCounters() {
     // Create a set to track which buttons we've already attached listeners to
     const processedButtons = new Set();
+
+    // Haptic feedback helper (vibrate on supported devices). Respects user preference and reduced-motion.
+    let _lastHaptic = 0;
+    function triggerHapticFeedback(pattern = 10) {
+        try {
+            // Respect reduced-motion preference and user opt-out
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('haptic_feedback_enabled') : null;
+            if (pref === 'false' || pref === '0') return;
+            const now = Date.now();
+            if (now - _lastHaptic < 60) return; // throttle to avoid spamming
+            _lastHaptic = now;
+            if (navigator && typeof navigator.vibrate === 'function') {
+                // Use a short vibration for subtle feedback
+                navigator.vibrate(pattern);
+            }
+        } catch (e) { /* ignore */ }
+    }
     
     // First handle buttons inside counter-type container elements (supports configurable step and optional alternate +/- buttons)
     const counters = document.querySelectorAll('.counter-container, .counter-shell, .counter-control, .input-group.counter-control, .counter-container-inline');
@@ -562,6 +580,8 @@ function initializeCounters() {
 
             countInput.value = newValue;
             countInput.dispatchEvent(new Event('change'));
+            // Haptic feedback for tactile confirmation
+            try { triggerHapticFeedback(); } catch (e) { /* ignore */ }
             updatePointsCalculation();
 
             // Update disable state for all buttons in this container
@@ -659,6 +679,8 @@ function initializeCounters() {
 
             input.value = newValue;
             input.dispatchEvent(new Event('change'));
+            // Haptic feedback for tactile confirmation
+            try { triggerHapticFeedback(); } catch (e) { /* ignore */ }
             updatePointsCalculation();
 
             // Add visual feedback
@@ -765,6 +787,8 @@ function initializeCounters() {
             let lastAngle = null;
             let accumulated = 0; // degrees
             let startValue = 0;
+            // Track the last value we emitted so we only dispatch changes when the numeric value actually changes
+            let lastEmittedValue = null;
 
             function angleFromEvent(e) {
                 const rect = display.getBoundingClientRect();
@@ -779,6 +803,7 @@ function initializeCounters() {
                 lastAngle = null;
                 accumulated = 0;
                 startValue = parseInt(input.value || 0);
+                lastEmittedValue = startValue;
                 e.preventDefault();
             });
 
@@ -803,9 +828,15 @@ function initializeCounters() {
                     const max = (input.max !== undefined && input.max !== '') ? parseInt(input.max) : null;
                     if (!isNaN(min)) newVal = Math.max(min, newVal);
                     if (max !== null && !isNaN(max)) newVal = Math.min(max, newVal);
-                    input.value = newVal;
-                    valueEl.textContent = newVal;
-                    input.dispatchEvent(new Event('change'));
+                    // Only update DOM and emit change/haptic if numeric value actually changed
+                    if (newVal !== lastEmittedValue) {
+                        input.value = newVal;
+                        valueEl.textContent = newVal;
+                        input.dispatchEvent(new Event('change'));
+                        lastEmittedValue = newVal;
+                        // Haptic feedback for tactile confirmation
+                        try { triggerHapticFeedback(); } catch (e) { /* ignore */ }
+                    }
                 }
 
                 // Visual rotation feedback: rotate the ring only so the number stays upright
@@ -818,14 +849,16 @@ function initializeCounters() {
                 pressing = false;
                 accumulated = 0;
                 ring.style.transform = '';
+                // Ensure emitted value stays in sync after release
+                try { lastEmittedValue = parseInt(input.value || 0); } catch (e) { /* ignore */ }
             });
 
             // Keyboard accessibility: left/right to change by 1
             display.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-                    e.preventDefault(); const v = parseInt(input.value || 0) + 1; input.value = v; valueEl.textContent = v; input.dispatchEvent(new Event('change'));
+                    e.preventDefault(); const v = parseInt(input.value || 0) + 1; input.value = v; valueEl.textContent = v; input.dispatchEvent(new Event('change')); try { triggerHapticFeedback(); } catch(e) { /* ignore */ } try { lastEmittedValue = v; } catch(e) { /* ignore */ }
                 } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-                    e.preventDefault(); const v = Math.max(parseInt(input.min || 0), parseInt(input.value || 0) - 1); input.value = v; valueEl.textContent = v; input.dispatchEvent(new Event('change'));
+                    e.preventDefault(); const v = Math.max(parseInt(input.min || 0), parseInt(input.value || 0) - 1); input.value = v; valueEl.textContent = v; input.dispatchEvent(new Event('change')); try { triggerHapticFeedback(); } catch(e) { /* ignore */ } try { lastEmittedValue = v; } catch(e) { /* ignore */ }
                 }
             });
 
