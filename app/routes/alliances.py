@@ -697,7 +697,7 @@ def manage_lists(event_id):
     avoid_entries = AvoidEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
     do_not_pick_entries = DoNotPickEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
     declined_entries = DeclinedEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
-    want_list_entries = filter_want_list_by_scouting_team().filter_by(event_id=event_id).order_by(WantListEntry.rank).all()
+    want_list_entries = filter_want_list_by_scouting_team().filter_by(event_id=event_id).join(Team).order_by(WantListEntry.rank).all()
     
     # Get all teams for this event from team_event relationship
     all_teams = db.session.query(Team).join(
