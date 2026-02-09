@@ -433,6 +433,18 @@ def filter_declined_entries_by_scouting_team(query=None):
     return query.filter(DeclinedEntry.scouting_team_number.is_(None))
 
 
+def filter_want_list_by_scouting_team(query=None):
+    """Filter want list entries by current user's scouting team number."""
+    from app.models import WantListEntry
+    scouting_team_number = get_current_scouting_team_number()
+    if query is None:
+        query = WantListEntry.query
+
+    if scouting_team_number is not None:
+        return query.filter(WantListEntry.scouting_team_number == scouting_team_number)
+    return query.filter(WantListEntry.scouting_team_number.is_(None))
+
+
 def filter_pit_scouting_data_by_scouting_team(query=None):
     """Filter pit scouting data by current user's scouting team number.
     If alliance mode is active, includes pit data from all alliance members.

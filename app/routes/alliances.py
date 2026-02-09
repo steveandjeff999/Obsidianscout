@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app
 from flask_socketio import emit, join_room, leave_room
-from app.models import AllianceSelection, Team, Event, ScoutingData, DoNotPickEntry, AvoidEntry, db, team_event, DeclinedEntry
+from app.models import AllianceSelection, Team, Event, ScoutingData, DoNotPickEntry, AvoidEntry, db, team_event, DeclinedEntry, WantListEntry
 from app.utils.analysis import calculate_team_metrics
 from flask_login import current_user
 from app import socketio
@@ -13,7 +13,7 @@ from app.utils.team_isolation import (
     filter_avoid_entries_by_scouting_team, assign_scouting_team_to_model,
     get_current_scouting_team_number, get_event_by_code
 )
-from app.utils.team_isolation import filter_declined_entries_by_scouting_team, get_combined_dropdown_events
+from app.utils.team_isolation import filter_declined_entries_by_scouting_team, get_combined_dropdown_events, filter_want_list_by_scouting_team
 
 bp = Blueprint('alliances', __name__, url_prefix='/alliances')
 
@@ -226,6 +226,14 @@ def get_recommendations(event_id):
             DeclinedEntry.event_id == event_id
         ).all())
         
+        # Get want list for this event (filtered by scouting team) with rankings
+        want_list_entries = filter_want_list_by_scouting_team().filter(
+            WantListEntry.event_id == event_id
+        ).all()
+        want_list_teams = {}  # Map team_id to rank
+        for entry in want_list_entries:
+            want_list_teams[entry.team_id] = entry.rank
+        
         # Calculate metrics for available teams
         team_recommendations = []
         do_not_pick_recommendations = []  # Separate list for do not pick teams
@@ -245,7 +253,9 @@ def get_recommendations(event_id):
                             'teleop_points': metrics.get('teleop_points', 0),
                             'endgame_points': metrics.get('endgame_points', 0),
                             'is_avoided': team.id in avoid_teams,
-                            'is_do_not_pick': team.id in do_not_pick_teams
+                            'is_do_not_pick': team.id in do_not_pick_teams,
+                            'is_want_list': team.id in want_list_teams,
+                            'want_list_rank': want_list_teams.get(team.id, 999)
                         
                         }
                         
@@ -268,7 +278,9 @@ def get_recommendations(event_id):
                             'is_avoided': team.id in avoid_teams,
                             'is_do_not_pick': team.id in do_not_pick_teams,
                             'is_declined': team.id in declined_teams,
-                            'has_no_data': True
+                            'has_no_data': True,
+                            'is_want_list': team.id in want_list_teams,
+                            'want_list_rank': want_list_teams.get(team.id, 999)
                         })
                 except Exception as e:
                     print(f"Error calculating metrics for team {team.team_number}: {e}")
@@ -283,7 +295,9 @@ def get_recommendations(event_id):
                         'is_avoided': team.id in avoid_teams,
                         'is_do_not_pick': team.id in do_not_pick_teams,
                         'is_declined': team.id in declined_teams,
-                        'has_no_data': True
+                        'has_no_data': True,
+                        'is_want_list': team.id in want_list_teams,
+                        'want_list_rank': want_list_teams.get(team.id, 999)
                     })
         
         # Optionally apply a small trend adjustment to the sort key.
@@ -382,6 +396,16 @@ def get_recommendations(event_id):
                         trend_adj = 0.0
 
             effective = base_score + trend_adj
+            
+            # Apply want list boost - higher priority (lower rank number) gets larger boost
+            # Rank 1 gets biggest boost, rank 2 slightly less, etc.
+            if team_data.get('is_want_list', False):
+                rank = team_data.get('want_list_rank', 999)
+                # Calculate boost: rank 1 = +50 points, rank 2 = +40, rank 3 = +30, etc.
+                # Use formula: max(60 - (rank * 10), 5) to give diminishing boosts
+                want_boost = max(60 - (rank * 10), 5)
+                effective += want_boost
+            
             # Penalize avoided teams slightly
             if team_data['is_avoided']:
                 return effective * 0.7  # Reduce score by 30% for avoided teams
@@ -496,7 +520,9 @@ def get_recommendations(event_id):
                 'is_avoided': rec['is_avoided'],
                 'is_do_not_pick': rec['is_do_not_pick'],
                 'is_declined': rec.get('is_declined', False),
-                'has_no_data': rec.get('has_no_data', False)
+                'has_no_data': rec.get('has_no_data', False),
+                'is_want_list': rec.get('is_want_list', False),
+                'want_list_rank': rec.get('want_list_rank', 999)
             }
             # Compute recent trend (slope) for client display (small, robust indicator)
             try:
@@ -664,13 +690,14 @@ def reset_alliances(event_id):
 
 @bp.route('/manage_lists/<int:event_id>')
 def manage_lists(event_id):
-    """Manage avoid and do not pick lists"""
+    """Manage avoid, do not pick, declined, and want lists"""
     event = Event.query.get_or_404(event_id)
     
     # Get current lists
     avoid_entries = AvoidEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
     do_not_pick_entries = DoNotPickEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
     declined_entries = DeclinedEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
+    want_list_entries = filter_want_list_by_scouting_team().filter_by(event_id=event_id).order_by(WantListEntry.rank).all()
     
     # Get all teams for this event from team_event relationship
     all_teams = db.session.query(Team).join(
@@ -705,6 +732,7 @@ def manage_lists(event_id):
                          avoid_entries=avoid_entries,
                          do_not_pick_entries=do_not_pick_entries,
                          declined_entries=declined_entries,
+                         want_list_entries=want_list_entries,
                          all_teams=all_teams,
                          **get_theme_context())
 
@@ -909,3 +937,187 @@ def remove_from_list():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
+
+
+@bp.route('/api/want_list/add', methods=['POST'])
+def add_to_want_list():
+    """Add a team to the want list"""
+    data = request.get_json()
+    
+    team_number = data.get('team_number')
+    event_id = data.get('event_id')
+    reason = data.get('reason', '')
+    
+    if not all([team_number, event_id]):
+        return jsonify({'success': False, 'message': 'Missing required fields'})
+    
+    # Get the team
+    team = filter_teams_by_scouting_team().filter_by(team_number=team_number).first()
+    if not team:
+        return jsonify({'success': False, 'message': 'Team not found'})
+    
+    # Check if team is already in the want list
+    existing = filter_want_list_by_scouting_team().filter_by(
+        team_id=team.id, 
+        event_id=event_id
+    ).first()
+    if existing:
+        return jsonify({'success': False, 'message': 'Team already in want list'})
+    
+    try:
+        # Get the highest rank currently in the list and add 1
+        max_rank_result = filter_want_list_by_scouting_team().filter_by(
+            event_id=event_id
+        ).order_by(WantListEntry.rank.desc()).first()
+        
+        new_rank = (max_rank_result.rank + 1) if max_rank_result else 1
+        
+        entry = WantListEntry(
+            team_id=team.id, 
+            event_id=event_id, 
+            reason=reason, 
+            rank=new_rank,
+            scouting_team_number=current_user.scouting_team_number
+        )
+        db.session.add(entry)
+        db.session.commit()
+        
+        # Emit real-time update
+        list_data = {
+            'event_id': event_id,
+            'team_id': team.id,
+            'team_number': team.team_number,
+            'team_name': team.team_name or f'Team {team.team_number}',
+            'list_type': 'want_list',
+            'rank': new_rank,
+            'reason': reason,
+            'action': 'add'
+        }
+        emit_lists_update(event_id, list_data)
+        emit_recommendations_update(event_id)
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Team {team_number} added to want list',
+            'rank': new_rank,
+            'entry_id': entry.id
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
+
+
+@bp.route('/api/want_list/remove', methods=['POST'])
+def remove_from_want_list():
+    """Remove a team from the want list"""
+    data = request.get_json()
+    
+    team_id = data.get('team_id')
+    event_id = data.get('event_id')
+    
+    if not all([team_id, event_id]):
+        return jsonify({'success': False, 'message': 'Missing required fields'})
+    
+    # Find and remove the entry
+    entry = filter_want_list_by_scouting_team().filter_by(
+        team_id=team_id, 
+        event_id=event_id
+    ).first()
+    
+    if not entry:
+        return jsonify({'success': False, 'message': 'Entry not found'})
+    
+    try:
+        team = entry.team  # Get team info before deleting
+        removed_rank = entry.rank
+        db.session.delete(entry)
+        
+        # Re-rank remaining entries to fill the gap
+        remaining_entries = filter_want_list_by_scouting_team().filter_by(
+            event_id=event_id
+        ).filter(WantListEntry.rank > removed_rank).order_by(WantListEntry.rank).all()
+        
+        for remaining_entry in remaining_entries:
+            remaining_entry.rank -= 1
+        
+        db.session.commit()
+        
+        # Emit real-time update
+        list_data = {
+            'event_id': event_id,
+            'team_id': team_id,
+            'team_number': team.team_number,
+            'team_name': team.team_name or f'Team {team.team_number}',
+            'list_type': 'want_list',
+            'action': 'remove'
+        }
+        emit_lists_update(event_id, list_data)
+        emit_recommendations_update(event_id)
+        
+        return jsonify({'success': True, 'message': 'Team removed from want list'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
+
+
+@bp.route('/api/want_list/reorder', methods=['POST'])
+def reorder_want_list():
+    """Reorder teams in the want list"""
+    data = request.get_json()
+    
+    event_id = data.get('event_id')
+    ordered_team_ids = data.get('ordered_team_ids', [])  # Array of team IDs in new order
+    
+    if not event_id or not ordered_team_ids:
+        return jsonify({'success': False, 'message': 'Missing required fields'})
+    
+    try:
+        # Update ranks based on new order
+        for new_rank, team_id in enumerate(ordered_team_ids, start=1):
+            entry = filter_want_list_by_scouting_team().filter_by(
+                team_id=team_id,
+                event_id=event_id
+            ).first()
+            if entry:
+                entry.rank = new_rank
+        
+        db.session.commit()
+        
+        # Emit real-time update
+        list_data = {
+            'event_id': event_id,
+            'list_type': 'want_list',
+            'action': 'reorder',
+            'ordered_team_ids': ordered_team_ids
+        }
+        emit_lists_update(event_id, list_data)
+        emit_recommendations_update(event_id)
+        
+        return jsonify({'success': True, 'message': 'Want list reordered successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
+
+
+@bp.route('/api/want_list/get/<int:event_id>')
+def get_want_list(event_id):
+    """Get the want list for an event"""
+    try:
+        entries = filter_want_list_by_scouting_team().filter_by(
+            event_id=event_id
+        ).order_by(WantListEntry.rank).all()
+        
+        want_list = []
+        for entry in entries:
+            want_list.append({
+                'id': entry.id,
+                'team_id': entry.team_id,
+                'team_number': entry.team.team_number,
+                'team_name': entry.team.team_name or f'Team {entry.team.team_number}',
+                'rank': entry.rank,
+                'reason': entry.reason or ''
+            })
+        
+        return jsonify({'success': True, 'want_list': want_list})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'})

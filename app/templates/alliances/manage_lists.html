@@ -179,16 +179,75 @@
             </div>
         </div>
     </div>
+
+    <!-- Want List -->
+    <div class="col-lg-6 mb-4">
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-star me-2"></i>Want List {{ help.help_icon('Teams here get priority boosts in recommendations based on their rank. Rank 1 gets the biggest boost. Drag to reorder.', 'Want list') }}
+                </h5>
+                <small>Teams will be prioritized in recommendations - higher rank = bigger boost</small>
+            </div>
+            <div class="card-body">
+                <!-- Add to Want List -->
+                <div class="mb-3">
+                    <div class="input-group">
+                        <select class="form-select" id="wantListTeamSelect">
+                            <option value="">Select team to add to want list...</option>
+                            {% for team in all_teams %}
+                            <option value="{{ team.team_number }}">{{ team.team_number }} - {{ team.team_name or 'Unknown' }}</option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-success" onclick="addToWantList()">
+                            <i class="fas fa-plus me-1"></i>Add
+                        </button>
+                    </div>
+                    <div class="mt-2">
+                        <input type="text" class="form-control" id="wantListReason" placeholder="Reason (optional)">
+                    </div>
+                </div>
+                
+                <!-- Want List Display with Drag-to-Reorder -->
+                <div id="wantList" class="sortable-list">
+                    {% if want_list_entries %}
+                    {% for entry in want_list_entries %}
+                    <div class="d-flex justify-content-between align-items-center border-bottom py-2 sortable-item" data-team-id="{{ entry.team_id }}" draggable="true">
+                        <div class="d-flex align-items-center flex-grow-1">
+                            <span class="badge bg-success me-2" style="min-width: 30px;">{{ entry.rank }}</span>
+                            <i class="fas fa-grip-vertical text-muted me-2" style="cursor: move;"></i>
+                            <div>
+                                <strong>Team {{ entry.team.team_number }}</strong>
+                                {% if entry.team.team_name %} - {{ entry.team.team_name }}{% endif %}
+                                {% if entry.reason %}
+                                <br><small class="text-muted">{{ entry.reason }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" onclick="removeFromWantList({{ entry.team_id }})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-muted text-center py-3" id="wantListEmpty">No teams in want list</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row">
     <div class="col-12">
         <div class="alert alert-info">
-            <h6><i class="fas fa-info-circle me-2"></i>How these lists work: {{ help.help_icon('Short explanation of the Avoid, Do-not-pick, and Declined lists and how they affect recommendations and assignments.', 'How lists work') }}</h6>
+            <h6><i class="fas fa-info-circle me-2"></i>How these lists work: {{ help.help_icon('Explanation of Avoid, Do-not-pick, Declined, and Want lists and how they affect recommendations.', 'How lists work') }}</h6>
             <ul class="mb-0">
+                <li><strong>Want List:</strong> Teams receive ranking boosts based on their position (Rank 1 = +50 pts, Rank 2 = +40 pts, etc.). Drag to reorder.</li>
                 <li><strong>Avoid List:</strong> Teams will still appear in recommendations but with a 30% reduction in their ranking score</li>
                 <li><strong>Do Not Pick List:</strong> Teams will only be recommended if there are no other available teams</li>
-                <li>Both lists only affect recommendations - you can still manually assign any team to an alliance</li>
+                <li><strong>Declined List:</strong> Teams are hidden from recommendations but can be manually assigned</li>
+                <li>All lists only affect recommendations - you can still manually assign any team to an alliance</li>
             </ul>
         </div>
     </div>
@@ -427,5 +486,168 @@ function removeFromList(listType, teamId) {
         }
     });
 }
+
+// Want List Functions
+function addToWantList() {
+    const teamNumber = document.getElementById('wantListTeamSelect').value;
+    const reason = document.getElementById('wantListReason').value;
+    
+    if (!teamNumber) {
+        alert('Please select a team');
+        return;
+    }
+    
+    fetch('/alliances/api/want_list/add', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            team_number: teamNumber,
+            event_id: manageEventId,
+            reason: reason
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Clear inputs
+            document.getElementById('wantListTeamSelect').value = '';
+            document.getElementById('wantListReason').value = '';
+            // UI will update via socket or reload
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Network error occurred');
+    });
+}
+
+function removeFromWantList(teamId) {
+    if (!confirm('Are you sure you want to remove this team from the want list?')) {
+        return;
+    }
+    
+    fetch('/alliances/api/want_list/remove', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            team_id: teamId,
+            event_id: manageEventId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Network error occurred');
+    });
+}
+
+// Drag and drop functionality for want list reordering
+document.addEventListener('DOMContentLoaded', function() {
+    const wantList = document.getElementById('wantList');
+    if (!wantList) return;
+    
+    let draggedItem = null;
+    
+    // Add event listeners to all sortable items
+    function initializeDragAndDrop() {
+        const items = wantList.querySelectorAll('.sortable-item');
+        items.forEach(item => {
+            item.addEventListener('dragstart', handleDragStart);
+            item.addEventListener('dragover', handleDragOver);
+            item.addEventListener('drop', handleDrop);
+            item.addEventListener('dragend', handleDragEnd);
+        });
+    }
+    
+    function handleDragStart(e) {
+        draggedItem = this;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', this.innerHTML);
+        this.style.opacity = '0.4';
+    }
+    
+    function handleDragOver(e) {
+        if (e.preventDefault) {
+            e.preventDefault();
+        }
+        e.dataTransfer.dropEffect = 'move';
+        
+        if (draggedItem !== this) {
+            const rect = this.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            
+            if (e.clientY < midpoint) {
+                this.parentNode.insertBefore(draggedItem, this);
+            } else {
+                this.parentNode.insertBefore(draggedItem, this.nextSibling);
+            }
+        }
+        
+        return false;
+    }
+    
+    function handleDrop(e) {
+        if (e.stopPropagation) {
+            e.stopPropagation();
+        }
+        return false;
+    }
+    
+    function handleDragEnd(e) {
+        this.style.opacity = '1';
+        
+        // Update ranks visually and send to server
+        const items = wantList.querySelectorAll('.sortable-item');
+        const orderedTeamIds = [];
+        
+        items.forEach((item, index) => {
+            const badge = item.querySelector('.badge');
+            if (badge) {
+                badge.textContent = index + 1;
+            }
+            orderedTeamIds.push(parseInt(item.dataset.teamId));
+        });
+        
+        // Send new order to server
+        fetch('/alliances/api/want_list/reorder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                event_id: manageEventId,
+                ordered_team_ids: orderedTeamIds
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                alert('Error updating order: ' + data.message);
+                location.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Network error occurred');
+            location.reload();
+        });
+    }
+    
+    initializeDragAndDrop();
+});
 </script>
 {% endblock %}

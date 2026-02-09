@@ -976,6 +976,20 @@ class DeclinedEntry(TeamListEntry):
         'polymorphic_identity': 'declined'
     }
 
+class WantListEntry(TeamListEntry):
+    """Teams that are desired for alliance selection with a priority ranking.
+    
+    Teams on the want list receive a boost in recommendations based on their rank.
+    Higher ranks (lower numbers, e.g., 1, 2, 3) receive larger boosts.
+    This helps prioritize preferred alliance partners during selection.
+    """
+    __tablename__ = None  # Use parent table
+    rank = db.Column(db.Integer, nullable=False, default=999)  # Lower number = higher priority
+    
+    __mapper_args__ = {
+        'polymorphic_identity': 'want_list'
+    }
+
 class AllianceSelection(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     alliance_number = db.Column(db.Integer, nullable=False)  # 1-8 for 8 alliances
