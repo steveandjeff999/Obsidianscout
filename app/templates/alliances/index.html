@@ -600,6 +600,8 @@ function displayRecommendations() {
         } else if (team.is_avoided) {
             badgeClass = 'text-warning';
             warningIcon = '<i class="fas fa-exclamation-triangle text-warning me-1" title="Avoid"></i>';
+        } else if (team.is_want_list) {
+            warningIcon = `<i class="fas fa-star text-success me-1" title="Want List - Rank ${team.want_list_rank}"></i>`;
         }
         
         // Trend arrow and predicted score
@@ -656,6 +658,8 @@ function displayRecommendations() {
         } else if (team.is_avoided) {
             badgeClass = 'text-warning';
             warningIcon = '<i class="fas fa-exclamation-triangle text-warning me-1" title="Avoid"></i>';
+        } else if (team.is_want_list) {
+            warningIcon = `<i class="fas fa-star text-success me-1" title="Want List - Rank ${team.want_list_rank}"></i>`;
         }
         
         // Show flat trend for no-data teams (unless slope provided)
@@ -1040,6 +1044,19 @@ function declineTeam(teamNumber) {
     border-radius: 0.5rem;
     box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
     transition: all 0.2s ease-in-out;
+    position: relative;
+    z-index: 1;
+}
+
+/* Ensure the entire card header with dropdown has higher z-index */
+.card > .card-header {
+    position: relative;
+    z-index: 1060;
+}
+
+/* Ensure event dropdown menu appears above everything */
+.dropdown-menu {
+    z-index: 1070 !important;
 }
 
 .team-slot {
