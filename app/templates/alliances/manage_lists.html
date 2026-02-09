@@ -255,6 +255,18 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+.sortable-list .sortable-item {
+    transition: opacity 0.2s;
+    cursor: move;
+}
+.sortable-list .sortable-item:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+.sortable-list .sortable-item.dragging {
+    opacity: 0.4;
+}
+</style>
 <script>
 let socket;
 const manageEventId = (function(){

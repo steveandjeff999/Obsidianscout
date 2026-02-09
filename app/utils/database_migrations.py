@@ -101,6 +101,7 @@ MIGRATIONS = [
     # TeamListEntry table migrations (default bind)
     # -------------------------------------------------------------------------
     ('team_list_entry', 'scouting_team_number', 'INTEGER', None),
+    ('team_list_entry', 'rank', 'INTEGER DEFAULT 999', None),  # For WantListEntry priority ranking
     
     # -------------------------------------------------------------------------
     # AllianceSelection table migrations (default bind)
