@@ -67,6 +67,14 @@ class ConcurrentDatabaseManager:
     def init_app(self, app):
         """Initialize the database manager with Flask app"""
         self.app = app
+        database_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        if not database_uri.startswith('sqlite:///'):
+            # ConcurrentDatabaseManager is SQLite-specific (CR-SQLite).
+            # When running against PostgreSQL, skip initialisation – PG
+            # handles concurrency natively.
+            logger.info("Skipping ConcurrentDatabaseManager init (non-SQLite backend).")
+            self._initialized = False
+            return
         self._setup_crsqlite_path()
         self._setup_engine()
         self._initialized = True

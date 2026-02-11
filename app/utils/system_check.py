@@ -81,6 +81,10 @@ class SystemCheck:
                 self.results["database"]["status"] = "pass"
                 
         except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             self.results["database"]["details"].append({"name": "Database Error", "status": "fail", "message": str(e)})
             self.results["database"]["status"] = "fail"
     
@@ -577,6 +581,10 @@ class SystemCheck:
                         "message": f"Model {model_class.__name__} is valid. Count: {count}"
                     })
                 except Exception as e:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
                     self.results["models"]["details"].append({
                         "name": f"Model {model_class.__name__}", 
                         "status": "fail", 

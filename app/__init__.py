@@ -598,6 +598,10 @@ def on_connect():
                     join_room(alliance_room)
                     
     except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         print(f"Error in socket connect: {e}")
         pass
 
@@ -626,43 +630,65 @@ def register_chat_history_routes(app):
         
         return jsonify({'success': True, 'message': 'Chat history deleted'})
 
-def create_app(test_config=None):
+def create_app(test_config=None, use_postgres=False):
     # Create and configure the app
     app = Flask(__name__, instance_relative_config=True)
+    # Store the database mode on the app so other modules can check it
+    app.config['USE_POSTGRES'] = use_postgres
     # Record application start time for uptime diagnostics
     try:
         app.start_time = datetime.now(timezone.utc)
     except Exception:
         app.start_time = None
     
+    # ------------------------------------------------------------------
+    # Database URI setup – choose between SQLite and PostgreSQL
+    # ------------------------------------------------------------------
+    if use_postgres:
+        # PostgreSQL mode: import manager and build URIs
+        try:
+            from app.utils.postgres_manager import PostgresManager
+            _pg = PostgresManager()
+            _db_uri = _pg.get_uri()
+            _db_binds = _pg.get_binds()
+            _engine_opts = _pg.get_engine_options()
+            print(f"[create_app] Using PostgreSQL: {_db_uri.split('@')[1] if '@' in _db_uri else _db_uri}")
+        except Exception as pg_err:
+            print(f"[create_app] WARNING: PostgreSQL setup failed ({pg_err}), falling back to SQLite.")
+            use_postgres = False
+            app.config['USE_POSTGRES'] = False
+
+    if not use_postgres:
+        # SQLite mode (default)
+        _db_uri = 'sqlite:///' + os.path.join(app.instance_path, 'scouting.db')
+        _db_binds = {
+            'users': 'sqlite:///' + os.path.join(app.instance_path, 'users.db'),
+            'pages': 'sqlite:///' + os.path.join(app.instance_path, 'pages.db'),
+            'misc':  'sqlite:///' + os.path.join(app.instance_path, 'misc.db'),
+        }
+        _engine_opts = {
+            'pool_pre_ping': True,
+            'pool_recycle': 1800,
+            'pool_size': 5,
+            'pool_timeout': 60,
+            'max_overflow': 10,
+            'connect_args': {
+                'check_same_thread': False,
+                'timeout': 60,
+                'isolation_level': None,
+            },
+        }
+
     # Set default configuration
     app.config.from_mapping(
         SECRET_KEY='dev',
-        SQLALCHEMY_DATABASE_URI='sqlite:///' + os.path.join(app.instance_path, 'scouting.db'),
-        # Additional database bind for user accounts (stored separately)
-        SQLALCHEMY_BINDS={
-            'users': 'sqlite:///' + os.path.join(app.instance_path, 'users.db'),
-            # Dedicated database for user-created pages/widgets
-            'pages': 'sqlite:///' + os.path.join(app.instance_path, 'pages.db'),
-            # Dedicated database for notifications and misc features
-            'misc': 'sqlite:///' + os.path.join(app.instance_path, 'misc.db')
-        },
+        SQLALCHEMY_DATABASE_URI=_db_uri,
+        SQLALCHEMY_BINDS=_db_binds,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         # Enable managing instance DB files from admin UI
         DB_FILE_MANAGEMENT_ENABLED=True,
         DB_BACKUP_RETENTION=10,
-        SQLALCHEMY_ENGINE_OPTIONS={
-            'pool_pre_ping': True,
-            'pool_recycle': 1800,        # Reduced to 30 minutes
-            'pool_size': 5,              # Increased for sync workers (SQLite WAL mode supports multiple readers)
-            'pool_timeout': 60,          # Increased timeout
-            'max_overflow': 10,          # Allow overflow connections for background processes
-            'connect_args': {
-                'check_same_thread': False,
-                'timeout': 60,           # SQLite connection timeout
-                'isolation_level': None  # Autocommit mode for better performance
-            }
-        },
+        SQLALCHEMY_ENGINE_OPTIONS=_engine_opts,
         UPLOAD_FOLDER=os.path.join(app.instance_path, 'uploads'),
         # Security: enforce secure session cookies
         SESSION_COOKIE_SECURE=True,
@@ -694,12 +720,14 @@ def create_app(test_config=None):
             alt_instance = os.path.join(tempfile.gettempdir(), 'obsidian_scout_instance')
             os.makedirs(alt_instance, exist_ok=True)
             app.instance_path = alt_instance
-            app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(alt_instance, 'scouting.db')
-            app.config['SQLALCHEMY_BINDS'] = {
-                'users': 'sqlite:///' + os.path.join(alt_instance, 'users.db'),
-                'pages': 'sqlite:///' + os.path.join(alt_instance, 'pages.db'),
-                'misc': 'sqlite:///' + os.path.join(alt_instance, 'misc.db')
-            }
+            # Only override DB URIs when NOT using PostgreSQL
+            if not app.config.get('USE_POSTGRES'):
+                app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(alt_instance, 'scouting.db')
+                app.config['SQLALCHEMY_BINDS'] = {
+                    'users': 'sqlite:///' + os.path.join(alt_instance, 'users.db'),
+                    'pages': 'sqlite:///' + os.path.join(alt_instance, 'pages.db'),
+                    'misc': 'sqlite:///' + os.path.join(alt_instance, 'misc.db')
+                }
             app.config['UPLOAD_FOLDER'] = os.path.join(alt_instance, 'uploads')
             os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
             print(f"Using alternative instance path: {alt_instance}")
@@ -932,7 +960,44 @@ def create_app(test_config=None):
     
     # Initialize SocketIO
     socketio.init_app(app)
-    
+
+    # ---- Session cleanup ------------------------------------------------
+    # Ensure Flask-SQLAlchemy's scoped session is removed at the end of
+    # every request so that PostgreSQL connections are returned to the pool
+    # in a clean state.  Without this, a failed transaction in one request
+    # can poison the session for subsequent requests on the same thread.
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):
+        try:
+            # Always roll back before removing the session.  If the
+            # transaction was already committed this is a harmless no-op.
+            # If any query failed (even silently caught), this ensures the
+            # connection is returned to the pool in a clean state so that
+            # PostgreSQL does not carry an aborted transaction into the
+            # next request.
+            db.session.rollback()
+        except Exception:
+            pass
+        db.session.remove()
+
+    # ---- Per-request session health (PostgreSQL) ---------------------
+    # Ensure the scoped session starts clean on every request.  If the
+    # previous request left the session in an aborted-transaction state
+    # (e.g. an error was caught but not rolled back), this resets it so
+    # the new request doesn't inherit a poisoned session.
+    if use_postgres:
+        @app.before_request
+        def _pg_ensure_clean_session():
+            try:
+                # A lightweight probe; if the connection is in a failed
+                # transaction state, this will raise and we handle it.
+                db.session.execute(db.text('SELECT 1'))
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
     # Initialize file integrity monitor
     file_integrity_monitor.init_app(app)
     
@@ -1190,7 +1255,10 @@ def create_app(test_config=None):
             # Create user-related tables explicitly to avoid cross-bind foreign key ordering issues.
             if 'SQLALCHEMY_BINDS' in app.config and 'users' in app.config['SQLALCHEMY_BINDS']:
                 try:
-                    users_engine = db.get_engine(app, bind='users')
+                    try:
+                        users_engine = db.get_engine(bind='users')
+                    except TypeError:
+                        users_engine = db.get_engine(app, bind='users')
                     # Create user-related tables explicitly using their Table objects to
                     # ensure the referenced tables exist before creating association tables.
                     try:
@@ -1211,7 +1279,10 @@ def create_app(test_config=None):
             # If a separate pages bind is configured, create its tables explicitly.
             if 'SQLALCHEMY_BINDS' in app.config and 'pages' in app.config['SQLALCHEMY_BINDS']:
                 try:
-                    pages_engine = db.get_engine(app, bind='pages')
+                    try:
+                        pages_engine = db.get_engine(bind='pages')
+                    except TypeError:
+                        pages_engine = db.get_engine(app, bind='pages')
                     try:
                         from app.models import CustomPage
                         CustomPage.__table__.create(pages_engine, checkfirst=True)
@@ -1223,23 +1294,45 @@ def create_app(test_config=None):
                 except Exception as e:
                     app.logger.info('Could not create pages bind tables via metadata.create_all; continuing: %s', e)
 
-            # Finally create all remaining tables on the default bind.
-            # Creating per-table avoids SQLAlchemy attempting to sort cross-bind
-            # dependencies which can raise NoReferencedTableError when tables
-            # are split across multiple SQLite files.
-            try:
-                default_engine = db.get_engine(app)
-                # Names of tables that belong to the users bind and were already created
-                users_table_names = set(['role', 'user', 'user_roles'])
+            # If a separate misc bind is configured, create its tables explicitly.
+            if 'SQLALCHEMY_BINDS' in app.config and 'misc' in app.config['SQLALCHEMY_BINDS']:
+                try:
+                    try:
+                        misc_engine = db.get_engine(bind='misc')
+                    except TypeError:
+                        misc_engine = db.get_engine(app, bind='misc')
+                    from app import models_misc  # noqa: F401 – ensure models registered
+                    misc_tables = [
+                        t for t in db.metadata.sorted_tables
+                        if t.info.get('bind_key') == 'misc'
+                    ]
+                    for t in misc_tables:
+                        try:
+                            t.create(misc_engine, checkfirst=True)
+                        except Exception as te:
+                            app.logger.debug(f"Could not create misc table {t.name}: {te}")
+                except Exception as e:
+                    app.logger.info('Could not create misc bind tables: %s', e)
 
-                # Create each table individually for the default bind, skipping user tables
+            # Finally create all remaining tables on the default bind.
+            # Skip tables that belong to other binds – they were already
+            # created on their own engines above.
+            try:
+                try:
+                    default_engine = db.get_engine(bind_key=None)
+                except TypeError:
+                    default_engine = db.get_engine(app)
+                # Bind keys that have their own engines (already handled above)
+                _non_default_binds = {'users', 'pages', 'misc'}
+
                 for table in db.metadata.sorted_tables:
-                    if table.name in users_table_names:
+                    # Skip tables that belong to a non-default bind
+                    tbl_bind = table.info.get('bind_key')
+                    if tbl_bind in _non_default_binds:
                         continue
                     try:
                         table.create(default_engine, checkfirst=True)
                     except Exception as te:
-                        # Log but continue creating other tables
                         app.logger.debug(f"Could not create table {table.name}: {te}")
             except Exception as e:
                 print(f"Warning: Database tables may already exist or per-table create failed: {e}")

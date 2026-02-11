@@ -42,6 +42,13 @@ class CatchupSyncScheduler:
                     self.start()
                     
             except Exception as e:
+                # Rollback so the session isn't left in a failed-transaction
+                # state (critical for PostgreSQL).
+                try:
+                    from app import db
+                    db.session.rollback()
+                except Exception:
+                    pass
                 logger.warning(f"Could not load catch-up scheduler configuration: {e}")
                 # Start with defaults
                 self.start()

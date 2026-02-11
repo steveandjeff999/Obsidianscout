@@ -146,6 +146,10 @@ def init_auth_system():
     except Exception as e:
         print(f"Auth init query failed (likely missing column): {e}")
         try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
             from app.utils.database_migrations import run_all_migrations
             print("Attempting to run migrations to repair auth schema...")
             run_all_migrations(db)
@@ -154,6 +158,10 @@ def init_auth_system():
         try:
             admin_user = User.query.filter_by(username=admin_username).first()
         except Exception as e2:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             print(f"Auth init query still failing after migrations: {e2}")
             admin_user = None
     if not admin_user:
@@ -401,6 +409,10 @@ def check_database_health():
         
     except Exception as e:
         print(f"Database health check failed: {e}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         # Attempt to automatically repair schema issues by running migrations
         try:
             from app.utils.database_migrations import run_all_migrations
@@ -416,9 +428,17 @@ def check_database_health():
                         return False
                     return True
                 except Exception as e2:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
                     print(f"Re-check after migration failed: {e2}")
                     return False
         except Exception as me:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             print(f"Automatic migration attempt failed: {me}")
         return False
 

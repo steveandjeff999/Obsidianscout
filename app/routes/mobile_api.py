@@ -3092,7 +3092,9 @@ def bulk_submit_scouting_data():
                     failed_count += 1
                     continue
                 
-                # Create entry
+                # Create entry inside SAVEPOINT so one failure doesn't kill the batch
+                nested = db.session.begin_nested()
+
                 timestamp = entry.get('timestamp')
                 if timestamp:
                     timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
@@ -3113,6 +3115,7 @@ def bulk_submit_scouting_data():
                 
                 db.session.add(scouting_data)
                 db.session.flush()  # Get ID without committing
+                nested.commit()  # Release SAVEPOINT
                 
                 # Sync to alliance if active
                 sync_scouting_to_alliance(scouting_data, team_number)
@@ -3125,6 +3128,10 @@ def bulk_submit_scouting_data():
                 submitted_count += 1
                 
             except Exception as e:
+                try:
+                    nested.rollback()  # Rollback only this SAVEPOINT
+                except Exception:
+                    pass
                 results.append({
                     'offline_id': entry.get('offline_id'),
                     'success': False,

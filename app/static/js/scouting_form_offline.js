@@ -331,10 +331,11 @@
     }
 
     /**
-     * Check whether the server is reachable by pinging a lightweight health endpoint with timeout
+     * Check whether the server is reachable by pinging a lightweight health endpoint with timeout.
+     * Increased timeout to 10 seconds to accommodate slow connections like PDANet.
      * Returns a Promise<boolean>
      */
-    function checkServerReachable(timeoutMs = 2500) {
+    function checkServerReachable(timeoutMs = 100000) {
         const url = '/health';
         try {
             const controller = new AbortController();

@@ -362,6 +362,10 @@ def schedule_upcoming_match_notifications(app):
                 last_event_offsets[event.id] = offset
 
             except Exception as e:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
                 print(f" Error handling reschedule logic for event {getattr(event,'code', 'N/A')}: {e}")
 
         if rescheduled_total > 0:

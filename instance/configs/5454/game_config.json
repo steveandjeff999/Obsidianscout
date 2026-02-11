@@ -10,7 +10,7 @@
     "Qualification",
     "Playoff"
   ],
-  "preferred_api_source": "first",
+  "preferred_api_source": "tba",
   "auto_period": {
     "duration_seconds": 20,
     "scoring_elements": [

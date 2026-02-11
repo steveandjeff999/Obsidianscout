@@ -21,7 +21,7 @@ from app.utils.database_migrations import column_exists_for_bind
 from app.models_misc import NotificationLog
 from app.utils.emailer import send_email as send_email_util
 from app.utils import emailer as emailer_util
-from app.utils import token as token_util
+from app.utils import token_utils as token_util
 import json
  
 def validate_csrf_token():
