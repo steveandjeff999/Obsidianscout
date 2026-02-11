@@ -1472,49 +1472,60 @@ def sync_download():
             new_data_count = 0
             updated_data_count = 0
             
-            # Process downloaded data
+            # Process downloaded data — wrap each item in SAVEPOINT
             for item_data in download_result.get('data', []):
-                # Check if this data already exists locally
-                existing_data = PitScoutingData.query.filter_by(
-                    local_id=item_data.get('local_id')
-                ).first()
-                
-                if existing_data:
-                    # Update existing data if remote version is newer
-                    remote_timestamp = datetime.fromisoformat(item_data['timestamp'].replace('Z', '+00:00'))
-                    if remote_timestamp > existing_data.timestamp:
-                        existing_data.data_json = json.dumps(item_data.get('data', {}))
-                        existing_data.timestamp = remote_timestamp
-                        if item_data.get('is_uploaded'):
-                            existing_data.is_uploaded = True
-                            existing_data.upload_timestamp = datetime.fromisoformat(item_data['upload_timestamp'].replace('Z', '+00:00'))
-                        updated_data_count += 1
-                else:
-                    # Create new local data entry
-                    team = Team.query.filter_by(team_number=item_data['team_number']).first()
-                    if not team:
-                        team = Team(team_number=item_data['team_number'])
-                        db.session.add(team)
-                        db.session.flush()  # Get the team ID
+                try:
+                    nested = db.session.begin_nested()  # SAVEPOINT
+
+                    # Check if this data already exists locally
+                    existing_data = PitScoutingData.query.filter_by(
+                        local_id=item_data.get('local_id')
+                    ).first()
                     
-                    new_pit_data = PitScoutingData(
-                        local_id=item_data.get('local_id'),
-                        team_id=team.id,
-                        event_id=item_data.get('event_id'),
-                        scouting_team_number=item_data.get('scouting_team_number') or getattr(current_user, 'scouting_team_number', None),
-                        scout_name=item_data.get('scout_name'),
-                        scout_id=item_data.get('scout_id'),
-                        data_json=json.dumps(item_data.get('data', {})),
-                        is_uploaded=item_data.get('is_uploaded', False),
-                        device_id=item_data.get('device_id'),
-                        timestamp=datetime.fromisoformat(item_data['timestamp'].replace('Z', '+00:00'))
-                    )
-                    
-                    if item_data.get('upload_timestamp'):
-                        new_pit_data.upload_timestamp = datetime.fromisoformat(item_data['upload_timestamp'].replace('Z', '+00:00'))
-                    
-                    db.session.add(new_pit_data)
-                    new_data_count += 1
+                    if existing_data:
+                        # Update existing data if remote version is newer
+                        remote_timestamp = datetime.fromisoformat(item_data['timestamp'].replace('Z', '+00:00'))
+                        if remote_timestamp > existing_data.timestamp:
+                            existing_data.data_json = json.dumps(item_data.get('data', {}))
+                            existing_data.timestamp = remote_timestamp
+                            if item_data.get('is_uploaded'):
+                                existing_data.is_uploaded = True
+                                existing_data.upload_timestamp = datetime.fromisoformat(item_data['upload_timestamp'].replace('Z', '+00:00'))
+                            updated_data_count += 1
+                    else:
+                        # Create new local data entry
+                        team = Team.query.filter_by(team_number=item_data['team_number']).first()
+                        if not team:
+                            team = Team(team_number=item_data['team_number'])
+                            db.session.add(team)
+                            db.session.flush()  # Get the team ID
+                        
+                        new_pit_data = PitScoutingData(
+                            local_id=item_data.get('local_id'),
+                            team_id=team.id,
+                            event_id=item_data.get('event_id'),
+                            scouting_team_number=item_data.get('scouting_team_number') or getattr(current_user, 'scouting_team_number', None),
+                            scout_name=item_data.get('scout_name'),
+                            scout_id=item_data.get('scout_id'),
+                            data_json=json.dumps(item_data.get('data', {})),
+                            is_uploaded=item_data.get('is_uploaded', False),
+                            device_id=item_data.get('device_id'),
+                            timestamp=datetime.fromisoformat(item_data['timestamp'].replace('Z', '+00:00'))
+                        )
+                        
+                        if item_data.get('upload_timestamp'):
+                            new_pit_data.upload_timestamp = datetime.fromisoformat(item_data['upload_timestamp'].replace('Z', '+00:00'))
+                        
+                        db.session.add(new_pit_data)
+                        new_data_count += 1
+
+                    nested.commit()
+                except Exception as e:
+                    try:
+                        nested.rollback()
+                    except Exception:
+                        pass
+                    print(f"Warning: Failed to sync pit scouting item {item_data.get('local_id')}: {e}")
             
             db.session.commit()
             
@@ -1596,49 +1607,60 @@ def sync_full():
         updated_data_count = 0
         
         if sync_result['download_success']:
-            # Process downloaded data
+            # Process downloaded data — wrap each item in SAVEPOINT
             for item_data in sync_result.get('new_data', []):
-                # Check if this data already exists locally
-                existing_data = PitScoutingData.query.filter_by(
-                    local_id=item_data.get('local_id')
-                ).first()
-                
-                if existing_data:
-                    # Update existing data if remote version is newer
-                    remote_timestamp = datetime.fromisoformat(item_data['timestamp'].replace('Z', '+00:00'))
-                    if remote_timestamp > existing_data.timestamp:
-                        existing_data.data_json = json.dumps(item_data.get('data', {}))
-                        existing_data.timestamp = remote_timestamp
-                        if item_data.get('is_uploaded'):
-                            existing_data.is_uploaded = True
-                            existing_data.upload_timestamp = datetime.fromisoformat(item_data['upload_timestamp'].replace('Z', '+00:00'))
-                        updated_data_count += 1
-                else:
-                    # Create new local data entry
-                    team = Team.query.filter_by(team_number=item_data['team_number']).first()
-                    if not team:
-                        team = Team(team_number=item_data['team_number'])
-                        db.session.add(team)
-                        db.session.flush()  # Get the team ID
+                try:
+                    nested = db.session.begin_nested()  # SAVEPOINT
+
+                    # Check if this data already exists locally
+                    existing_data = PitScoutingData.query.filter_by(
+                        local_id=item_data.get('local_id')
+                    ).first()
                     
-                    new_pit_data = PitScoutingData(
-                        local_id=item_data.get('local_id'),
-                        team_id=team.id,
-                        event_id=item_data.get('event_id'),
-                        scouting_team_number=item_data.get('scouting_team_number') or getattr(current_user, 'scouting_team_number', None),
-                        scout_name=item_data.get('scout_name'),
-                        scout_id=item_data.get('scout_id'),
-                        data_json=json.dumps(item_data.get('data', {})),
-                        is_uploaded=item_data.get('is_uploaded', False),
-                        device_id=item_data.get('device_id'),
-                        timestamp=datetime.fromisoformat(item_data['timestamp'].replace('Z', '+00:00'))
-                    )
-                    
-                    if item_data.get('upload_timestamp'):
-                        new_pit_data.upload_timestamp = datetime.fromisoformat(item_data['upload_timestamp'].replace('Z', '+00:00'))
-                    
-                    db.session.add(new_pit_data)
-                    new_data_count += 1
+                    if existing_data:
+                        # Update existing data if remote version is newer
+                        remote_timestamp = datetime.fromisoformat(item_data['timestamp'].replace('Z', '+00:00'))
+                        if remote_timestamp > existing_data.timestamp:
+                            existing_data.data_json = json.dumps(item_data.get('data', {}))
+                            existing_data.timestamp = remote_timestamp
+                            if item_data.get('is_uploaded'):
+                                existing_data.is_uploaded = True
+                                existing_data.upload_timestamp = datetime.fromisoformat(item_data['upload_timestamp'].replace('Z', '+00:00'))
+                            updated_data_count += 1
+                    else:
+                        # Create new local data entry
+                        team = Team.query.filter_by(team_number=item_data['team_number']).first()
+                        if not team:
+                            team = Team(team_number=item_data['team_number'])
+                            db.session.add(team)
+                            db.session.flush()  # Get the team ID
+                        
+                        new_pit_data = PitScoutingData(
+                            local_id=item_data.get('local_id'),
+                            team_id=team.id,
+                            event_id=item_data.get('event_id'),
+                            scouting_team_number=item_data.get('scouting_team_number') or getattr(current_user, 'scouting_team_number', None),
+                            scout_name=item_data.get('scout_name'),
+                            scout_id=item_data.get('scout_id'),
+                            data_json=json.dumps(item_data.get('data', {})),
+                            is_uploaded=item_data.get('is_uploaded', False),
+                            device_id=item_data.get('device_id'),
+                            timestamp=datetime.fromisoformat(item_data['timestamp'].replace('Z', '+00:00'))
+                        )
+                        
+                        if item_data.get('upload_timestamp'):
+                            new_pit_data.upload_timestamp = datetime.fromisoformat(item_data['upload_timestamp'].replace('Z', '+00:00'))
+                        
+                        db.session.add(new_pit_data)
+                        new_data_count += 1
+
+                    nested.commit()
+                except Exception as e:
+                    try:
+                        nested.rollback()
+                    except Exception:
+                        pass
+                    print(f"Warning: Failed to sync pit scouting item {item_data.get('local_id')}: {e}")
         
         db.session.commit()
         

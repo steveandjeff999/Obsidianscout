@@ -109,6 +109,11 @@ class RealTimeReplicator:
                 continue
             except Exception as e:
                 logger.error(f" Error in replication worker: {e}")
+                try:
+                    from app import db
+                    db.session.rollback()
+                except Exception:
+                    pass
                 # Continue processing to prevent worker from stopping
                 try:
                     self.replication_queue.task_done()
@@ -117,6 +122,11 @@ class RealTimeReplicator:
                 continue
             except Exception as e:
                 logger.error(f" Error in replication worker: {e}")
+                try:
+                    from app import db
+                    db.session.rollback()
+                except Exception:
+                    pass
                 time.sleep(1)
     
     def _replicate_to_servers(self, operation: Dict, servers: List[SyncServer]):

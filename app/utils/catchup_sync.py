@@ -55,6 +55,13 @@ class CatchupSyncManager:
                 self.max_catchup_days = SyncConfig.get_value('max_catchup_days', 30)
                 self.batch_size = SyncConfig.get_value('catchup_batch_size', 100)
             except Exception as e:
+                # Rollback so the session isn't left in a failed-transaction
+                # state (critical for PostgreSQL).
+                try:
+                    from app import db
+                    db.session.rollback()
+                except Exception:
+                    pass
                 logger.warning(f"Could not load catch-up configuration: {e}")
     
     def detect_servers_needing_catchup(self) -> List['SyncServer']:

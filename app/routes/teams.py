@@ -362,32 +362,38 @@ def sync_from_config():
         
         # Temporarily disable replication during bulk sync to prevent queue issues
         with DisableReplication():
-            # Process each team from the API
+            BATCH_SIZE = 25
+            batch_count = 0
+
+            # Process each team from the API inside SAVEPOINTs so one
+            # failure doesn't kill the whole sync.
             for team_data in team_data_list:
                 
                 if not team_data or not team_data.get('team_number'):
                     continue
                     
                 team_number = team_data.get('team_number')
-                
-                # Check if the team already exists for this scouting team
-                team = filter_teams_by_scouting_team().filter(Team.team_number == team_number).first()
-                
-                if team:
-                    # Update existing team
-                    team.team_name = team_data.get('team_name', team.team_name)
-                    team.location = team_data.get('location', team.location)
-                    teams_updated += 1
-                else:
-                    # Add new team
-                    team = Team(**team_data)
-                    assign_scouting_team_to_model(team)  # Assign current scouting team
-                    db.session.add(team)
-                    db.session.flush()  # Flush to get the team ID
-                    teams_added += 1
-                
-                # Associate this team with the current event if not already associated
+
                 try:
+                    nested = db.session.begin_nested()  # SAVEPOINT
+                    
+                    # Check if the team already exists for this scouting team
+                    team = filter_teams_by_scouting_team().filter(Team.team_number == team_number).first()
+                    
+                    if team:
+                        # Update existing team
+                        team.team_name = team_data.get('team_name', team.team_name)
+                        team.location = team_data.get('location', team.location)
+                        teams_updated += 1
+                    else:
+                        # Add new team
+                        team = Team(**team_data)
+                        assign_scouting_team_to_model(team)  # Assign current scouting team
+                        db.session.add(team)
+                        db.session.flush()  # Flush to get the team ID
+                        teams_added += 1
+                    
+                    # Associate this team with the current event if not already associated
                     # Prevent two different Team rows with the same team_number from being associated
                     # with the same Event. Check existing teams on the event with the same team_number.
                     conflict = False
@@ -396,21 +402,24 @@ def sync_from_config():
                             conflict = True
                             break
 
-                    if conflict:
-                        # Log and skip association to avoid duplicate logical team entries on same event
-                        print(f"Skipping association for team {team.team_number} -> event {event.code}: another team row with same number already associated")
-                        continue
-
-                    # Check if association already exists to avoid duplicate
-                    if event not in team.events:
+                    if not conflict and event not in team.events:
                         team.events.append(event)
-                        db.session.flush()  # Flush after each team-event association
+                        db.session.flush()  # Flush after team-event association
+
+                    nested.commit()  # Release SAVEPOINT
                 except Exception as e:
-                    # Log the error but continue processing other teams
-                    print(f"Error associating team {team.team_number} with event: {str(e)}")
+                    try:
+                        nested.rollback()  # Rollback only this SAVEPOINT
+                    except Exception:
+                        pass
+                    print(f"Warning: Failed to sync team {team_number}: {e}")
                     continue
+
+                batch_count += 1
+                if batch_count % BATCH_SIZE == 0:
+                    db.session.commit()  # Checkpoint progress
             
-            # Commit all changes
+            # Final commit for remaining items
             db.session.commit()
         
         # Merge any duplicate events that may have been created

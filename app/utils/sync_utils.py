@@ -209,6 +209,10 @@ class SyncUtils:
             else:
                 health['database'] = 'error'
         except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             health['database'] = f'error: {str(e)}'
         
         try:

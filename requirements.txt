@@ -63,4 +63,5 @@ Flask-Mail>=0.9.1
 pywebpush>=2.1.1
 py-vapid
 PyJWT>=2.8.0
+psycopg2-binary>=2.9.9  # PostgreSQL driver (needed when USE_POSTGRES=True)
 

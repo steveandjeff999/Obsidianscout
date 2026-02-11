@@ -227,10 +227,28 @@ def get_or_create_event(name=None, code=None, year=None, location=None, start_da
     )
     try:
         db.session.add(new_ev)
-        db.session.flush()
+        # Use a SAVEPOINT so that an IntegrityError rolls back only this
+        # insert, not any prior work in the session (critical for PG).
+        nested = db.session.begin_nested()
+        try:
+            db.session.flush()
+            nested.commit()
+        except IntegrityError:
+            nested.rollback()
+            # Race: someone else created it concurrently. Re-query.
+            if code_norm:
+                evt = Event.query.filter_by(code=code_norm, scouting_team_number=scouting_team_number).first()
+                if evt:
+                    return evt
+            if name and year is not None:
+                evt = Event.query.filter_by(name=name, year=year, scouting_team_number=scouting_team_number).first()
+                if evt:
+                    return evt
+            # If still no event, re-raise to let caller decide
+            raise
         return new_ev
     except IntegrityError:
-        # Race: someone else created it concurrently. Rollback and re-query.
+        # Final safety net — full rollback if nested approach also fails
         db.session.rollback()
         if code_norm:
             evt = Event.query.filter_by(code=code_norm, scouting_team_number=scouting_team_number).first()
@@ -240,7 +258,6 @@ def get_or_create_event(name=None, code=None, year=None, location=None, start_da
             evt = Event.query.filter_by(name=name, year=year, scouting_team_number=scouting_team_number).first()
             if evt:
                 return evt
-        # If still no event, re-raise to let caller decide
         raise
 
 def merge_duplicate_matches(scouting_team_number=None, event_id=None):
@@ -529,16 +546,14 @@ def _process_portable_data(export_data):
                     db.session.commit()
                     return created.id
                 except Exception:
+                    # Fallback: create a minimal Event record inside SAVEPOINT
                     try:
-                        db.session.rollback()
-                    except Exception:
-                        pass
-                    # Fallback: create a minimal Event record
-                    try:
+                        fb_nested = db.session.begin_nested()
                         ev_obj = Event(name='Imported (Missing Event) - Portable Import', code=ev.get('code'), year=ev.get('year') or datetime.now(timezone.utc).year)
                         ev_obj.scouting_team_number = stn
                         db.session.add(ev_obj)
                         db.session.flush()
+                        fb_nested.commit()
                         mapping['events'][export_event_id] = ev_obj.id
                         if code:
                             mapping['events'][code.strip().upper()] = ev_obj.id
@@ -547,7 +562,7 @@ def _process_portable_data(export_data):
                         return ev_obj.id
                     except Exception:
                         try:
-                            db.session.rollback()
+                            fb_nested.rollback()
                         except Exception:
                             pass
                         return None
@@ -558,56 +573,69 @@ def _process_portable_data(export_data):
 
             # Create a generic placeholder event
             try:
+                ph_nested = db.session.begin_nested()
                 placeholder = get_or_create_event(
                     name='Imported (Missing Event) - Portable Import',
-                    code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}',
+                    code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
                     year=datetime.now(timezone.utc).year
                 )
                 mapping['events'][None] = placeholder.id
                 report['created']['events'] = report['created'].get('events', 0) + 1 if report.get('created') else 1
+                ph_nested.commit()
                 db.session.commit()
                 return placeholder.id
             except Exception:
                 try:
-                    db.session.rollback()
+                    ph_nested.rollback()
                 except Exception:
                     pass
                 try:
+                    ph_nested2 = db.session.begin_nested()
                     ev_obj = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
                     db.session.add(ev_obj)
                     db.session.flush()
+                    ph_nested2.commit()
                     mapping['events'][None] = ev_obj.id
                     report['created']['events'] = report['created'].get('events', 0) + 1 if report.get('created') else 1
                     db.session.commit()
                     return ev_obj.id
                 except Exception:
                     try:
-                        db.session.rollback()
+                        ph_nested2.rollback()
                     except Exception:
                         pass
                     return None
 
-        # TEAMS
+        # TEAMS — wrap each team in a SAVEPOINT so one failure doesn't kill the batch
         for t in export_data.get('teams', []):
-            existing = Team.query.filter_by(team_number=t.get('team_number')).first()
-            if existing:
-                existing.team_name = t.get('team_name')
-                existing.location = t.get('location')
-                existing.scouting_team_number = t.get('scouting_team_number')
-                db.session.add(existing)
-                mapping['teams'][t['id']] = existing.id
-                report['updated']['teams'] = report['updated'].get('teams', 0) + 1 if report['updated'].get('teams') else 1
-            else:
-                new_t = Team(
-                    team_number=t.get('team_number'),
-                    team_name=t.get('team_name'),
-                    location=t.get('location'),
-                    scouting_team_number=t.get('scouting_team_number')
-                )
-                db.session.add(new_t)
-                db.session.flush()
-                mapping['teams'][t['id']] = new_t.id
-                report['created']['teams'] = report['created'].get('teams', 0) + 1 if report['created'].get('teams') else 1
+            try:
+                nested = db.session.begin_nested()  # SAVEPOINT
+                existing = Team.query.filter_by(team_number=t.get('team_number')).first()
+                if existing:
+                    existing.team_name = t.get('team_name')
+                    existing.location = t.get('location')
+                    existing.scouting_team_number = t.get('scouting_team_number')
+                    db.session.add(existing)
+                    mapping['teams'][t['id']] = existing.id
+                    report['updated']['teams'] = report['updated'].get('teams', 0) + 1 if report['updated'].get('teams') else 1
+                else:
+                    new_t = Team(
+                        team_number=t.get('team_number'),
+                        team_name=t.get('team_name'),
+                        location=t.get('location'),
+                        scouting_team_number=t.get('scouting_team_number')
+                    )
+                    db.session.add(new_t)
+                    db.session.flush()
+                    mapping['teams'][t['id']] = new_t.id
+                    report['created']['teams'] = report['created'].get('teams', 0) + 1 if report['created'].get('teams') else 1
+                nested.commit()
+            except Exception as e:
+                try:
+                    nested.rollback()
+                except Exception:
+                    pass
+                report['errors'].append(f"Failed to import team {t.get('team_number')}: {e}")
 
         db.session.commit()
 
@@ -636,68 +664,38 @@ def _process_portable_data(export_data):
                 if m.get('event_id') is None or m.get('event_id') not in mapping['events']:
                     need_placeholder = True
                     break
-            if need_placeholder:
+            if need_placeholder and mapping['events'].get(None) is None:
                 try:
+                    ph_nested = db.session.begin_nested()
                     placeholder = get_or_create_event(
                         name='Imported (Missing Event) - Portable Import',
                         code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
                         year=datetime.now(timezone.utc).year
                     )
                     mapping['events'][None] = placeholder.id
+                    ph_nested.commit()
                     db.session.commit()
                 except Exception:
                     try:
-                        db.session.rollback()
+                        ph_nested.rollback()
                     except Exception:
                         pass
                     # Fallback: attempt to create a minimal Event directly
                     try:
+                        ph_nested2 = db.session.begin_nested()
                         ev = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
                         db.session.add(ev)
                         db.session.flush()
+                        ph_nested2.commit()
                         mapping['events'][None] = ev.id
                         db.session.commit()
                     except Exception:
                         try:
-                            db.session.rollback()
+                            ph_nested2.rollback()
                         except Exception:
                             pass
 
-        # Ensure we have a placeholder Event for any MATCH entries that reference a missing event
-        if export_data.get('matches'):
-            need_placeholder = False
-            for m in export_data.get('matches', []):
-                if m.get('event_id') is None or m.get('event_id') not in mapping['events']:
-                    need_placeholder = True
-                    break
-            if need_placeholder:
-                try:
-                    placeholder = get_or_create_event(
-                        name='Imported (Missing Event) - Portable Import',
-                        code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
-                        year=datetime.now(timezone.utc).year
-                    )
-                    mapping['events'][None] = placeholder.id
-                    db.session.commit()
-                except Exception:
-                    try:
-                        db.session.rollback()
-                    except Exception:
-                        pass
-                    # Fallback: attempt to create Event directly
-                    try:
-                        ev = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
-                        db.session.add(ev)
-                        db.session.flush()
-                        mapping['events'][None] = ev.id
-                        db.session.commit()
-                    except Exception:
-                        try:
-                            db.session.rollback()
-                        except Exception:
-                            pass
-
-        # MATCHES
+        # MATCHES — wrap each match in a SAVEPOINT so one failure doesn't kill the batch
         for m in export_data.get('matches', []):
             # Look up mapped event id. If mapping doesn't contain a key for the
             # exported event_id, fall back to the placeholder (mapping['events'][None])
@@ -709,79 +707,91 @@ def _process_portable_data(export_data):
                     # If still None, ensure a global placeholder exists
                     if mapping['events'].get(None) is None:
                         try:
+                            ev_nested = db.session.begin_nested()
                             placeholder = get_or_create_event(
                                 name='Imported (Missing Event) - Portable Import',
                                 code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
                                 year=datetime.now(timezone.utc).year
                             )
                             mapping['events'][None] = placeholder.id
+                            ev_nested.commit()
                             db.session.commit()
                         except Exception:
                             try:
-                                db.session.rollback()
+                                ev_nested.rollback()
                             except Exception:
                                 pass
                             # Fallback to creating a minimal Event directly
                             try:
+                                ev_nested2 = db.session.begin_nested()
                                 ev = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
                                 db.session.add(ev)
                                 db.session.flush()
                                 mapping['events'][None] = ev.id
+                                ev_nested2.commit()
                                 db.session.commit()
                             except Exception:
                                 try:
-                                    db.session.rollback()
+                                    ev_nested2.rollback()
                                 except Exception:
                                     pass
                     new_event = mapping['events'].get(None)
-            existing = None
-            if new_event:
-                existing = Match.query.filter_by(event_id=new_event, match_type=m.get('match_type'), match_number=m.get('match_number')).first()
 
-            if existing:
-                existing.red_alliance = m.get('red_alliance') or ''
-                existing.blue_alliance = m.get('blue_alliance') or ''
-                existing.red_score = m.get('red_score')
-                existing.blue_score = m.get('blue_score')
-                existing.winner = m.get('winner')
-                db.session.add(existing)
-                mapping['matches'][m['id']] = existing.id
-                report['updated']['matches'] = report['updated'].get('matches', 0) + 1 if report['updated'].get('matches') else 1
-            else:
-                # If we still don't have an event id, skip this match and report error
-                if not new_event:
-                    report['errors'].append(f"Skipping match import (no event): {m.get('match_number')} {m.get('match_type')}")
-                    continue
-                new_m = Match(
-                    match_number=m.get('match_number'),
-                    match_type=m.get('match_type'),
-                    event_id=new_event if new_event else mapping['events'].get(None),
-                    red_alliance=m.get('red_alliance') or '',
-                    blue_alliance=m.get('blue_alliance') or '',
-                    red_score=m.get('red_score'),
-                    blue_score=m.get('blue_score'),
-                    winner=m.get('winner'),
-                    scouting_team_number=m.get('scouting_team_number')
-                )
-                db.session.add(new_m)
-                db.session.flush()
-                # If for some reason event_id persisted as None (race or mapping issue), assign placeholder if available
-                try:
+            try:
+                nested = db.session.begin_nested()  # SAVEPOINT
+
+                existing = None
+                if new_event:
+                    existing = Match.query.filter_by(event_id=new_event, match_type=m.get('match_type'), match_number=m.get('match_number')).first()
+
+                if existing:
+                    existing.red_alliance = m.get('red_alliance') or ''
+                    existing.blue_alliance = m.get('blue_alliance') or ''
+                    existing.red_score = m.get('red_score')
+                    existing.blue_score = m.get('blue_score')
+                    existing.winner = m.get('winner')
+                    db.session.add(existing)
+                    mapping['matches'][m['id']] = existing.id
+                    report['updated']['matches'] = report['updated'].get('matches', 0) + 1 if report['updated'].get('matches') else 1
+                else:
+                    # If we still don't have an event id, skip this match and report error
+                    if not new_event:
+                        nested.rollback()
+                        report['errors'].append(f"Skipping match import (no event): {m.get('match_number')} {m.get('match_type')}")
+                        continue
+                    new_m = Match(
+                        match_number=m.get('match_number'),
+                        match_type=m.get('match_type'),
+                        event_id=new_event if new_event else mapping['events'].get(None),
+                        red_alliance=m.get('red_alliance') or '',
+                        blue_alliance=m.get('blue_alliance') or '',
+                        red_score=m.get('red_score'),
+                        blue_score=m.get('blue_score'),
+                        winner=m.get('winner'),
+                        scouting_team_number=m.get('scouting_team_number')
+                    )
+                    db.session.add(new_m)
+                    db.session.flush()
+                    # If for some reason event_id persisted as None, assign placeholder if available
                     if (not new_m.event_id) and mapping['events'].get(None):
                         new_m.event_id = mapping['events'].get(None)
                         db.session.add(new_m)
                         db.session.flush()
+                    mapping['matches'][m['id']] = new_m.id
+                    report['created']['matches'] = report['created'].get('matches', 0) + 1 if report['created'].get('matches') else 1
+
+                nested.commit()
+            except Exception as e:
+                try:
+                    nested.rollback()
                 except Exception:
-                    try:
-                        db.session.rollback()
-                    except Exception:
-                        pass
-                mapping['matches'][m['id']] = new_m.id
-                report['created']['matches'] = report['created'].get('matches', 0) + 1 if report['created'].get('matches') else 1
+                    pass
+                report['errors'].append(f"Failed to import match {m.get('match_type')} {m.get('match_number')}: {e}")
 
         db.session.commit()
 
         # SCOUTING DATA - upsert by match+team+scouting_team_number
+        # Wrap each entry in a SAVEPOINT so one failure doesn't kill the batch
         for sd in export_data.get('scouting_data', []):
             new_match = mapping['matches'].get(sd.get('match_id'))
             new_team = mapping['teams'].get(sd.get('team_id'))
@@ -789,44 +799,55 @@ def _process_portable_data(export_data):
                 report['skipped']['scouting_data'] = report['skipped'].get('scouting_data', 0) + 1 if report['skipped'].get('scouting_data') else 1
                 continue
 
-            existing_sd = ScoutingData.query.filter_by(match_id=new_match, team_id=new_team, scouting_team_number=sd.get('scouting_team_number')).first()
-            if existing_sd:
-                # Merge JSON data conservatively: prefer incoming non-null values, keep existing otherwise
-                try:
-                    incoming = json.loads(sd.get('data_json')) if isinstance(sd.get('data_json'), str) else sd.get('data_json') or {}
-                except Exception:
-                    incoming = {}
-                try:
-                    existing = existing_sd.data or {}
-                except Exception:
-                    existing = {}
+            try:
+                nested = db.session.begin_nested()  # SAVEPOINT
 
-                merged = existing.copy()
-                for k, v in incoming.items():
-                    if v is not None:
-                        merged[k] = v
+                existing_sd = ScoutingData.query.filter_by(match_id=new_match, team_id=new_team, scouting_team_number=sd.get('scouting_team_number')).first()
+                if existing_sd:
+                    # Merge JSON data conservatively: prefer incoming non-null values, keep existing otherwise
+                    try:
+                        incoming = json.loads(sd.get('data_json')) if isinstance(sd.get('data_json'), str) else sd.get('data_json') or {}
+                    except Exception:
+                        incoming = {}
+                    try:
+                        existing = existing_sd.data or {}
+                    except Exception:
+                        existing = {}
 
-                existing_sd.data_json = json.dumps(merged)
-                existing_sd.scout_name = sd.get('scout_name') or existing_sd.scout_name
-                existing_sd.scouting_station = sd.get('scouting_station') or existing_sd.scouting_station
-                db.session.add(existing_sd)
-                mapping['scouting_data'][sd['id']] = existing_sd.id
-                report['updated']['scouting_data'] = report['updated'].get('scouting_data', 0) + 1 if report['updated'].get('scouting_data') else 1
-            else:
-                new_sd = ScoutingData(
-                    match_id=new_match,
-                    team_id=new_team,
-                    scouting_team_number=sd.get('scouting_team_number'),
-                    scout_name=sd.get('scout_name'),
-                    scout_id=sd.get('scout_id'),
-                    scouting_station=sd.get('scouting_station'),
-                    alliance=sd.get('alliance'),
-                    data_json=sd.get('data_json')
-                )
-                db.session.add(new_sd)
-                db.session.flush()
-                mapping['scouting_data'][sd['id']] = new_sd.id
-                report['created']['scouting_data'] = report['created'].get('scouting_data', 0) + 1 if report['created'].get('scouting_data') else 1
+                    merged = existing.copy()
+                    for k, v in incoming.items():
+                        if v is not None:
+                            merged[k] = v
+
+                    existing_sd.data_json = json.dumps(merged)
+                    existing_sd.scout_name = sd.get('scout_name') or existing_sd.scout_name
+                    existing_sd.scouting_station = sd.get('scouting_station') or existing_sd.scouting_station
+                    db.session.add(existing_sd)
+                    mapping['scouting_data'][sd['id']] = existing_sd.id
+                    report['updated']['scouting_data'] = report['updated'].get('scouting_data', 0) + 1 if report['updated'].get('scouting_data') else 1
+                else:
+                    new_sd = ScoutingData(
+                        match_id=new_match,
+                        team_id=new_team,
+                        scouting_team_number=sd.get('scouting_team_number'),
+                        scout_name=sd.get('scout_name'),
+                        scout_id=sd.get('scout_id'),
+                        scouting_station=sd.get('scouting_station'),
+                        alliance=sd.get('alliance'),
+                        data_json=sd.get('data_json')
+                    )
+                    db.session.add(new_sd)
+                    db.session.flush()
+                    mapping['scouting_data'][sd['id']] = new_sd.id
+                    report['created']['scouting_data'] = report['created'].get('scouting_data', 0) + 1 if report['created'].get('scouting_data') else 1
+
+                nested.commit()
+            except Exception as e:
+                try:
+                    nested.rollback()
+                except Exception:
+                    pass
+                report['errors'].append(f"Failed to import scouting data entry: {e}")
 
         db.session.commit()
 
@@ -843,10 +864,15 @@ def _process_portable_data(export_data):
                 new_p.team_id = new_team
                 new_p.event_id = new_event
                 db.session.add(new_p)
-                db.session.flush()
+                nested = db.session.begin_nested()
+                try:
+                    db.session.flush()
+                    nested.commit()
+                except Exception:
+                    nested.rollback()
+                    raise
                 mapping['pit_scouting'][p['id']] = new_p.id
             except Exception:
-                db.session.rollback()
                 report['errors'].append(f'Failed to import pit scouting entry for team {p.get("team_id")}')
 
         db.session.commit()
@@ -862,17 +888,23 @@ def _process_portable_data(export_data):
                     background_image=s.get('background_image')
                 )
                 db.session.add(new_s)
-                db.session.flush()
+                nested = db.session.begin_nested()
+                try:
+                    db.session.flush()
+                    nested.commit()
+                except Exception:
+                    nested.rollback()
+                    raise
                 mapping['strategy_drawings'][s['id']] = new_s.id
             except Exception:
-                db.session.rollback()
                 report['errors'].append(f'Failed to import strategy drawing {s.get("id")}')
 
         db.session.commit()
 
-        # ALLIANCES / DO_NOT_PICK / AVOID
+        # ALLIANCES / DO_NOT_PICK / AVOID — wrap each in SAVEPOINT
         for a in export_data.get('alliances', []):
             try:
+                nested = db.session.begin_nested()  # SAVEPOINT
                 # Resolve event by exported id and exported metadata (prefer code match across servers)
                 new_event = mapping['events'].get(a.get('event_id'))
                 if new_event is None:
@@ -880,6 +912,7 @@ def _process_portable_data(export_data):
                     if new_event is None:
                         if mapping['events'].get(None) is None:
                             try:
+                                ev_nested = db.session.begin_nested()
                                 placeholder = get_or_create_event(
                                     name='Imported (Missing Event) - Portable Import',
                                     code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
@@ -889,23 +922,26 @@ def _process_portable_data(export_data):
                                 mapping['events'][None] = placeholder.id
                                 report['created']['events'] = report['created'].get('events', 0) + 1 if report.get('created') else 1
                                 current_app.logger.info(f"Created placeholder event id={placeholder.id} for missing alliance event reference")
+                                ev_nested.commit()
                                 db.session.commit()
                             except Exception:
                                 try:
-                                    db.session.rollback()
+                                    ev_nested.rollback()
                                 except Exception:
                                     pass
                                 try:
+                                    ev_nested2 = db.session.begin_nested()
                                     ev = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
                                     ev.scouting_team_number = a.get('scouting_team_number') if a.get('scouting_team_number') else None
                                     db.session.add(ev)
                                     db.session.flush()
+                                    ev_nested2.commit()
                                     mapping['events'][None] = ev.id
                                     report['created']['events'] = report['created'].get('events', 0) + 1 if report.get('created') else 1
                                     db.session.commit()
                                 except Exception:
                                     try:
-                                        db.session.rollback()
+                                        ev_nested2.rollback()
                                     except Exception:
                                         pass
                         new_event = mapping['events'].get(None)
@@ -920,12 +956,17 @@ def _process_portable_data(export_data):
                     scouting_team_number=a.get('scouting_team_number')
                 )
                 db.session.add(new_alliance)
+                nested.commit()
             except Exception:
-                db.session.rollback()
+                try:
+                    nested.rollback()
+                except Exception:
+                    pass
                 report['errors'].append(f'Failed to import alliance selection {a.get("id")}')
 
         for e in export_data.get('do_not_pick', []):
             try:
+                nested = db.session.begin_nested()  # SAVEPOINT
                 new_team = mapping['teams'].get(e.get('team_id'))
                 new_event = mapping['events'].get(e.get('event_id'))
                 if new_team:
@@ -936,12 +977,17 @@ def _process_portable_data(export_data):
                         scouting_team_number=e.get('scouting_team_number')
                     )
                     db.session.add(new_e)
+                nested.commit()
             except Exception:
-                db.session.rollback()
+                try:
+                    nested.rollback()
+                except Exception:
+                    pass
                 report['errors'].append(f'Failed to import do_not_pick entry {e.get("id")}')
 
         for a in export_data.get('avoid', []):
             try:
+                nested = db.session.begin_nested()  # SAVEPOINT
                 new_team = mapping['teams'].get(a.get('team_id'))
                 new_event = mapping['events'].get(a.get('event_id'))
                 if new_team:
@@ -952,15 +998,20 @@ def _process_portable_data(export_data):
                         scouting_team_number=a.get('scouting_team_number')
                     )
                     db.session.add(new_a)
+                nested.commit()
             except Exception:
-                db.session.rollback()
+                try:
+                    nested.rollback()
+                except Exception:
+                    pass
                 report['errors'].append(f'Failed to import avoid entry {a.get("id")}')
 
         db.session.commit()
 
-        # SHARED GRAPHS & SHARED TEAM RANKS - upsert by share_id
+        # SHARED GRAPHS & SHARED TEAM RANKS - upsert by share_id (SAVEPOINT-protected)
         for g in export_data.get('shared_graphs', []):
             try:
+                nested = db.session.begin_nested()  # SAVEPOINT
                 share_id = g.get('share_id')
                 existing_sg = None
                 if share_id:
@@ -999,9 +1050,14 @@ def _process_portable_data(export_data):
                         is_active=g.get('is_active', True)
                     )
                     db.session.add(sg)
+                nested.commit()
             except IntegrityError:
-                db.session.rollback()
                 try:
+                    nested.rollback()
+                except Exception:
+                    pass
+                try:
+                    nested2 = db.session.begin_nested()
                     if share_id:
                         existing = SharedGraph.query.filter_by(share_id=share_id).first()
                         if existing:
@@ -1010,14 +1066,22 @@ def _process_portable_data(export_data):
                             existing.team_numbers = json.dumps(g.get('team_numbers') if g.get('team_numbers') else [])
                             existing.event_id = mapping['events'].get(g.get('event_id')) if g.get('event_id') else None
                             db.session.add(existing)
+                    nested2.commit()
+                except Exception:
+                    try:
+                        nested2.rollback()
+                    except Exception:
+                        pass
+            except Exception:
+                try:
+                    nested.rollback()
                 except Exception:
                     pass
-            except Exception:
-                db.session.rollback()
                 report['errors'].append(f'Failed to import shared graph {g.get("id") or g.get("share_id")}')
 
         for r in export_data.get('shared_team_ranks', []):
             try:
+                nested = db.session.begin_nested()  # SAVEPOINT
                 share_id = r.get('share_id')
                 existing_sr = None
                 if share_id:
@@ -1050,9 +1114,14 @@ def _process_portable_data(export_data):
                         is_active=r.get('is_active', True)
                     )
                     db.session.add(sr)
+                nested.commit()
             except IntegrityError:
-                db.session.rollback()
                 try:
+                    nested.rollback()
+                except Exception:
+                    pass
+                try:
+                    nested2 = db.session.begin_nested()
                     if share_id:
                         existing = SharedTeamRanks.query.filter_by(share_id=share_id).first()
                         if existing:
@@ -1060,10 +1129,17 @@ def _process_portable_data(export_data):
                             existing.description = r.get('description')
                             existing.event_id = mapping['events'].get(r.get('event_id')) if r.get('event_id') else None
                             db.session.add(existing)
+                    nested2.commit()
+                except Exception:
+                    try:
+                        nested2.rollback()
+                    except Exception:
+                        pass
+            except Exception:
+                try:
+                    nested.rollback()
                 except Exception:
                     pass
-            except Exception:
-                db.session.rollback()
                 report['errors'].append(f'Failed to import shared team ranks {r.get("id") or r.get("share_id")}')
 
         db.session.commit()
@@ -2745,27 +2821,29 @@ def import_status():
                 # Resolve placeholder if needed
                 if not new_event and mapping['events'].get(None) is None:
                     try:
+                        nested = db.session.begin_nested()
                         placeholder = get_or_create_event(
                             name='Imported (Missing Event) - Portable Import',
                             code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
                             year=datetime.now(timezone.utc).year
                         )
                         mapping['events'][None] = placeholder.id
-                        db.session.commit()
+                        nested.commit()
                     except Exception:
                         try:
-                            db.session.rollback()
+                            nested.rollback()
                         except Exception:
                             pass
                         try:
+                            nested2 = db.session.begin_nested()
                             ev = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
                             db.session.add(ev)
                             db.session.flush()
                             mapping['events'][None] = ev.id
-                            db.session.commit()
+                            nested2.commit()
                         except Exception:
                             try:
-                                db.session.rollback()
+                                nested2.rollback()
                             except Exception:
                                 pass
                 if not new_event and mapping['events'].get(None):
@@ -2788,13 +2866,15 @@ def import_status():
                 db.session.add(new_m)
                 db.session.flush()
                 try:
+                    nested = db.session.begin_nested()
                     if (not new_m.event_id) and mapping['events'].get(None):
                         new_m.event_id = mapping['events'].get(None)
                         db.session.add(new_m)
                         db.session.flush()
+                    nested.commit()
                 except Exception:
                     try:
-                        db.session.rollback()
+                        nested.rollback()
                     except Exception:
                         pass
                 mapping['matches'][m['id']] = new_m.id
@@ -2816,6 +2896,7 @@ def import_status():
             existing = StrategyDrawing.query.filter_by(match_id=new_match).first()
             if existing:
                 try:
+                    nested = db.session.begin_nested()
                     existing.scouting_team_number = s.get('scouting_team_number') if s.get('scouting_team_number') is not None else existing.scouting_team_number
                     existing.data_json = s.get('data_json') or existing.data_json
                     existing.background_image = s.get('background_image') or existing.background_image
@@ -2824,11 +2905,12 @@ def import_status():
                     mapping['strategy_drawings'][s['id']] = existing.id
                     report['updated'].setdefault('strategy_drawings', 0)
                     report['updated']['strategy_drawings'] = report['updated']['strategy_drawings'] + 1 if report['updated'].get('strategy_drawings') else 1
+                    nested.commit()
                     continue
                 except Exception:
                     # If update fails for any reason, rollback and try to continue
                     try:
-                        db.session.rollback()
+                        nested.rollback()
                     except Exception:
                         pass
                     report['errors'].append(f"Error updating strategy_drawing for imported id {s.get('id')}")
@@ -2836,6 +2918,7 @@ def import_status():
 
             # Create a new drawing if none exists
             try:
+                nested = db.session.begin_nested()
                 new_s = StrategyDrawing(
                     match_id=new_match,
                     scouting_team_number=s.get('scouting_team_number'),
@@ -2847,9 +2930,10 @@ def import_status():
                 mapping['strategy_drawings'][s['id']] = new_s.id
                 report['created'].setdefault('strategy_drawings', 0)
                 report['created']['strategy_drawings'] = report['created']['strategy_drawings'] + 1 if report['created'].get('strategy_drawings') else 1
+                nested.commit()
             except Exception as e:
                 try:
-                    db.session.rollback()
+                    nested.rollback()
                 except Exception:
                     pass
                 report['errors'].append(f"Error creating strategy_drawing for imported id {s.get('id')}: {e}")
@@ -2902,6 +2986,7 @@ def import_status():
 
             if existing:
                 try:
+                    nested = db.session.begin_nested()
                     # Update existing record with imported values (preserve non-null fields when incoming is None)
                     existing.team_id = new_team or existing.team_id
                     existing.event_id = new_event if new_event is not None else existing.event_id
@@ -2926,10 +3011,11 @@ def import_status():
                     mapping['pit_scouting'][p['id']] = existing.id
                     report['updated'].setdefault('pit_scouting', 0)
                     report['updated']['pit_scouting'] = report['updated']['pit_scouting'] + 1 if report['updated'].get('pit_scouting') else 1
+                    nested.commit()
                     continue
                 except Exception as e:
                     try:
-                        db.session.rollback()
+                        nested.rollback()
                     except Exception:
                         pass
                     report['errors'].append(f"Error updating pit_scouting for imported id {p.get('id')}: {e}")
@@ -2937,6 +3023,7 @@ def import_status():
 
             # Create new PitScoutingData
             try:
+                nested = db.session.begin_nested()
                 # Ensure a unique local_id exists
                 if not local_id:
                     local_id = str(_uuid.uuid4())
@@ -2954,14 +3041,16 @@ def import_status():
                 mapping['pit_scouting'][p['id']] = new_p.id
                 report['created'].setdefault('pit_scouting', 0)
                 report['created']['pit_scouting'] = report['created']['pit_scouting'] + 1 if report['created'].get('pit_scouting') else 1
+                nested.commit()
             except Exception as e:
                 try:
-                    db.session.rollback()
+                    nested.rollback()
                 except Exception:
                     pass
                 # If UNIQUE local_id caused a failure, try to find the conflicting record and update it instead
                 if 'UNIQUE constraint failed' in str(e) and local_id:
                     try:
+                        nested2 = db.session.begin_nested()
                         conflict = PitScoutingData.query.filter_by(local_id=local_id).first()
                         if conflict:
                             conflict.team_id = new_team
@@ -2972,10 +3061,11 @@ def import_status():
                             mapping['pit_scouting'][p['id']] = conflict.id
                             report['updated'].setdefault('pit_scouting', 0)
                             report['updated']['pit_scouting'] = report['updated']['pit_scouting'] + 1 if report['updated'].get('pit_scouting') else 1
+                            nested2.commit()
                             continue
                     except Exception:
                         try:
-                            db.session.rollback()
+                            nested2.rollback()
                         except Exception:
                             pass
                 report['errors'].append(f"Error creating pit_scouting for imported id {p.get('id')}: {e}")
@@ -3024,6 +3114,7 @@ def import_status():
         # Upsert shared graphs by share_id to avoid UNIQUE constraint failures
         for g in shared_graphs:
             try:
+                nested = db.session.begin_nested()
                 share_id = g.get('share_id')
                 existing_sg = None
                 if share_id:
@@ -3063,10 +3154,15 @@ def import_status():
                         is_active=g.get('is_active', True)
                     )
                     db.session.add(sg)
+                nested.commit()
             except IntegrityError:
-                db.session.rollback()
+                try:
+                    nested.rollback()
+                except Exception:
+                    pass
                 # On unique constraint errors, attempt to update existing record
                 try:
+                    nested2 = db.session.begin_nested()
                     if share_id:
                         existing = SharedGraph.query.filter_by(share_id=share_id).first()
                         if existing:
@@ -3075,16 +3171,24 @@ def import_status():
                             existing.team_numbers = json.dumps(g.get('team_numbers') if g.get('team_numbers') else [])
                             existing.event_id = mapping['events'].get(g.get('event_id')) if g.get('event_id') else None
                             db.session.add(existing)
+                    nested2.commit()
                 except Exception:
-                    pass
+                    try:
+                        nested2.rollback()
+                    except Exception:
+                        pass
             except Exception:
                 # best-effort; skip problematic graph
-                db.session.rollback()
+                try:
+                    nested.rollback()
+                except Exception:
+                    pass
                 continue
 
         # Upsert shared team ranks by share_id
         for r in shared_team_ranks:
             try:
+                nested = db.session.begin_nested()
                 share_id = r.get('share_id')
                 existing_sr = None
                 if share_id:
@@ -3117,9 +3221,14 @@ def import_status():
                         is_active=r.get('is_active', True)
                     )
                     db.session.add(sr)
+                nested.commit()
             except IntegrityError:
-                db.session.rollback()
                 try:
+                    nested.rollback()
+                except Exception:
+                    pass
+                try:
+                    nested2 = db.session.begin_nested()
                     if share_id:
                         existing = SharedTeamRanks.query.filter_by(share_id=share_id).first()
                         if existing:
@@ -3127,10 +3236,17 @@ def import_status():
                             existing.description = r.get('description')
                             existing.event_id = mapping['events'].get(r.get('event_id')) if r.get('event_id') else None
                             db.session.add(existing)
+                    nested2.commit()
+                except Exception:
+                    try:
+                        nested2.rollback()
+                    except Exception:
+                        pass
+            except Exception:
+                try:
+                    nested.rollback()
                 except Exception:
                     pass
-            except Exception:
-                db.session.rollback()
                 continue
 
         db.session.commit()
@@ -3341,16 +3457,21 @@ def wipe_database():
                 if 'FOREIGN KEY constraint failed' in error_str or 'foreign key constraint fails' in error_str:
                     try:
                         current_app.logger.warning(f"Foreign key constraint error encountered during database wipe for team {scouting_team_number}. Attempting recovery with constraint bypass.")
-                        
-                        # Disable foreign key constraints temporarily (SQLite specific)
-                        db.session.execute(text('PRAGMA foreign_keys = OFF'))
-                        
-                        # Perform deletion with constraints disabled
+
+                        _is_pg = current_app.config.get('USE_POSTGRES', False)
+                        if _is_pg:
+                            # PostgreSQL: defer all FK checks until commit
+                            db.session.execute(text('SET CONSTRAINTS ALL DEFERRED'))
+                        else:
+                            # SQLite: disable FK checking entirely
+                            db.session.execute(text('PRAGMA foreign_keys = OFF'))
+
+                        # Perform deletion with constraints disabled / deferred
                         _perform_deletion_sequence()
-                        
-                        # Re-enable foreign key constraints
-                        db.session.execute(text('PRAGMA foreign_keys = ON'))
-                        
+
+                        if not _is_pg:
+                            db.session.execute(text('PRAGMA foreign_keys = ON'))
+
                         db.session.commit()
                         return True, "Deletion successful with foreign key constraint bypass"
                     except Exception as bypass_error:

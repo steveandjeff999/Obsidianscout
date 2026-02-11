@@ -1,0 +1,11 @@
+{
+  "host": "localhost",
+  "port": 5432,
+  "user": "postgres",
+  "password": "[REDACTED_password]",
+  "superuser_password": "[REDACTED_superuser_password]",
+  "database": "obsidian_scout",
+  "database_users": "obsidian_scout_users",
+  "database_pages": "obsidian_scout_pages",
+  "database_misc": "obsidian_scout_misc"
+}

@@ -64,6 +64,11 @@ class MultiServerSyncManager:
                     self.start_background_workers()
             except Exception as e:
                 # Sync tables don't exist yet - use defaults
+                try:
+                    from app import db as _db
+                    _db.session.rollback()
+                except Exception:
+                    pass
                 print(f"Warning: Sync tables not found (run setup_multi_server_sync.py): {e}")
                 self.sync_enabled = False
                 self.sync_interval = 30

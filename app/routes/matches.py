@@ -550,7 +550,11 @@ def sync_from_config():
         
         # Temporarily disable replication during bulk sync to prevent queue issues
         with DisableReplication():
-            # Process each match from the API
+            BATCH_SIZE = 25
+            batch_count = 0
+
+            # Process each match from the API inside SAVEPOINTs so one
+            # failure doesn't kill the whole sync.
             for match_data in match_data_list:
                 # Set the event_id for the match
                 match_data['event_id'] = event.id
@@ -563,41 +567,57 @@ def sync_from_config():
                 
                 if not match_number or not match_type:
                     continue
+
+                try:
+                    nested = db.session.begin_nested()  # SAVEPOINT
                 
-                # Check if the match already exists for this scouting team
-                match = filter_matches_by_scouting_team().filter(
-                    Match.event_id == event.id,
-                    Match.match_number == match_number,
-                    Match.match_type == match_type
-                ).first()
-                
-                if match:
-                    # Update existing match
-                    match.red_alliance = match_data.get('red_alliance', match.red_alliance)
-                    match.blue_alliance = match_data.get('blue_alliance', match.blue_alliance)
-                    match.winner = match_data.get('winner', match.winner)
-                    match.red_score = match_data.get('red_score', match.red_score)
-                    match.blue_score = match_data.get('blue_score', match.blue_score)
-                    match.display_match_number = match_data.get('display_match_number', match.display_match_number)
-                    # Ensure scouting_team_number is set (in case it was None before)
-                    assign_scouting_team_to_model(match)
-                    matches_updated += 1
-                else:
-                    # Add new match - filter out non-model fields before creating
-                    # Valid Match model fields
-                    valid_fields = {
-                        'match_number', 'match_type', 'event_id', 'red_alliance', 'blue_alliance',
-                        'red_score', 'blue_score', 'winner', 'timestamp', 'scheduled_time',
-                        'predicted_time', 'actual_time', 'display_match_number', 'scouting_team_number'
-                    }
-                    # Filter match_data to only include valid fields
-                    filtered_data = {k: v for k, v in match_data.items() if k in valid_fields}
-                    match = Match(**filtered_data)
-                    assign_scouting_team_to_model(match)  # Assign current scouting team
-                    db.session.add(match)
-                    matches_added += 1
+                    # Check if the match already exists for this scouting team
+                    match = filter_matches_by_scouting_team().filter(
+                        Match.event_id == event.id,
+                        Match.match_number == match_number,
+                        Match.match_type == match_type
+                    ).first()
+                    
+                    if match:
+                        # Update existing match
+                        match.red_alliance = match_data.get('red_alliance', match.red_alliance)
+                        match.blue_alliance = match_data.get('blue_alliance', match.blue_alliance)
+                        match.winner = match_data.get('winner', match.winner)
+                        match.red_score = match_data.get('red_score', match.red_score)
+                        match.blue_score = match_data.get('blue_score', match.blue_score)
+                        match.display_match_number = match_data.get('display_match_number', match.display_match_number)
+                        # Ensure scouting_team_number is set (in case it was None before)
+                        assign_scouting_team_to_model(match)
+                        matches_updated += 1
+                    else:
+                        # Add new match - filter out non-model fields before creating
+                        # Valid Match model fields
+                        valid_fields = {
+                            'match_number', 'match_type', 'event_id', 'red_alliance', 'blue_alliance',
+                            'red_score', 'blue_score', 'winner', 'timestamp', 'scheduled_time',
+                            'predicted_time', 'actual_time', 'display_match_number', 'scouting_team_number'
+                        }
+                        # Filter match_data to only include valid fields
+                        filtered_data = {k: v for k, v in match_data.items() if k in valid_fields}
+                        match = Match(**filtered_data)
+                        assign_scouting_team_to_model(match)  # Assign current scouting team
+                        db.session.add(match)
+                        matches_added += 1
+
+                    nested.commit()  # Release SAVEPOINT
+                except Exception as e:
+                    try:
+                        nested.rollback()  # Rollback only this SAVEPOINT
+                    except Exception:
+                        pass
+                    print(f"Warning: Failed to sync match {match_type} {match_number}: {e}")
+                    continue
+
+                batch_count += 1
+                if batch_count % BATCH_SIZE == 0:
+                    db.session.commit()  # Checkpoint progress
             
-            # Commit all changes
+            # Final commit for remaining items
             db.session.commit()
         
         # Merge any duplicate events that may have been created
@@ -865,21 +885,31 @@ def add():
                     team_obj = Team(team_number=0, team_name=tn, location=None)
                 assign_scouting_team_to_model(team_obj)
                 try:
+                    nested = db.session.begin_nested()  # SAVEPOINT
                     db.session.add(team_obj)
                     db.session.flush()
+                    nested.commit()
                 except Exception as e:
-                    db.session.rollback()
+                    try:
+                        nested.rollback()
+                    except Exception:
+                        pass
                     current_app.logger.error(f"Failed to create team {tn}: {e}")
                     return None
 
             # Associate the team with the event if not already
             try:
+                nested = db.session.begin_nested()  # SAVEPOINT
                 ev = Event.query.get(event_id)
                 if ev and ev not in team_obj.events:
                     team_obj.events.append(ev)
                     db.session.flush()
+                nested.commit()
             except Exception:
-                db.session.rollback()
+                try:
+                    nested.rollback()
+                except Exception:
+                    pass
 
             return tn
 

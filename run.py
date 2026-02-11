@@ -1,4 +1,3 @@
-
 import os
 import sys
 import threading
@@ -32,18 +31,46 @@ else:
     print(f"Parent directory writable: {os.access(parent_dir, os.W_OK)}")
 
 print("===========================\n")
-
+sys.stdout.flush()
+# ---------------------------------------------------------------------------
+# Workaround: Python 3.14 on Windows – platform._wmi_query() can hang
+# indefinitely when the WMI service is slow or unresponsive.  SQLAlchemy
+# calls platform.machine() at import time (in sqlalchemy.util.compat),
+# which triggers the WMI query.  We disable it here so the platform module
+# falls back to sys.getwindowsversion() + PROCESSOR_ARCHITECTURE instead.
+# ---------------------------------------------------------------------------
+if os.name == 'nt':
+    import platform as _platform
+    if hasattr(_platform, '_wmi_query'):
+        def _disabled_wmi_query(*_args, **_kwargs):
+            raise OSError('WMI disabled – startup workaround')
+        _platform._wmi_query = _disabled_wmi_query
+        # Also clear the cached _wmi handle so nothing else retries
+        _platform._wmi = None
+print("Loading application modules...", end=" ", flush=True)
 from app import create_app, socketio, db
+print("core", end=" ", flush=True)
 from flask import redirect, url_for, request, flash
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy import func
+print("flask", end=" ", flush=True)
 from app.models import User, Role
+print("models", end=" ", flush=True)
 from app.utils.database_init import initialize_database, check_database_health
+print("done.", flush=True)
 # ============================================================================
-# SERVER CONFIGURATION FLAG
+# SERVER CONFIGURATION FLAGS
+# ============================================================================
 # Set to True to use Waitress WSGI server, False to use Flask dev server with SSL
-# ============================================================================
-USE_WAITRESS = False # Change this to False to use Flask development server with SSL
+USE_WAITRESS = False
+
+# Set to True to use PostgreSQL instead of SQLite.
+# When True the app will:
+#   1. Auto-detect and start the PostgreSQL server
+#   2. Create the application role and databases if needed
+#   3. Use PostgreSQL connection URIs for all SQLAlchemy binds
+# When False (default) the app continues using local SQLite files.
+USE_POSTGRES = False
 
 # Toggle file-based logging of all mobile API requests/responses.
 # Set to True to enable writing incoming / outgoing mobile API traffic to a file.
@@ -55,7 +82,46 @@ MOBILE_API_LOG_MAX_BODY = 5000
 # Threading lock to ensure file writes are atomic
 MOBILE_API_LOG_LOCK = threading.Lock()
 
-app = create_app()
+# ---------------------------------------------------------------------------
+# PostgreSQL auto-start (when USE_POSTGRES is True)
+# ---------------------------------------------------------------------------
+if USE_POSTGRES:
+    print("\n=== PostgreSQL Mode Enabled ===", flush=True)
+    try:
+        print("[1/4] Loading PostgreSQL manager...", flush=True)
+        from app.utils.postgres_manager import PostgresManager
+        _pg_manager = PostgresManager()
+        print("[2/4] Checking PostgreSQL server status...", flush=True)
+        if _pg_manager.ensure_running():
+            print("[3/4] PostgreSQL is running and databases are provisioned.", flush=True)
+            # Optionally auto-migrate existing SQLite data on first use
+            _pg_flag = os.path.join(script_dir, 'instance', '.pg_initial_migration_done')
+            if not os.path.exists(_pg_flag):
+                print("[4/4] First-time migration: copying SQLite data to PostgreSQL...", flush=True)
+                try:
+                    from app.utils.db_migrate import migrate_sqlite_to_postgres
+                    result = migrate_sqlite_to_postgres(verbose=True)
+                    if result['success']:
+                        os.makedirs(os.path.dirname(_pg_flag), exist_ok=True)
+                        with open(_pg_flag, 'w') as _f:
+                            _f.write(f'migrated at {__import__("datetime").datetime.now().isoformat()}')
+                        print("Initial SQLite → PostgreSQL migration complete.", flush=True)
+                    else:
+                        print("WARNING: Initial migration had errors. Check output above.", flush=True)
+                except Exception as _mig_err:
+                    print(f"WARNING: Could not run initial migration: {_mig_err}", flush=True)
+            else:
+                print("[4/4] Migration already done (skipping).", flush=True)
+        else:
+            print("WARNING: PostgreSQL could not be started. Falling back to SQLite.", flush=True)
+            USE_POSTGRES = False
+    except Exception as _pg_err:
+        print(f"WARNING: PostgreSQL setup failed: {_pg_err}", flush=True)
+        print("Falling back to SQLite.", flush=True)
+        USE_POSTGRES = False
+    print("==============================\n", flush=True)
+
+app = create_app(use_postgres=USE_POSTGRES)
 
 def mobile_api_file_log(prefix, message):
     """Helper to write mobile API request/response details to a file safely."""

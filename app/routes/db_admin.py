@@ -437,7 +437,10 @@ def import_database():
 
                     with engine.begin() as conn:
                         try:
-                            conn.execute(db.text('PRAGMA foreign_keys = OFF'))
+                            if current_app.config.get('USE_POSTGRES', False):
+                                conn.execute(db.text('SET CONSTRAINTS ALL DEFERRED'))
+                            else:
+                                conn.execute(db.text('PRAGMA foreign_keys = OFF'))
                         except Exception:
                             pass
 
@@ -490,16 +493,28 @@ def import_database():
                             except Exception as e:
                                 logger.warning(f"Failed to import table {table_name} on bind {bind_key}: {e}")
 
-                        try:
-                            # Reset sqlite_sequence for this engine to avoid PK collisions
-                            conn.execute(db.text('DELETE FROM sqlite_sequence'))
-                        except Exception:
-                            pass
+                        if not current_app.config.get('USE_POSTGRES', False):
+                            try:
+                                # Reset sqlite_sequence for this engine to avoid PK collisions
+                                conn.execute(db.text('DELETE FROM sqlite_sequence'))
+                            except Exception:
+                                pass
 
-                        try:
-                            conn.execute(db.text('PRAGMA foreign_keys = ON'))
-                        except Exception:
-                            pass
+                            try:
+                                conn.execute(db.text('PRAGMA foreign_keys = ON'))
+                            except Exception:
+                                pass
+                        else:
+                            # PostgreSQL: reset sequences to max(id)+1 to avoid PK collisions
+                            try:
+                                for table_name in tables.keys():
+                                    if table_name in valid_tables:
+                                        conn.execute(db.text(
+                                            f"SELECT setval(pg_get_serial_sequence('\"{table_name}\"', 'id'), "
+                                            f"COALESCE(MAX(id), 1)) FROM \"{table_name}\""
+                                        ))
+                            except Exception:
+                                pass
 
                 db.session.commit()
                 flash('Database imported successfully (databases format)', 'success')
@@ -611,7 +626,18 @@ def import_database():
             for engine in engines:
                 try:
                     with engine.begin() as conn:
-                        conn.execute(db.text('DELETE FROM sqlite_sequence'))
+                        if current_app.config.get('USE_POSTGRES', False):
+                            # PostgreSQL: reset all sequences
+                            try:
+                                result = conn.execute(db.text(
+                                    "SELECT sequencename FROM pg_sequences WHERE schemaname = 'public'"
+                                ))
+                                for row in result:
+                                    conn.execute(db.text(f"ALTER SEQUENCE {row[0]} RESTART WITH 1"))
+                            except Exception:
+                                pass
+                        else:
+                            conn.execute(db.text('DELETE FROM sqlite_sequence'))
                     logger.info("Reset auto-increment counters on engine")
                 except Exception as e:
                     logger.warning(f"Error resetting auto-increment on engine: {e}")
