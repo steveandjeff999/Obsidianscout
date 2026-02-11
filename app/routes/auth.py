@@ -841,6 +841,7 @@ def manage_users():
                 server_id='local'
             )
         except Exception:
+            db.session.rollback()
             current_app.logger.exception('Failed to log DB change for user creation')
         db.session.commit()
 
@@ -1029,6 +1030,7 @@ def add_user():
                 server_id='local'
             )
         except Exception as e:
+            db.session.rollback()
             current_app.logger.error(f"Manual insert change tracking failed: {e}")
         db.session.commit()
         
@@ -1128,6 +1130,7 @@ def update_user(user_id):
         )
         db.session.commit()
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Manual update change tracking failed: {e}")
     current_app.logger.info(f"User {user.username} updated successfully. New active status: {user.is_active}")
     flash(f'User {user.username} updated successfully.', 'success')
@@ -1308,6 +1311,7 @@ def delete_user(user_id):
         )
         db.session.commit()
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Manual soft delete change tracking failed: {e}")
     
     current_app.logger.info(f"Soft delete completed for user: {username}")
@@ -1365,6 +1369,7 @@ def hard_delete_user(user_id):
         )
         current_app.logger.info(f" Logged hard delete change for user {username}")
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f" Manual hard delete change tracking failed: {e}")
     
     # Hard delete - this will trigger the after_delete event
@@ -1413,6 +1418,7 @@ def restore_user(user_id):
         )
         db.session.commit()
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Manual restore change tracking failed: {e}")
     
     current_app.logger.info(f"Restore completed for user: {username}")

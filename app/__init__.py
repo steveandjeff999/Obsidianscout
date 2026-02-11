@@ -1345,6 +1345,15 @@ def create_app(test_config=None, use_postgres=False):
             run_all_migrations(db)
         except Exception as e:
             app.logger.warning(f"Failed to run automatic migrations during app init: {e}")
+
+        # PostgreSQL sequence reset: fix auto-increment desync after SQLite→PG migration
+        if use_postgres:
+            try:
+                from app.utils.postgres_manager import PostgresManager
+                pg = PostgresManager()
+                pg.reset_all_sequences()
+            except Exception as e:
+                app.logger.warning(f"Failed to reset PostgreSQL sequences: {e}")
     
     # Error handlers
     @app.errorhandler(404)
@@ -1353,6 +1362,11 @@ def create_app(test_config=None, use_postgres=False):
     
     @app.errorhandler(500)
     def internal_server_error(e):
+        # Roll back any pending transaction to avoid PendingRollbackError cascades
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         error_msg = str(e) or 'Internal Server Error'
         stack = None
         try:
@@ -1399,8 +1413,16 @@ def create_app(test_config=None, use_postgres=False):
             from app.utils.config_manager import get_effective_game_config
             effective_cfg = get_effective_game_config()
         except Exception:
-            from app.utils.config_manager import get_current_game_config
-            effective_cfg = get_current_game_config()
+            # Reset session if we got an error (likely PendingRollbackError)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                from app.utils.config_manager import get_current_game_config
+                effective_cfg = get_current_game_config()
+            except Exception:
+                effective_cfg = {}
         return dict(game_config=effective_cfg, display_team_label=display_team_label)
 
     # Add a context processor to surface teams configuration status to templates

@@ -684,3 +684,86 @@ class PostgresManager:
         time.sleep(1)
         self.ensure_role_and_databases()
         return True
+
+    # ------------------------------------------------------------------
+    # Sequence reset (fix for SQLite→PG migration desync)
+    # ------------------------------------------------------------------
+    def reset_all_sequences(self) -> bool:
+        """Reset all PostgreSQL sequences to MAX(id)+1 to fix migration desync.
+
+        When data is migrated from SQLite to PostgreSQL, rows are inserted with
+        explicit IDs but the PostgreSQL sequences (used for auto-increment) don't
+        get updated.  This causes duplicate-key errors on subsequent INSERTs.
+
+        Call this once after table creation to fix the issue.
+        """
+        databases = [
+            self.cfg["database"],
+            self.cfg["database_users"],
+            self.cfg["database_pages"],
+            self.cfg["database_misc"],
+        ]
+
+        try:
+            import psycopg2
+            from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+        except ImportError:
+            print("[PostgresManager] psycopg2 not installed; cannot reset sequences.", flush=True)
+            return False
+
+        user = self.cfg["user"]
+        password = self.cfg["password"]
+        host = self.cfg["host"]
+        port = self.cfg["port"]
+
+        total_reset = 0
+
+        for db_name in databases:
+            try:
+                conn = psycopg2.connect(
+                    host=host,
+                    port=port,
+                    user=user,
+                    password=password,
+                    dbname=db_name,
+                    connect_timeout=5,
+                )
+                conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+                cur = conn.cursor()
+
+                # Find all sequences and their owning columns
+                cur.execute("""
+                    SELECT
+                        s.relname AS seq_name,
+                        t.relname AS table_name,
+                        a.attname AS column_name
+                    FROM pg_class s
+                    JOIN pg_depend d ON d.objid = s.oid
+                    JOIN pg_class t ON t.oid = d.refobjid
+                    JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
+                    WHERE s.relkind = 'S'
+                      AND d.deptype = 'a'
+                """)
+                sequences = cur.fetchall()
+
+                for seq_name, table_name, column_name in sequences:
+                    try:
+                        # Get the current max value in the table
+                        cur.execute(f'SELECT COALESCE(MAX("{column_name}"), 0) FROM "{table_name}"')
+                        max_val = cur.fetchone()[0] or 0
+                        # Reset the sequence to max+1
+                        new_start = max_val + 1
+                        cur.execute(f"SELECT setval('{seq_name}', {new_start}, false)")
+                        total_reset += 1
+                    except Exception as e:
+                        # Skip sequences that can't be reset (no big deal)
+                        print(f"[PostgresManager]   Could not reset {seq_name}: {e}", flush=True)
+
+                cur.close()
+                conn.close()
+            except Exception as e:
+                print(f"[PostgresManager] Could not reset sequences on {db_name}: {e}", flush=True)
+
+        if total_reset > 0:
+            print(f"[PostgresManager] Reset {total_reset} sequences to fix migration desync.", flush=True)
+        return True
