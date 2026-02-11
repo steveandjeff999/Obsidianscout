@@ -72,6 +72,11 @@ USE_WAITRESS = False
 # When False (default) the app continues using local SQLite files.
 USE_POSTGRES = False
 
+# Default port for the server. Change this at the top of the file to
+# run the app on a different port. Environment variable `PORT` will still
+# override this value when present (e.g., in hosting environments).
+PORT = 8080
+
 # Toggle file-based logging of all mobile API requests/responses.
 # Set to True to enable writing incoming / outgoing mobile API traffic to a file.
 MOBILE_API_LOG_TO_FILE = False  # Toggle this to True to enable logging
@@ -250,8 +255,8 @@ if __name__ == '__main__':
     # Render sets the 'RENDER' environment variable
     IS_PRODUCTION = 'RENDER' in os.environ
 
-    # Get port from environment variables, fallback to 5000 for local dev
-    port = int(os.environ.get('PORT', 8080))
+    # Get port from environment variables, fallback to `PORT` defined at top
+    port = int(os.environ.get('PORT', PORT))
 
     # Initialize database first
     print("Starting FRC Scouting Platform...")
