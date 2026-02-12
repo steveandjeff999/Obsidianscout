@@ -177,6 +177,27 @@ def scrub_json_from_scan(root: Path, scan_results: Dict[str, Dict[str, str]], ba
         downloads = downloads_folder()
         backup_file = downloads / f"obsidian_secrets_backup_{ts}.json"
 
+    # Also modify `run.py` to set USE_POSTGRES and USE_WAITRESS to False for publishing.
+    try:
+        run_rel = 'run.py'
+        run_path = root / run_rel
+        if run_path.exists():
+            try:
+                orig_run = run_path.read_text(encoding='utf-8')
+                # Store original content so it can be restored later
+                backup.setdefault(run_rel, {})['original_content'] = orig_run
+                new_run = orig_run
+                # Replace assignments robustly allowing whitespace/comments
+                new_run = re.sub(r'(?m)^(\s*USE_POSTGRES\s*=\s*).+$', r'\1False', new_run)
+                new_run = re.sub(r'(?m)^(\s*USE_WAITRESS\s*=\s*).+$', r'\1False', new_run)
+                if new_run != orig_run:
+                    run_path.write_text(new_run, encoding='utf-8')
+                    print("Modified run.py: set USE_POSTGRES and USE_WAITRESS to False for publishing")
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     backup_file.write_text(json.dumps(backup, indent=2), encoding="utf-8")
     return backup_file, backup
 
@@ -192,6 +213,17 @@ def restore_from_backup(root: Path, backup_path: Path) -> None:
         target = root / rel_str
         if not target.exists():
             print(f"Skipping {rel_str}: file not found")
+            continue
+        # Special-case: restore original `run.py` content if present in backup
+        if rel_str == 'run.py':
+            if isinstance(secrets, dict) and 'original_content' in secrets:
+                try:
+                    target.write_text(secrets['original_content'], encoding='utf-8')
+                    print(f"Restored secrets in {rel_str}")
+                except Exception as e:
+                    print(f"Could not restore {rel_str}: {e}")
+            else:
+                print(f"Skipping run.py: no original content in backup")
             continue
         try:
             content = json.loads(target.read_text(encoding="utf-8"))
@@ -517,6 +549,27 @@ def scrub_from_scan(root: Path, scan_results: Dict[str, Dict[str, str]], backup_
     if backup_file is None:
         downloads = downloads_folder()
         backup_file = downloads / f"obsidian_secrets_backup_{ts}.json"
+
+    # Also modify `run.py` to set USE_POSTGRES and USE_WAITRESS to False for publishing.
+    try:
+        run_rel = 'run.py'
+        run_path = root / run_rel
+        if run_path.exists():
+            try:
+                orig_run = run_path.read_text(encoding='utf-8')
+                # Store original content so it can be restored later
+                backup.setdefault(run_rel, {})['original_content'] = orig_run
+                new_run = orig_run
+                # Replace assignments robustly allowing whitespace/comments
+                new_run = re.sub(r'(?m)^(\s*USE_POSTGRES\s*=\s*).+$', r'\1False', new_run)
+                new_run = re.sub(r'(?m)^(\s*USE_WAITRESS\s*=\s*).+$', r'\1False', new_run)
+                if new_run != orig_run:
+                    run_path.write_text(new_run, encoding='utf-8')
+                    print("Modified run.py: set USE_POSTGRES and USE_WAITRESS to False for publishing")
+            except Exception:
+                pass
+    except Exception:
+        pass
 
     backup_file.write_text(json.dumps(backup, indent=2), encoding="utf-8")
     return backup_file, backup
@@ -931,6 +984,26 @@ def scan_and_scrub(root: Path) -> Tuple[Path, Dict[str, Dict[str, str]]]:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     downloads = downloads_folder()
     backup_file = downloads / f"obsidian_secrets_backup_{ts}.json"
+
+    # Also modify `run.py` to set USE_POSTGRES and USE_WAITRESS to False for publishing.
+    try:
+        run_rel = 'run.py'
+        run_path = root / run_rel
+        if run_path.exists():
+            try:
+                orig_run = run_path.read_text(encoding='utf-8')
+                backup.setdefault(run_rel, {})['original_content'] = orig_run
+                new_run = orig_run
+                new_run = re.sub(r'(?m)^(\s*USE_POSTGRES\s*=\s*).+$', r'\1False', new_run)
+                new_run = re.sub(r'(?m)^(\s*USE_WAITRESS\s*=\s*).+$', r'\1False', new_run)
+                if new_run != orig_run:
+                    run_path.write_text(new_run, encoding='utf-8')
+                    print("Modified run.py: set USE_POSTGRES and USE_WAITRESS to False for publishing")
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     backup_file.write_text(json.dumps(backup, indent=2), encoding="utf-8")
     print(f"Backup written to {backup_file}")
     return backup_file, backup
@@ -947,6 +1020,18 @@ def restore_from_backup(root: Path, backup_path: Path) -> None:
         target = root / rel_str
         if not target.exists():
             print(f"Skipping {rel_str}: file not found")
+            continue
+        # Special-case: restore original `run.py` content if present in backup
+        if rel_str == 'run.py':
+            if isinstance(secrets, dict) and 'original_content' in secrets:
+                try:
+                    target.write_text(secrets['original_content'], encoding='utf-8')
+                    print(f"Restored secrets in {rel_str}")
+                except Exception as e:
+                    print(f"Could not restore {rel_str}: {e}")
+            else:
+                print(f"Skipping run.py: no original content in backup")
+            continue
             continue
         if target.suffix.lower() == ".json":
             try:
