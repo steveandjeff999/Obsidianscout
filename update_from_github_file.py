@@ -35,6 +35,7 @@ from pathlib import Path
 import socket
 import threading
 import json
+import re
 try:
     import tkinter as tk
     from tkinter import filedialog, messagebox, scrolledtext
@@ -178,6 +179,26 @@ def perform_update(release: str | Path, is_zip: bool = False, preserve_extra: se
 
     repo_root = Path(__file__).resolve().parent if repo_root is None else Path(repo_root).resolve()
     release_path = Path(release).expanduser().resolve()
+
+    # Read and preserve current runtime settings from run.py (PORT, USE_WAITRESS, USE_POSTGRES)
+    preserved_run_settings: dict = {}
+    try:
+        run_py = repo_root / 'run.py'
+        if run_py.exists():
+            run_text = run_py.read_text(encoding='utf-8')
+            m = re.search(r'(?m)^\s*PORT\s*=\s*(\d+)', run_text)
+            if m:
+                preserved_run_settings['PORT'] = int(m.group(1))
+            m = re.search(r'(?m)^\s*USE_WAITRESS\s*=\s*(True|False)', run_text)
+            if m:
+                preserved_run_settings['USE_WAITRESS'] = True if m.group(1) == 'True' else False
+            m = re.search(r'(?m)^\s*USE_POSTGRES\s*=\s*(True|False)', run_text)
+            if m:
+                preserved_run_settings['USE_POSTGRES'] = True if m.group(1) == 'True' else False
+            if preserved_run_settings:
+                _log(f"Preserving run.py settings: {preserved_run_settings}")
+    except Exception as e:
+        _log(f"Warning: could not read run.py settings: {e}")
 
     # Build preserve set
     preserve = set(DEFAULT_PRESERVE)
@@ -389,6 +410,37 @@ def perform_update(release: str | Path, is_zip: bool = False, preserve_extra: se
         if skipped:
             for s, reason in skipped:
                 _log(f"    - {s} ({reason})")
+
+        # Reapply preserved run.py settings if present (only when not a dry-run)
+        if not dry_run and preserved_run_settings:
+            try:
+                run_path = repo_root / 'run.py'
+                if run_path.exists():
+                    run_txt = run_path.read_text(encoding='utf-8')
+                    # PORT
+                    if 'PORT' in preserved_run_settings:
+                        if re.search(r'(?m)^\s*PORT\s*=', run_txt):
+                            run_txt = re.sub(r'(?m)^(\s*PORT\s*=\s*).+$', '\\1' + str(preserved_run_settings['PORT']), run_txt)
+                        else:
+                            run_txt += f"\nPORT = {preserved_run_settings['PORT']}\n"
+                    # USE_WAITRESS
+                    if 'USE_WAITRESS' in preserved_run_settings:
+                        val = 'True' if preserved_run_settings['USE_WAITRESS'] else 'False'
+                        if re.search(r'(?m)^\s*USE_WAITRESS\s*=', run_txt):
+                            run_txt = re.sub(r'(?m)^(\s*USE_WAITRESS\s*=\s*).+$', '\\1' + val, run_txt)
+                        else:
+                            run_txt += f"\nUSE_WAITRESS = {val}\n"
+                    # USE_POSTGRES
+                    if 'USE_POSTGRES' in preserved_run_settings:
+                        val = 'True' if preserved_run_settings['USE_POSTGRES'] else 'False'
+                        if re.search(r'(?m)^\s*USE_POSTGRES\s*=', run_txt):
+                            run_txt = re.sub(r'(?m)^(\s*USE_POSTGRES\s*=\s*).+$', '\\1' + val, run_txt)
+                        else:
+                            run_txt += f"\nUSE_POSTGRES = {val}\n"
+                    run_path.write_text(run_txt, encoding='utf-8')
+                    _log('Reapplied preserved run.py settings (PORT/USE_WAITRESS/USE_POSTGRES).')
+            except Exception as e:
+                _log(f'Warning: could not reapply run.py settings: {e}')
 
         if dry_run:
             _log('\nDry-run mode: no files were changed. Remove --dry-run to perform the update.')

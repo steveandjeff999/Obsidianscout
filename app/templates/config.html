@@ -7,6 +7,24 @@
 {% block heading %}Game Configuration {{ help.help_icon('View and manage the current game configuration. Use Simple Edit for form-based changes or Advanced Edit for raw JSON edits. Be careful: element id changes can affect stored data.', 'Game configuration') }}{% endblock %}
 
 {% block content %}
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Pit Scouting Configuration</h5>
+            </div>
+            <div class="card-body">
+                <p class="lead">Looking for the pit config? Find it here.</p>
+                <a href="{{ url_for('pit_scouting.config') }}" class="btn btn-primary btn-sm me-2">
+                    <i class="fas fa-wrench me-1"></i> View Pit Config
+                </a>
+                <a href="{{ url_for('pit_scouting.config_edit') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-edit me-1"></i> Edit Pit Config
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
 <div class="row">
     <div class="col-md-12">
         <div class="card mb-4">
@@ -95,4 +113,5 @@
         </div>
     </div>
 </div>
+ 
 {% endblock %}
