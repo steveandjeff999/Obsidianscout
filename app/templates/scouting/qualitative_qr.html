@@ -9,11 +9,16 @@
     <div class="row">
         <div class="col-md-6 mb-4">
             <div class="card">
-                <div class="card-header {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %} text-white">
+                <div class="card-header {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}bg-success{% elif entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %} text-white">
                     <h5 class="mb-0">
                         <i class="fas fa-star me-2"></i>
+                        {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}
+                        Team {{ entry.alliance_scouted.replace('team_', '') }} - Individual Scouting
+                        ({{ entry.match.match_type }} Match {{ entry.match.match_number }})
+                        {% elif entry.match %}
                         {{ entry.match.event.code if entry.match.event else '' }} - 
                         {{ entry.match.match_type }} Match {{ entry.match.match_number }}
+                        {% endif %}
                     </h5>
                 </div>
                 <div class="card-body text-center">
@@ -54,16 +59,25 @@
                     <dl class="row mb-0">
                         <dt class="col-sm-5">Match:</dt>
                         <dd class="col-sm-7">
-                            <span class="badge bg-secondary">{{ entry.match.event.code if entry.match.event else '' }}</span>
+                            <span class="badge bg-secondary">{{ entry.match.event.code if entry.match and entry.match.event else '' }}</span>
                             {{ entry.match.match_type }} {{ entry.match.match_number }}
                         </dd>
                         
+                        {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}
+                        <dt class="col-sm-5">Team:</dt>
+                        <dd class="col-sm-7">
+                            <span class="badge bg-success">{{ entry.alliance_scouted.replace('team_', '') }}</span>
+                        </dd>
+                        <dt class="col-sm-5">Type:</dt>
+                        <dd class="col-sm-7"><span class="badge bg-success">Individual</span></dd>
+                        {% else %}
                         <dt class="col-sm-5">Alliance:</dt>
                         <dd class="col-sm-7">
                             <span class="badge {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
                                 {{ entry.alliance_scouted|title }}
                             </span>
                         </dd>
+                        {% endif %}
                         
                         <dt class="col-sm-5">Scout:</dt>
                         <dd class="col-sm-7">{{ entry.scout_name }}</dd>

@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}Updates — ObsidianScout{% endblock %}
+
+{% block heading %}Updates{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="row mb-4 align-items-center">
+    <div class="col-md-8">
+      <h1 class="display-5 fw-bold">Latest updates</h1>
+      <p class="lead text-muted">News, releases and product notes from the ObsidianScout team — public and always accessible.</p>
+    </div>
+    <div class="col-md-4 text-md-end mt-3 mt-md-0">
+      {% if user_has_role('superadmin') %}
+        <a class="btn btn-primary me-2" href="{{ url_for('main.create_update') }}"><i class="fas fa-plus me-1"></i> Create new post</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if posts %}
+  <div class="row g-4">
+    {% for p in posts %}
+    <article class="col-lg-4 col-md-6">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body d-flex flex-column">
+          <div class="mb-2 text-muted small"><i class="fas fa-calendar-day me-1"></i> {{ p.date }}</div>
+          <h5 class="card-title">{{ p.title }}</h5>
+          <p class="card-text text-secondary mb-4">{{ p.excerpt }}</p>
+          <div class="mt-auto d-flex justify-content-between align-items-center">
+            {% if p.filename %}
+              <a class="btn btn-sm btn-primary" href="{{ url_for('main.update_view', filename=p.filename) }}">Read</a>
+            {% elif p.slug and p.slug != '#' %}
+              <a class="btn btn-sm btn-primary" href="{{ p.slug }}">Read</a>
+            {% else %}
+              <button class="btn btn-sm btn-secondary" disabled>Read</button>
+            {% endif %}
+            {% if p.read_time %}
+              <div class="text-muted small">&middot; {{ p.read_time }}</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+    <div class="row">
+      <div class="col-12">
+        <div class="card border-0 shadow-sm text-center py-5">
+          <div class="card-body">
+            <h3 class="mb-2">No updates yet</h3>
+            <p class="text-muted">There are no published updates right now. Check back later.</p>
+            {% if user_has_role('superadmin') %}
+              <a class="btn btn-primary mt-3" href="{{ url_for('main.create_update') }}">Create your first post</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -77,7 +77,8 @@
 
             <div class="text-center mt-3">
                 <small class="text-muted">Don't have an account? <a href="{{ url_for('auth.register') }}">Create account</a></small>
-                <div class="mt-2">
+                <div class="mt-2 d-flex justify-content-center gap-2">
+                    <a href="{{ url_for('main.updates') }}" class="btn btn-outline-primary btn-sm mt-2"><i class="fas fa-newspaper me-1"></i> See what's new</a>
                     <a href="{{ url_for('setup.features') }}" class="btn btn-outline-secondary btn-sm mt-2"><i class="fas fa-info-circle me-1"></i> About / Features</a>
                 </div>
             </div>
