@@ -1588,6 +1588,8 @@ def import_qr():
                 if scouting_data_json.get('qualitative') is True:
                     from app.models import QualitativeScoutingData
                     
+                    is_individual = scouting_data_json.get('individual_team') is True
+                    
                     # Extract qualitative scouting data
                     match_number = scouting_data_json.get('match_number')
                     match_type = scouting_data_json.get('match_type', 'Qualification')
@@ -1596,8 +1598,18 @@ def import_qr():
                     team_data = scouting_data_json.get('team_data', {})
                     event_code = scouting_data_json.get('event_code', '')
                     
-                    if not match_number or not alliance_scouted:
-                        return {'success': False, 'message': 'Invalid qualitative QR data: missing match or alliance'}
+                    if is_individual:
+                        # Individual team QR: needs match_number and team_number
+                        team_number = scouting_data_json.get('team_number')
+                        if not match_number:
+                            return {'success': False, 'message': 'Invalid individual qualitative QR data: missing match'}
+                        if not team_number:
+                            return {'success': False, 'message': 'Invalid individual qualitative QR data: missing team number'}
+                        alliance_scouted = f'team_{team_number}'
+                    else:
+                        # Match-based alliance QR
+                        if not match_number or not alliance_scouted:
+                            return {'success': False, 'message': 'Invalid qualitative QR data: missing match or alliance'}
                     
                     # Find or create match
                     match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
@@ -1621,17 +1633,19 @@ def import_qr():
                     # Check if entry already exists
                     existing = QualitativeScoutingData.query.filter_by(
                         match_id=match.id,
+                        alliance_scouted=alliance_scouted,
                         scouting_team_number=current_user.scouting_team_number
                     ).first()
                     
+                    label = f'individual team {scouting_data_json.get("team_number")} in Match {match.match_number}' if is_individual else f'Match {match.match_number}'
+                    
                     if existing:
                         # Update existing entry
-                        existing.alliance_scouted = alliance_scouted
                         existing.data = team_data
                         existing.scout_name = scout_name
                         existing.timestamp = datetime.now(timezone.utc)
                         db.session.commit()
-                        return {'success': True, 'message': f'Updated qualitative scouting for Match {match.match_number}'}
+                        return {'success': True, 'message': f'Updated qualitative scouting for {label}'}
                     else:
                         # Create new entry
                         new_entry = QualitativeScoutingData(
@@ -1643,7 +1657,7 @@ def import_qr():
                         )
                         db.session.add(new_entry)
                         db.session.commit()
-                        return {'success': True, 'message': f'Added qualitative scouting for Match {match.match_number}'}
+                        return {'success': True, 'message': f'Added qualitative scouting for {label}'}
                 
                 # Regular scouting data processing
                 elif 'offline_generated' in scouting_data_json:

@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}{{ post.title }} — Updates{% endblock %}
+{% block heading %}{{ post.title }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <div class="mb-2 text-muted small">{{ post.date or post.created_at }} &middot; {{ post.author }}</div>
+      <h2 class="card-title">{{ post.title }}</h2>
+      {% if post.excerpt %}<p class="lead text-muted">{{ post.excerpt }}</p>{% endif %}
+      <hr>
+      <div class="update-body">{{ body_html|safe }}</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

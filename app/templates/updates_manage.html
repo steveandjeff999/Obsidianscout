@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Manage Updates{% endblock %}
+{% block heading %}Manage Updates{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Updates</h3>
+    <a href="{{ url_for('main.create_update') }}" class="btn btn-primary">Create new post</a>
+  </div>
+
+  {% if posts %}
+  <div class="list-group">
+    {% for p in posts %}
+    <div class="list-group-item d-flex justify-content-between align-items-start">
+      <div class="me-3">
+        <div class="fw-bold">{{ p.title }}</div>
+        <div class="small text-muted">{{ p.date or p.created_at }}</div>
+        <div class="small text-secondary mt-2">{{ p.excerpt }}</div>
+      </div>
+      <div class="text-end">
+        <a class="btn btn-sm btn-outline-primary mb-2" href="{{ url_for('main.update_view', filename=p.filename) }}">View</a>
+        <a class="btn btn-sm btn-outline-secondary mb-2" href="{{ url_for('main.edit_update', filename=p.filename) }}">Edit</a>
+        <form method="post" action="{{ url_for('main.delete_update', filename=p.filename) }}" style="display:inline-block;" onsubmit="return confirm('Delete this post?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-danger">Delete</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+    <div class="alert alert-info">No updates yet. Use <strong>Create new post</strong> to add one.</div>
+  {% endif %}
+</div>
+{% endblock %}

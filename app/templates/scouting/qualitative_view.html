@@ -9,11 +9,16 @@
     <div class="row">
         <div class="col-md-12">
             <div class="card mb-4">
-                <div class="card-header {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %} text-white">
+                <div class="card-header {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}bg-success{% elif entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %} text-white">
                     <h5 class="mb-0">
                         <i class="fas fa-star me-2"></i>
-                        {{ entry.match.event.code if entry.match.event else '' }} - 
+                        {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}
+                        Individual Team Scouting - Team {{ entry.alliance_scouted.replace('team_', '') }}
+                        ({{ entry.match.event.code if entry.match and entry.match.event else '' }} - {{ entry.match.match_type }} {{ entry.match.match_number }})
+                        {% else %}
+                        {{ entry.match.event.code if entry.match and entry.match.event else '' }} - 
                         {{ entry.match.match_type }} {{ entry.match.match_number }}
+                        {% endif %}
                     </h5>
                 </div>
                 <div class="card-body">
@@ -22,16 +27,25 @@
                             <dl class="row">
                                 <dt class="col-sm-4">Match:</dt>
                                 <dd class="col-sm-8">
-                                    <span class="badge bg-secondary">{{ entry.match.event.code if entry.match.event else '' }}</span>
+                                    <span class="badge bg-secondary">{{ entry.match.event.code if entry.match and entry.match.event else '' }}</span>
                                     {{ entry.match.match_type }} {{ entry.match.match_number }}
                                 </dd>
                                 
+                                {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}
+                                <dt class="col-sm-4">Team Number:</dt>
+                                <dd class="col-sm-8">
+                                    <span class="badge bg-success">{{ entry.alliance_scouted.replace('team_', '') }}</span>
+                                </dd>
+                                <dt class="col-sm-4">Type:</dt>
+                                <dd class="col-sm-8"><span class="badge bg-success">Individual</span></dd>
+                                {% else %}
                                 <dt class="col-sm-4">Alliance Scouted:</dt>
                                 <dd class="col-sm-8">
                                     <span class="badge {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
                                         {{ entry.alliance_scouted|title }}
                                     </span>
                                 </dd>
+                                {% endif %}
                             </dl>
                         </div>
                         <div class="col-md-6">
@@ -64,7 +78,7 @@
                                     <div class="card-body">
                                         <div class="mb-2">
                                             <strong>Ranking:</strong>
-                                            {% if team_data.ranking %}
+                                            {% if team_data.get('ranking') is not none %}
                                             <span class="badge {% if team_data.ranking == 1 %}bg-success{% elif team_data.ranking == 2 %}bg-primary{% else %}bg-warning{% endif %}">
                                                 {{ team_data.ranking }}
                                             </span>
@@ -103,9 +117,52 @@
                                     <div class="card-body">
                                         <div class="mb-2">
                                             <strong>Ranking:</strong>
-                                            {% if team_data.ranking %}
+                                            {% if team_data.get('ranking') is not none %}
                                             <span class="badge {% if team_data.ranking == 1 %}bg-success{% elif team_data.ranking == 2 %}bg-primary{% else %}bg-warning{% endif %}">
                                                 {{ team_data.ranking }}
+                                            </span>
+                                            {% else %}
+                                            <span class="text-muted">Not ranked</span>
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            <strong>Notes:</strong>
+                                            <p class="mb-0 mt-1">
+                                                {{ team_data.notes if team_data.notes else 'No notes' }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Individual Team Data -->
+                    {% if data.individual %}
+                    <div class="mb-4">
+                        <h5 class="text-success mb-3">
+                            <i class="fas fa-user me-2"></i>Individual Team Scouting
+                        </h5>
+                        <div class="row">
+                            {% for team_key, team_data in data.individual.items() %}
+                            {% set team_num = team_key.replace('team_', '') %}
+                            <div class="col-md-6 mb-3">
+                                <div class="card border-success">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0">Team {{ team_num }}</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-2">
+                                            <strong>Ranking:</strong>
+                                            {% if team_data.get('ranking') is not none %}
+                                            <span class="badge {% if team_data.ranking == 1 %}bg-success{% elif team_data.ranking == 2 %}bg-primary{% elif team_data.ranking == 3 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                                {{ team_data.ranking }}
+                                                {% if team_data.ranking == 1 %}- Excellent
+                                                {% elif team_data.ranking == 2 %}- Good
+                                                {% elif team_data.ranking == 3 %}- Average
+                                                {% endif %}
                                             </span>
                                             {% else %}
                                             <span class="text-muted">Not ranked</span>

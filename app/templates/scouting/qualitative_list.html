@@ -13,6 +13,9 @@
             <p class="text-muted mb-0">{{ total_entries }} total entries</p>
         </div>
         <div>
+            <a href="{{ url_for('scouting.qualitative_leaderboard') }}" class="btn btn-warning">
+                <i class="fas fa-trophy me-2"></i>Leaderboard
+            </a>
             <a href="{{ url_for('scouting.qualitative_scouting') }}" class="btn btn-primary">
                 <i class="fas fa-plus me-2"></i>New Entry
             </a>
@@ -45,34 +48,48 @@
                             {% for entry in entries %}
                             <tr>
                                 <td>
+                                    {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}
+                                    <span class="badge bg-success">Individual</span>
+                                    Team {{ entry.alliance_scouted.replace('team_', '') }}
+                                    (Match {{ entry.match.match_number }})
+                                    {% elif entry.match %}
                                     <span class="badge {% if entry.match.match_type == 'Qualification' %}bg-primary{% elif entry.match.match_type == 'Playoff' %}bg-danger{% else %}bg-secondary{% endif %}">
                                         {{ entry.match.match_type }}
                                     </span>
                                     Match {{ entry.match.match_number }}
+                                    {% endif %}
                                 </td>
                                 <td>
+                                    {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}
+                                    <span class="badge bg-success">Individual</span>
+                                    {% elif entry.match %}
                                     <span class="badge {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
                                         {{ entry.alliance_scouted|title }}
                                     </span>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     {% set data = entry.data %}
                                     {% set ranked_count = 0 %}
-                                    {% if entry.alliance_scouted == 'red' or entry.alliance_scouted == 'both' %}
-                                        {% for team_key, team_data in data.red.items() %}
-                                            {% if team_data.ranking %}
-                                                {% set ranked_count = ranked_count + 1 %}
-                                            {% endif %}
-                                        {% endfor %}
+                                    {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}
+                                        {% set ranked_count = 1 %}
+                                    {% else %}
+                                        {% if entry.alliance_scouted == 'red' or entry.alliance_scouted == 'both' %}
+                                            {% for team_key, team_data in data.red.items() %}
+                                                {% if team_data.get('ranking') is not none %}
+                                                    {% set ranked_count = ranked_count + 1 %}
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+                                        {% if entry.alliance_scouted == 'blue' or entry.alliance_scouted == 'both' %}
+                                            {% for team_key, team_data in data.blue.items() %}
+                                                {% if team_data.get('ranking') is not none %}
+                                                    {% set ranked_count = ranked_count + 1 %}
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
                                     {% endif %}
-                                    {% if entry.alliance_scouted == 'blue' or entry.alliance_scouted == 'both' %}
-                                        {% for team_key, team_data in data.blue.items() %}
-                                            {% if team_data.ranking %}
-                                                {% set ranked_count = ranked_count + 1 %}
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% endif %}
-                                    <span class="badge bg-info">{{ ranked_count }} teams</span>
+                                    <span class="badge bg-info">{{ ranked_count }} team{% if ranked_count != 1 %}s{% endif %}</span>
                                 </td>
                                 <td>{{ entry.scout_name }}</td>
                                 <td>

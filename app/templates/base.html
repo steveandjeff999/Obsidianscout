@@ -1154,6 +1154,7 @@
                 </button>
                 <div class="nav-group-items" id="group-superadmin-items">
                     <a class="nav-link {% if request.endpoint == 'auth.manage_users' %}active{% endif %}" href="{{ url_for('auth.manage_users') }}"><i class="fas fa-user-shield"></i><span>Manage Users</span></a>
+                    <a class="nav-link {% if request.endpoint == 'main.manage_updates' %}active{% endif %}" href="{{ url_for('main.manage_updates') }}"><i class="fas fa-newspaper"></i><span>Manage Updates</span></a>
                     <a class="nav-link {% if request.endpoint == 'auth.add_user' %}active{% endif %}" href="{{ url_for('auth.add_user') }}"><i class="fas fa-user-plus"></i><span>Add User</span></a>
                     <a class="nav-link {% if request.endpoint == 'auth.manage_site_notifications' %}active{% endif %}" href="{{ url_for('auth.manage_site_notifications') }}"><i class="fas fa-bell"></i><span>Manage Notifications</span></a>
                 </div>

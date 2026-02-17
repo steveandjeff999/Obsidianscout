@@ -12,6 +12,9 @@
             <h2 class="mb-0">Qualitative Scouting</h2>
         </div>
         <div>
+            <a href="{{ url_for('scouting.qualitative_leaderboard') }}" class="btn btn-warning">
+                <i class="fas fa-trophy me-2"></i>Leaderboard
+            </a>
             <a href="{{ url_for('scouting.list_qualitative_data') }}" class="btn btn-info">
                 <i class="fas fa-list me-2"></i>View All Data
             </a>
@@ -22,15 +25,35 @@
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
-                        <i class="fas fa-star me-2"></i>Qualitative Match Scouting
-                        {{ help.help_icon('Scout entire alliances at once with rankings and notes for each team', 'Qualitative Scouting') }}
+                        <i class="fas fa-star me-2"></i>Qualitative Scouting
+                        {{ help.help_icon('Scout entire alliances from matches or individual teams', 'Qualitative Scouting') }}
                     </h5>
                 </div>
                 <div class="card-body">
+                    <!-- Scout Mode Toggle -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Scouting Mode</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="scout-mode" id="mode-match" value="match" autocomplete="off" checked>
+                                <label class="btn btn-outline-primary" for="mode-match">
+                                    <i class="fas fa-users me-1"></i>From Match
+                                </label>
+                                
+                                <input type="radio" class="btn-check" name="scout-mode" id="mode-team" value="team" autocomplete="off">
+                                <label class="btn btn-outline-success" for="mode-team">
+                                    <i class="fas fa-user me-1"></i>Individual Team
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <form id="qualitative-form">
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="match-selector" class="form-label">Select Match</label>
+                        <!-- Match-based scouting section -->
+                        <div id="match-scouting-section">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="match-selector" class="form-label">Select Match</label>
                                 <select class="form-select" id="match-selector" required>
                                     <option value="">-- Select a Match --</option>
                                     {% for match in matches %}
@@ -62,6 +85,38 @@
                                     </label>
                                 </div>
                             </div>
+                        </div>
+                        </div> <!-- End match-scouting-section -->
+
+                        <!-- Individual team scouting section -->
+                        <div id="team-scouting-section" style="display: none;">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="indiv-match-selector" class="form-label">Select Match</label>
+                                    <select class="form-select" id="indiv-match-selector">
+                                        <option value="">-- Select a Match --</option>
+                                        {% for match in matches %}
+                                        <option value="{{ match.id }}"
+                                                data-red="{{ match.red_alliance }}"
+                                                data-blue="{{ match.blue_alliance }}">
+                                            {{ match.event.code if match.event else '' }} -
+                                            {{ match.match_type }} {{ match.match_number }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="indiv-team-selector" class="form-label">Select Team</label>
+                                    <select class="form-select" id="indiv-team-selector" disabled>
+                                        <option value="">-- Select a Match First --</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Individual Team Card (shown when team mode is active) -->
+                        <div id="individual-team-section" class="mb-4" style="display: none;">
+                            <div id="individual-team-container"></div>
                         </div>
 
                         <!-- Red Alliance Teams -->
@@ -280,6 +335,13 @@
 document.addEventListener('DOMContentLoaded', function() {
     const matchSelector = document.getElementById('match-selector');
     const allianceRadios = document.querySelectorAll('input[name="alliance"]');
+    const scoutModeRadios = document.querySelectorAll('input[name="scout-mode"]');
+    const matchScoutingSection = document.getElementById('match-scouting-section');
+    const teamScoutingSection = document.getElementById('team-scouting-section');
+    const individualTeamSection = document.getElementById('individual-team-section');
+    const indivMatchSelector = document.getElementById('indiv-match-selector');
+    const indivTeamSelector = document.getElementById('indiv-team-selector');
+    const individualTeamContainer = document.getElementById('individual-team-container');
     const redSection = document.getElementById('red-teams-section');
     const blueSection = document.getElementById('blue-teams-section');
     const redContainer = document.getElementById('red-teams-container');
@@ -289,8 +351,180 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('qualitative-form');
     
     let currentMatchData = null;
+    let currentIndivMatchData = null;
     let currentEntryId = null;
     let matchesCache = {};
+    let currentScoutMode = 'match'; // 'match' or 'team'
+    
+    // Handle scout mode change
+    scoutModeRadios.forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            currentScoutMode = this.value;
+            
+            if (currentScoutMode === 'match') {
+                matchScoutingSection.style.display = 'block';
+                teamScoutingSection.style.display = 'none';
+                individualTeamSection.style.display = 'none';
+                
+                // Re-enable match-based sections if they were shown
+                if (matchSelector.value && document.querySelector('input[name="alliance"]:checked')) {
+                    updateAllianceDisplay();
+                }
+            } else {
+                matchScoutingSection.style.display = 'none';
+                teamScoutingSection.style.display = 'block';
+                redSection.style.display = 'none';
+                blueSection.style.display = 'none';
+                
+                // Show team card if already selected
+                if (indivTeamSelector.value) {
+                    createIndividualTeamCard(indivTeamSelector.value);
+                    individualTeamSection.style.display = 'block';
+                    saveBtn.disabled = false;
+                    qrBtn.disabled = false;
+                } else {
+                    saveBtn.disabled = true;
+                    qrBtn.disabled = true;
+                }
+            }
+        });
+    });
+    
+    // Handle individual match selection -> populate team list
+    indivMatchSelector.addEventListener('change', function() {
+        const matchId = this.value;
+        indivTeamSelector.innerHTML = '<option value="">-- Select a Team --</option>';
+        indivTeamSelector.disabled = true;
+        individualTeamSection.style.display = 'none';
+        individualTeamContainer.innerHTML = '';
+        saveBtn.disabled = true;
+        qrBtn.disabled = true;
+        
+        if (!matchId) return;
+        
+        // Get teams from the match (red + blue combined)
+        const selectedOption = this.options[this.selectedIndex];
+        const redTeamsStr = selectedOption.getAttribute('data-red') || '';
+        const blueTeamsStr = selectedOption.getAttribute('data-blue') || '';
+        
+        // Parse teams — handle both "123,456" and "123, 456" formats
+        const redTeams = redTeamsStr ? redTeamsStr.split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
+        const blueTeams = blueTeamsStr ? blueTeamsStr.split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
+        
+        // Build option groups
+        if (redTeams.length > 0) {
+            var redGroup = document.createElement('optgroup');
+            redGroup.label = 'Red Alliance';
+            redTeams.forEach(function(t) {
+                var opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = 'Team ' + t;
+                opt.setAttribute('data-alliance', 'red');
+                redGroup.appendChild(opt);
+            });
+            indivTeamSelector.appendChild(redGroup);
+        }
+        if (blueTeams.length > 0) {
+            var blueGroup = document.createElement('optgroup');
+            blueGroup.label = 'Blue Alliance';
+            blueTeams.forEach(function(t) {
+                var opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = 'Team ' + t;
+                opt.setAttribute('data-alliance', 'blue');
+                blueGroup.appendChild(opt);
+            });
+            indivTeamSelector.appendChild(blueGroup);
+        }
+        
+        indivTeamSelector.disabled = false;
+        
+        // Also fetch full match data for later use
+        fetch('{{ url_for("scouting.get_match_teams", match_id=0) }}'.replace('0', matchId))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) currentIndivMatchData = data;
+            })
+            .catch(function() {
+                // Offline — build from option attributes
+                var optionEl = indivMatchSelector.options[indivMatchSelector.selectedIndex];
+                currentIndivMatchData = {
+                    success: true,
+                    match: {
+                        id: matchId,
+                        match_number: extractMatchNumber(optionEl.textContent),
+                        match_type: extractMatchType(optionEl.textContent),
+                        event_code: extractEventCode(optionEl.textContent),
+                        red_teams: redTeams,
+                        blue_teams: blueTeams
+                    }
+                };
+            });
+    });
+    
+    // Handle individual team selection -> show team card
+    indivTeamSelector.addEventListener('change', function() {
+        const teamNum = this.value;
+        
+        if (teamNum) {
+            createIndividualTeamCard(teamNum);
+            individualTeamSection.style.display = 'block';
+            saveBtn.disabled = false;
+            qrBtn.disabled = false;
+        } else {
+            individualTeamSection.style.display = 'none';
+            individualTeamContainer.innerHTML = '';
+            saveBtn.disabled = true;
+            qrBtn.disabled = true;
+        }
+    });
+    
+    // Create card for individual team scouting
+    function createIndividualTeamCard(teamNum) {
+        individualTeamContainer.innerHTML = '';
+        
+        // Figure out alliance color for the badge
+        var allianceColor = 'success';
+        var selectedOpt = indivTeamSelector.options[indivTeamSelector.selectedIndex];
+        if (selectedOpt) {
+            var teamAlliance = selectedOpt.getAttribute('data-alliance');
+            if (teamAlliance === 'red') allianceColor = 'danger';
+            else if (teamAlliance === 'blue') allianceColor = 'primary';
+        }
+        
+        const card = document.createElement('div');
+        card.className = 'team-card';
+        
+        card.innerHTML = '<h5 class="text-' + allianceColor + ' mb-3"><i class="fas fa-user me-2"></i>Team ' + teamNum + '</h5>' +
+            '<div class="mb-3">' +
+            '<label class="form-label">Ranking:</label>' +
+            '<div class="ranking-buttons">' +
+            '<button type="button" class="btn btn-sm btn-outline-success ranking-btn" data-team="' + teamNum + '" data-alliance="individual" data-ranking="1">1 - Excellent</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-primary ranking-btn" data-team="' + teamNum + '" data-alliance="individual" data-ranking="2">2 - Good</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-warning ranking-btn" data-team="' + teamNum + '" data-alliance="individual" data-ranking="3">3 - Average</button>' +
+            '</div>' +
+            '</div>' +
+            '<div>' +
+            '<label class="form-label">Notes:</label>' +
+            '<textarea class="form-control team-notes" data-team="' + teamNum + '" data-alliance="individual" rows="5" placeholder="Add detailed notes about this team..."></textarea>' +
+            '</div>';
+        
+        individualTeamContainer.appendChild(card);
+        
+        // Add event listeners to ranking buttons
+        card.querySelectorAll('.ranking-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                // Remove active from siblings
+                const siblings = this.parentElement.querySelectorAll('.ranking-btn');
+                siblings.forEach(function(s) {
+                    s.classList.remove('active');
+                });
+                
+                // Add active to clicked button
+                this.classList.add('active');
+            });
+        });
+    }
     
     // Cache all matches data for offline use
     function cacheMatchesData() {
@@ -541,12 +775,67 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to collect form data for QR code or saving
     function collectFormData() {
-        const matchId = matchSelector.value;
-        const selectedAlliance = document.querySelector('input[name="alliance"]:checked');
-        
-        if (!matchId || !selectedAlliance || !currentMatchData) {
-            return null;
-        }
+        if (currentScoutMode === 'team') {
+            // Individual team scouting mode
+            const indivMatchId = indivMatchSelector.value;
+            const teamNum = indivTeamSelector.value;
+            
+            if (!indivMatchId || !teamNum) {
+                return null;
+            }
+            
+            const notes = document.querySelector('textarea[data-alliance="individual"]');
+            const rankBtn = document.querySelector('.ranking-btn[data-alliance="individual"].active');
+            
+            // Get match info for QR payload
+            const indivMatchOpt = indivMatchSelector.options[indivMatchSelector.selectedIndex];
+            const indivMatchText = indivMatchOpt ? indivMatchOpt.textContent.trim() : '';
+            
+            // Get scout name from global variable or localStorage
+            let scoutName = 'Unknown';
+            try {
+                if (typeof currentUsername !== 'undefined' && currentUsername) {
+                    scoutName = currentUsername;
+                } else if (localStorage.getItem('scout_name')) {
+                    scoutName = localStorage.getItem('scout_name');
+                }
+            } catch (e) {
+                console.warn('Could not get scout name:', e);
+            }
+            
+            const teamData = {};
+            teamData['team_' + teamNum] = {
+                notes: notes ? notes.value.trim() : '',
+                ranking: rankBtn ? parseInt(rankBtn.dataset.ranking) : null
+            };
+
+            // Require a ranking for individual team entries
+            if (!teamData['team_' + teamNum].ranking) {
+                alert('Please select a ranking (1-3) for the individual team before saving.');
+                return null;
+            }
+            
+            return {
+                qualitative: true,
+                individual_team: true,
+                match_id: parseInt(indivMatchId),
+                match_number: currentIndivMatchData ? currentIndivMatchData.match.match_number : extractMatchNumber(indivMatchText),
+                match_type: currentIndivMatchData ? currentIndivMatchData.match.match_type : extractMatchType(indivMatchText),
+                event_code: currentIndivMatchData ? (currentIndivMatchData.match.event_code || '') : extractEventCode(indivMatchText),
+                team_number: parseInt(teamNum),
+                team_data: { individual: teamData },
+                scout_name: scoutName,
+                timestamp: new Date().toISOString(),
+                offline_generated: true
+            };
+        } else {
+            // Match-based scouting mode
+            const matchId = matchSelector.value;
+            const selectedAlliance = document.querySelector('input[name="alliance"]:checked');
+            
+            if (!matchId || !selectedAlliance || !currentMatchData) {
+                return null;
+            }
         
         const allianceScouted = selectedAlliance.value;
         const matchData = currentMatchData.match;
@@ -580,6 +869,23 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         });
         
+        // Require ranking for every team in the selected alliance(s)
+        const missingRanks = [];
+        if (allianceScouted === 'red' || allianceScouted === 'both') {
+            Object.keys(teamData.red).forEach(function(k) {
+                if (teamData.red[k].ranking === null || teamData.red[k].ranking === undefined) missingRanks.push(k);
+            });
+        }
+        if (allianceScouted === 'blue' || allianceScouted === 'both') {
+            Object.keys(teamData.blue).forEach(function(k) {
+                if (teamData.blue[k].ranking === null || teamData.blue[k].ranking === undefined) missingRanks.push(k);
+            });
+        }
+        if (missingRanks.length > 0) {
+            alert('Please rank every team in the selected alliance before saving. Missing ranks for: ' + missingRanks.map(function(k){ return k.replace('team_', '') }).join(', '));
+            return null;
+        }
+        
         // Get scout name from global variable or localStorage
         let scoutName = 'Unknown';
         try {
@@ -605,6 +911,7 @@ document.addEventListener('DOMContentLoaded', function() {
             timestamp: new Date().toISOString(),
             offline_generated: true
         };
+        } // End else block for match mode
     }
     
     // Handle form submission (save to database or offline storage)
@@ -613,7 +920,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const formData = collectFormData();
         if (!formData) {
-            alert('Please select a match and alliance');
+            alert('Please complete the required fields');
             return;
         }
         
@@ -621,16 +928,30 @@ document.addEventListener('DOMContentLoaded', function() {
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
         
+        let savePayload;
+        if (currentScoutMode === 'team') {
+            // Individual team mode
+            savePayload = {
+                individual_team: true,
+                match_id: formData.match_id,
+                team_number: formData.team_number,
+                team_data: formData.team_data
+            };
+        } else {
+            // Match mode
+            savePayload = {
+                match_id: formData.match_id,
+                alliance_scouted: formData.alliance_scouted,
+                team_data: formData.team_data
+            };
+        }
+        
         fetch('{{ url_for("scouting.save_qualitative_scouting") }}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                match_id: formData.match_id,
-                alliance_scouted: formData.alliance_scouted,
-                team_data: formData.team_data
-            })
+            body: JSON.stringify(savePayload)
         })
         .then(function(response) {
             return response.json();

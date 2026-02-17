@@ -1,0 +1,256 @@
+{% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
+
+{% block title %}Qualitative Scouting Leaderboard{% endblock %}
+
+{% block heading %}Qualitative Scouting Leaderboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h2 class="mb-0">
+                <i class="fas fa-trophy me-2"></i>Qualitative Scouting Leaderboard
+                {{ help.help_icon('Teams ranked by their average qualitative scouting ratings', 'Leaderboard') }}
+            </h2>
+            <p class="text-muted mb-0">{{ total_teams }} teams ranked</p>
+        </div>
+        <div>
+            <a href="{{ url_for('scouting.qualitative_scouting') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Add Scouting Data
+            </a>
+            <a href="{{ url_for('scouting.list_qualitative_data') }}" class="btn btn-info">
+                <i class="fas fa-list me-2"></i>View All Data
+            </a>
+        </div>
+    </div>
+
+    {% if leaderboard %}
+    <div class="card">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">
+                <i class="fas fa-star me-2"></i>Team Rankings
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="width: 80px;">Rank</th>
+                            <th style="width: 120px;">Team</th>
+                            <th style="width: 150px;">Average Rating</th>
+                            <th style="width: 120px;">Appearances</th>
+                            <th>All Ratings</th>
+                            <th style="width: 150px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for team in leaderboard %}
+                        <tr>
+                            <td class="text-center">
+                                {% if loop.index <= 3 %}
+                                <span class="badge {% if loop.index == 1 %}bg-warning text-dark{% elif loop.index == 2 %}bg-secondary{% else %}bg-danger{% endif %} fs-5">
+                                    #{{ loop.index }}
+                                    {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% endif %}
+                                </span>
+                                {% else %}
+                                <span class="badge bg-dark fs-6">#{{ loop.index }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong class="fs-5">Team {{ team.team_number }}</strong>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <span class="me-2 fs-5 fw-bold">{{ team.average_ranking }}</span>
+                                    <div class="progress flex-grow-1" style="height: 20px;">
+                                        {% set rating_percent = (3 - team.average_ranking) / 2 * 100 %}
+                                        <div class="progress-bar 
+                                            {% if team.average_ranking <= 1.5 %}bg-success
+                                            {% elif team.average_ranking <= 2.25 %}bg-primary
+                                            {% else %}bg-warning{% endif %}"
+                                            role="progressbar"
+                                            style="width: {{ rating_percent }}%"
+                                            aria-valuenow="{{ rating_percent }}"
+                                            aria-valuemin="0"
+                                            aria-valuemax="100">
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ team.total_appearances }} times</span>
+                            </td>
+                            <td>
+                                {% for rating in team.rankings %}
+                                <span class="badge 
+                                    {% if rating == 1 %}bg-success
+                                    {% elif rating == 2 %}bg-primary
+                                    {% elif rating == 3 %}bg-warning text-dark
+                                    {% else %}bg-danger{% endif %} me-1 mb-1">
+                                    {{ rating }}
+                                </span>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-info" onclick="showTeamNotes('{{ team.team_number }}')">
+                                    <i class="fas fa-sticky-note me-1"></i>Notes ({{ team.notes|length }})
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="card mt-4">
+        <div class="card-body">
+            <h6 class="mb-3"><i class="fas fa-info-circle me-2"></i>Rating Scale</h6>
+            <div class="row">
+                <div class="col-md-3 mb-2">
+                    <span class="badge bg-success me-2">1</span>
+                    <span>Excellent</span>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <span class="badge bg-primary me-2">2</span>
+                    <span>Good</span>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <span class="badge bg-warning text-dark me-2">3</span>
+                    <span>Average</span>
+                </div>
+                </div>
+            </div>
+            <p class="text-muted small mb-0 mt-2">
+                <i class="fas fa-lightbulb me-1"></i>
+                Lower average rating is better. Teams are ranked from best (1.0) to worst (3.0).
+            </p>
+        </div>
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="fas fa-trophy fa-4x text-muted mb-3"></i>
+            <h4>No Qualitative Scouting Data Yet</h4>
+            <p class="text-muted">Start scouting teams to build your leaderboard!</p>
+            <a href="{{ url_for('scouting.qualitative_scouting') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Start Scouting
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Notes Modal -->
+<div class="modal fade" id="notesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-sticky-note me-2"></i>
+                    Notes for Team <span id="modal-team-number"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="notes-content">
+                <div class="text-center">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Store team notes data
+const teamNotesData = {
+    {% for team in leaderboard %}
+    '{{ team.team_number }}': {{ team.notes|tojson }},
+    {% endfor %}
+};
+
+function showTeamNotes(teamNumber) {
+    const modal = new bootstrap.Modal(document.getElementById('notesModal'));
+    const modalTitle = document.getElementById('modal-team-number');
+    const content = document.getElementById('notes-content');
+    
+    modalTitle.textContent = teamNumber;
+    
+    const notes = teamNotesData[teamNumber] || [];
+    
+    if (notes.length === 0) {
+        content.innerHTML = '<div class="alert alert-info"><i class="fas fa-info-circle me-2"></i>No notes recorded for this team.</div>';
+    } else {
+        let html = '<div class="list-group">';
+        notes.forEach(function(note, index) {
+            if (note && note.trim()) {
+                html += '<div class="list-group-item">';
+                html += '<div class="d-flex w-100 justify-content-between">';
+                html += '<h6 class="mb-1">Note #' + (index + 1) + '</h6>';
+                html += '</div>';
+                html += '<p class="mb-0">' + escapeHtml(note) + '</p>';
+                html += '</div>';
+            }
+        });
+        html += '</div>';
+        content.innerHTML = html;
+    }
+    
+    modal.show();
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+
+<style>
+.progress {
+    background-color: #e9ecef;
+}
+
+/* Dark mode styles */
+.dark-mode .table {
+    color: #e6e6e6;
+}
+
+.dark-mode .table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.dark-mode .table-hover > tbody > tr:hover > * {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .card {
+    background-color: #1a1a1a;
+    border-color: #444;
+}
+
+.dark-mode .card-header {
+    background-color: #2a2a2a;
+    border-color: #444;
+}
+
+.dark-mode .modal-content {
+    background-color: #1a1a1a;
+    color: #e6e6e6;
+}
+
+.dark-mode .modal-header {
+    border-color: #444;
+}
+
+.dark-mode .list-group-item {
+    background-color: #2a2a2a;
+    border-color: #444;
+    color: #e6e6e6;
+}
+</style>
+{% endblock %}

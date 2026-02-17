@@ -207,6 +207,121 @@ def about():
     """About page with info about the scouting system"""
     return render_template('about.html', **get_theme_context())
 
+
+@bp.route('/updates')
+def updates():
+    """Public updates / blog-like page (unrestricted access).
+
+    Loads posts from instance/updates/*.json (managed by superadmins).
+    No static placeholders are shown when there are no posts.
+    """
+    from app.utils.updates import list_posts
+
+    posts = list_posts() or []
+
+    # adapt posts so templates can link to individual view
+    for p in posts:
+        if p.get('filename'):
+            p['slug'] = url_for('main.update_view', filename=p.get('filename'))
+
+    return render_template('updates.html', posts=posts, **get_theme_context())
+
+
+@bp.route('/updates/<filename>')
+def update_view(filename):
+    """Render a single update post (public)."""
+    from app.utils.updates import load_post
+    import markdown2
+
+    post = load_post(filename)
+    if not post:
+        abort(404)
+    # render markdown body to HTML
+    body_html = markdown2.markdown(post.get('body') or '')
+    return render_template('updates_view.html', post=post, body_html=body_html, **get_theme_context())
+
+
+# ======= Superadmin management for instance-backed updates =======
+@bp.route('/updates/manage')
+@login_required
+def manage_updates():
+    from app.utils.updates import list_posts
+    if not getattr(current_user, 'has_role', None) or not current_user.has_role('superadmin'):
+        flash('Permission denied', 'danger')
+        return redirect(url_for('main.index'))
+    posts = list_posts()
+    return render_template('updates_manage.html', posts=posts, **get_theme_context())
+
+
+@bp.route('/updates/create', methods=['GET', 'POST'])
+@login_required
+def create_update():
+    from app.utils.updates import save_post
+    if not getattr(current_user, 'has_role', None) or not current_user.has_role('superadmin'):
+        flash('Permission denied', 'danger')
+        return redirect(url_for('main.index'))
+
+    if request.method == 'POST':
+        data = {
+            'title': request.form.get('title', '').strip(),
+            'date': request.form.get('date', '').strip(),
+            'excerpt': request.form.get('excerpt', '').strip(),
+            'body': request.form.get('body', '').strip(),
+            'author': getattr(current_user, 'username', 'superadmin'),
+            'published': bool(request.form.get('published', 'on'))
+        }
+        fn = save_post(data)
+        flash('Update post created.', 'success')
+        return redirect(url_for('main.manage_updates'))
+
+    # GET -> show form
+    return render_template('updates_edit.html', post=None, **get_theme_context())
+
+
+@bp.route('/updates/edit/<filename>', methods=['GET', 'POST'])
+@login_required
+def edit_update(filename):
+    from app.utils.updates import load_post, save_post
+    if not getattr(current_user, 'has_role', None) or not current_user.has_role('superadmin'):
+        flash('Permission denied', 'danger')
+        return redirect(url_for('main.index'))
+
+    post = load_post(filename)
+    if not post:
+        flash('Post not found', 'danger')
+        return redirect(url_for('main.manage_updates'))
+
+    if request.method == 'POST':
+        data = {
+            'title': request.form.get('title', '').strip(),
+            'date': request.form.get('date', '').strip(),
+            'excerpt': request.form.get('excerpt', '').strip(),
+            'body': request.form.get('body', '').strip(),
+            'author': getattr(current_user, 'username', 'superadmin'),
+            'published': bool(request.form.get('published', 'on'))
+        }
+        save_post(data, filename=filename)
+        flash('Update post saved.', 'success')
+        return redirect(url_for('main.manage_updates'))
+
+    return render_template('updates_edit.html', post=post, **get_theme_context())
+
+
+@bp.route('/updates/delete/<filename>', methods=['POST'])
+@login_required
+def delete_update(filename):
+    from app.utils.updates import delete_post
+    if not getattr(current_user, 'has_role', None) or not current_user.has_role('superadmin'):
+        flash('Permission denied', 'danger')
+        return redirect(url_for('main.index'))
+
+    ok = delete_post(filename)
+    if ok:
+        flash('Post deleted.', 'success')
+    else:
+        flash('Could not delete post.', 'danger')
+    return redirect(url_for('main.manage_updates'))
+
 @bp.route('/contact', methods=['GET', 'POST'])
 @login_required
 def contact():

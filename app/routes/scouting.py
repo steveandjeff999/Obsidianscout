@@ -1573,48 +1573,98 @@ def save_qualitative_scouting():
     """Save Qualitative scouting data"""
     try:
         data = request.get_json()
-        match_id = data.get('match_id')
-        alliance_scouted = data.get('alliance_scouted')
-        team_data = data.get('team_data', {})
+        individual_team = data.get('individual_team', False)
         
-        if not match_id or not alliance_scouted:
-            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
-        
-        # Check if entry already exists
-        existing = QualitativeScoutingData.query.filter_by(
-            match_id=match_id,
-            scouting_team_number=current_user.scouting_team_number
-        ).first()
-        
-        if existing:
-            # Update existing entry
-            existing.alliance_scouted = alliance_scouted
-            existing.data = team_data
-            existing.timestamp = datetime.now(timezone.utc)
-            existing.scout_name = current_user.username
-            existing.scout_id = current_user.id
-        else:
-            # Create new entry
+        if individual_team:
+            # Individual team scouting mode (from a match, single team)
+            team_number = data.get('team_number')
+            match_id = data.get('match_id')
+            team_data = data.get('team_data', {})
+            
+            if not team_number or not match_id:
+                return jsonify({'success': False, 'message': 'Missing team number or match'}), 400
+
+            # Server-side validation: ranking required for individual entries
+            individual_block = team_data.get('individual', {})
+            team_key = f'team_{team_number}'
+            indiv_entry = individual_block.get(team_key)
+            if not indiv_entry or indiv_entry.get('ranking') is None:
+                return jsonify({'success': False, 'message': 'Ranking required for individual team entries'}), 400
+            
+            # Individual team entries are always new (one per team per match)
             qualitative_data = QualitativeScoutingData(
                 match_id=match_id,
                 scouting_team_number=current_user.scouting_team_number,
                 scout_name=current_user.username,
                 scout_id=current_user.id,
-                alliance_scouted=alliance_scouted,
-                data_json=json.dumps(team_data)
+                alliance_scouted=team_key,
+                data_json=json.dumps({
+                    'individual': team_data.get('individual', {}),
+                    'team_number': team_number
+                })
             )
             db.session.add(qualitative_data)
-        
-        db.session.commit()
-        
-        # Get the entry ID (either existing or newly created)
-        entry_id = existing.id if existing else qualitative_data.id
-        
-        return jsonify({
-            'success': True,
-            'message': 'Qualitative scouting data saved successfully',
-            'entry_id': entry_id
-        })
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': f'Qualitative scouting for team {team_number} saved successfully',
+                'entry_id': qualitative_data.id
+            })
+        else:
+            # Match-based scouting mode (existing logic)
+            match_id = data.get('match_id')
+            alliance_scouted = data.get('alliance_scouted')
+            team_data = data.get('team_data', {})
+            
+            if not match_id or not alliance_scouted:
+                return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+            # Server-side validation: require rankings for all teams in the selected alliance(s)
+            if alliance_scouted in ('red', 'both'):
+                for k, v in (team_data.get('red') or {}).items():
+                    if v.get('ranking') is None:
+                        return jsonify({'success': False, 'message': 'All teams in the selected alliance must be ranked'}), 400
+            if alliance_scouted in ('blue', 'both'):
+                for k, v in (team_data.get('blue') or {}).items():
+                    if v.get('ranking') is None:
+                        return jsonify({'success': False, 'message': 'All teams in the selected alliance must be ranked'}), 400
+            
+            # Check if entry already exists
+            existing = QualitativeScoutingData.query.filter_by(
+                match_id=match_id,
+                scouting_team_number=current_user.scouting_team_number
+            ).first()
+            
+            if existing:
+                # Update existing entry
+                existing.alliance_scouted = alliance_scouted
+                existing.data = team_data
+                existing.timestamp = datetime.now(timezone.utc)
+                existing.scout_name = current_user.username
+                existing.scout_id = current_user.id
+            else:
+                # Create new entry
+                qualitative_data = QualitativeScoutingData(
+                    match_id=match_id,
+                    scouting_team_number=current_user.scouting_team_number,
+                    scout_name=current_user.username,
+                    scout_id=current_user.id,
+                    alliance_scouted=alliance_scouted,
+                    data_json=json.dumps(team_data)
+                )
+                db.session.add(qualitative_data)
+            
+            db.session.commit()
+            
+            # Get the entry ID (either existing or newly created)
+            entry_id = existing.id if existing else qualitative_data.id
+            
+            return jsonify({
+                'success': True,
+                'message': 'Qualitative scouting data saved successfully',
+                'entry_id': entry_id
+            })
         
     except Exception as e:
         db.session.rollback()
@@ -1688,6 +1738,67 @@ def list_qualitative_data():
                          **get_theme_context())
 
 
+@bp.route('/qualitative/leaderboard')
+@login_required
+def qualitative_leaderboard():
+    """Display a leaderboard of teams ranked by qualitative scouting rankings"""
+    from collections import defaultdict
+    
+    # Get all Qualitative scouting data for the current team
+    all_entries = QualitativeScoutingData.query.filter_by(
+        scouting_team_number=current_user.scouting_team_number
+    ).all()
+    
+    # Aggregate rankings by team
+    team_rankings = defaultdict(lambda: {'rankings': [], 'notes': [], 'appearances': 0})
+    
+    for entry in all_entries:
+        data = entry.data
+        
+        # Handle individual team entries (check first since they also have match_id now)
+        if entry.alliance_scouted and entry.alliance_scouted.startswith('team_'):
+            team_num = entry.alliance_scouted.replace('team_', '')
+            individual_data = data.get('individual', {})
+            for team_key, team_data in individual_data.items():
+                if team_data.get('ranking'):
+                    team_rankings[team_num]['rankings'].append(team_data['ranking'])
+                    team_rankings[team_num]['appearances'] += 1
+                    if team_data.get('notes'):
+                        team_rankings[team_num]['notes'].append(team_data['notes'])
+        # Handle match-based entries (full alliance scouting)
+        elif entry.match_id:
+            for alliance in ['red', 'blue']:
+                if alliance in data:
+                    for team_key, team_data in data[alliance].items():
+                        team_num = team_key.replace('team_', '')
+                        if team_data.get('ranking'):
+                            team_rankings[team_num]['rankings'].append(team_data['ranking'])
+                            team_rankings[team_num]['appearances'] += 1
+                            if team_data.get('notes'):
+                                team_rankings[team_num]['notes'].append(team_data['notes'])
+    
+    # Calculate average rankings and prepare leaderboard data
+    leaderboard = []
+    for team_num, data in team_rankings.items():
+        if data['rankings']:
+            avg_ranking = sum(data['rankings']) / len(data['rankings'])
+            leaderboard.append({
+                'team_number': team_num,
+                'average_ranking': round(avg_ranking, 2),
+                'total_appearances': data['appearances'],
+                'rankings': data['rankings'],
+                'notes': data['notes']
+            })
+    
+    # Sort by average ranking (1 is best)
+    leaderboard.sort(key=lambda x: x['average_ranking'])
+    
+    return render_template('scouting/qualitative_leaderboard.html',
+                         leaderboard=leaderboard,
+                         total_teams=len(leaderboard),
+                         **get_theme_context())
+
+
 @bp.route('/qualitative/qr/<int:entry_id>')
 @login_required
 def qualitative_qr_code(entry_id):
@@ -1698,17 +1809,43 @@ def qualitative_qr_code(entry_id):
     ).first_or_404()
     
     # Create QR code data with qualitative flag
-    qr_data = {
-        'qualitative': True,  # Flag to identify this as Qualitative scouting
-        'match_id': entry.match_id,
-        'match_number': entry.match.match_number,
-        'match_type': entry.match.match_type,
-        'event_code': entry.match.event.code if entry.match.event else '',
-        'alliance_scouted': entry.alliance_scouted,
-        'scout_name': entry.scout_name,
-        'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
-        'team_data': entry.data
-    }
+    if entry.alliance_scouted and entry.alliance_scouted.startswith('team_'):
+        # Individual team scouting
+        data = entry.data
+        qr_data = {
+            'qualitative': True,
+            'individual_team': True,
+            'match_id': entry.match_id,
+            'match_number': entry.match.match_number if entry.match else None,
+            'match_type': entry.match.match_type if entry.match else None,
+            'event_code': entry.match.event.code if entry.match and entry.match.event else '',
+            'team_number': data.get('team_number', entry.alliance_scouted.replace('team_', '')),
+            'alliance_scouted': entry.alliance_scouted,
+            'scout_name': entry.scout_name,
+            'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
+            'team_data': entry.data
+        }
+    elif entry.match:
+        # Match-based alliance scouting
+        qr_data = {
+            'qualitative': True,
+            'match_id': entry.match_id,
+            'match_number': entry.match.match_number,
+            'match_type': entry.match.match_type,
+            'event_code': entry.match.event.code if entry.match.event else '',
+            'alliance_scouted': entry.alliance_scouted,
+            'scout_name': entry.scout_name,
+            'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
+            'team_data': entry.data
+        }
+    else:
+        # Fallback
+        qr_data = {
+            'qualitative': True,
+            'scout_name': entry.scout_name,
+            'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
+            'team_data': entry.data
+        }
     
     # Convert to JSON
     json_data = json.dumps(qr_data, separators=(',', ':'))
