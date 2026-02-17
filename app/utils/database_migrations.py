@@ -86,6 +86,7 @@ MIGRATIONS = [
     # so older databases can be upgraded automatically on startup if needed.
     ('scouting_team_settings', 'liquid_glass_buttons', 'BOOLEAN DEFAULT 0', None),
     ('scouting_team_settings', 'spinning_counters_enabled', 'BOOLEAN DEFAULT 0', None),
+    ('scouting_team_settings', 'epa_source', "VARCHAR(30) DEFAULT 'scouted_only'", None),
     ('scouting_team_settings', 'locked_by_user_id', 'INTEGER', None),
     ('scouting_team_settings', 'locked_at', 'DATETIME', None),
     ('scouting_team_settings', 'created_at', 'DATETIME', None),
@@ -233,6 +234,21 @@ MIGRATIONS = [
     ('notification_subscription', 'updated_at', 'DATETIME', 'misc'),
     ('device_token', 'updated_at', 'DATETIME', 'misc'),
     ('notification_queue', 'updated_at', 'DATETIME', 'misc'),
+
+    # -------------------------------------------------------------------------
+    # StatboticsCache table migrations (default bind)
+    # -------------------------------------------------------------------------
+    ('statbotics_cache', 'team_number', 'INTEGER NOT NULL', None),
+    ('statbotics_cache', 'year', 'INTEGER NOT NULL', None),
+    ('statbotics_cache', 'scouting_team_number', 'INTEGER', None),
+    ('statbotics_cache', 'epa_total', 'FLOAT', None),
+    ('statbotics_cache', 'epa_auto', 'FLOAT', None),
+    ('statbotics_cache', 'epa_teleop', 'FLOAT', None),
+    ('statbotics_cache', 'epa_endgame', 'FLOAT', None),
+    ('statbotics_cache', 'rank_world', 'INTEGER', None),
+    ('statbotics_cache', 'rank_country', 'INTEGER', None),
+    ('statbotics_cache', 'fetched_at', 'DATETIME', None),
+    ('statbotics_cache', 'is_miss', 'BOOLEAN DEFAULT 0', None),
 ]
 
 

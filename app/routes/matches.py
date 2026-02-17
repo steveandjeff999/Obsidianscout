@@ -299,18 +299,25 @@ def index():
 
     def _compute_local_scores_for_match(m):
         # Gather scouting entries for this match and scouting team
-        if not scouting_team_number:
+        # EPA fallback: if a team has no scouting data, use Statbotics EPA when enabled
+        from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
+
+        epa_source = get_current_epa_source()
+        use_epa = epa_source in ('scouted_with_statbotics', 'statbotics_only')
+        statbotics_only = epa_source == 'statbotics_only'
+
+        if not scouting_team_number and not use_epa:
             return (None, None)
         # Exclude alliance-copied data when not in alliance mode
         from sqlalchemy import or_
-        entries = ScoutingData.query.filter_by(match_id=m.id, scouting_team_number=scouting_team_number).filter(
-            or_(
-                ScoutingData.scout_name == None,
-                ~ScoutingData.scout_name.like('[Alliance-%')
-            )
-        ).all()
-        if not entries:
-            return (None, None)
+        entries = []
+        if scouting_team_number and not statbotics_only:
+            entries = ScoutingData.query.filter_by(match_id=m.id, scouting_team_number=scouting_team_number).filter(
+                or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
+            ).all()
 
         # Keep the latest entry per team_id to avoid duplicate scouts
         latest_by_team = {}
@@ -324,6 +331,9 @@ def index():
         any_points = False
         red_team_numbers = set(m.red_teams)
         blue_team_numbers = set(m.blue_teams)
+
+        # Track which team_numbers already got scouting points
+        scored_team_numbers = set()
 
         for e in latest_by_team.values():
             try:
@@ -339,9 +349,30 @@ def index():
             if tn in red_team_numbers:
                 red_sum += pts
                 any_points = any_points or pts > 0
+                scored_team_numbers.add(tn)
             elif tn in blue_team_numbers:
                 blue_sum += pts
                 any_points = any_points or pts > 0
+                scored_team_numbers.add(tn)
+
+        # EPA fallback for teams without scouting data
+        if use_epa:
+            all_match_teams = red_team_numbers | blue_team_numbers
+            for tn in all_match_teams:
+                if not statbotics_only and tn in scored_team_numbers:
+                    continue
+                epa = get_epa_metrics_for_team(tn)
+                epa_total = epa.get('total') if epa else None
+                if epa_total and epa_total > 0:
+                    if statbotics_only:
+                        # Override any scouting score with EPA
+                        pass
+                    if tn in red_team_numbers:
+                        red_sum += int(epa_total)
+                        any_points = True
+                    elif tn in blue_team_numbers:
+                        blue_sum += int(epa_total)
+                        any_points = True
 
         if not any_points:
             return (None, None)
@@ -552,6 +583,7 @@ def sync_from_config():
         with DisableReplication():
             BATCH_SIZE = 25
             batch_count = 0
+            failed_matches = []  # Track matches that failed to sync
 
             # Process each match from the API inside SAVEPOINTs so one
             # failure doesn't kill the whole sync.
@@ -571,8 +603,17 @@ def sync_from_config():
                 try:
                     nested = db.session.begin_nested()  # SAVEPOINT
                 
+                    # Verify event exists before trying to add/update match
+                    if not event or not event.id:
+                        raise ValueError(f"Invalid event_id for match {match_type} {match_number}")
+                
                     # Check if the match already exists for this scouting team
-                    match = filter_matches_by_scouting_team().filter(
+                    # Use explicit query to avoid issues with deleted matches
+                    from app.utils.team_isolation import get_current_scouting_team_number
+                    current_team = get_current_scouting_team_number()
+                    
+                    match = Match.query.filter(
+                        Match.scouting_team_number == current_team,
                         Match.event_id == event.id,
                         Match.match_number == match_number,
                         Match.match_type == match_type
@@ -586,6 +627,13 @@ def sync_from_config():
                         match.red_score = match_data.get('red_score', match.red_score)
                         match.blue_score = match_data.get('blue_score', match.blue_score)
                         match.display_match_number = match_data.get('display_match_number', match.display_match_number)
+                        # Ensure scheduled times are updated
+                        if match_data.get('scheduled_time'):
+                            match.scheduled_time = match_data.get('scheduled_time')
+                        if match_data.get('predicted_time'):
+                            match.predicted_time = match_data.get('predicted_time')
+                        if match_data.get('actual_time'):
+                            match.actual_time = match_data.get('actual_time')
                         # Ensure scouting_team_number is set (in case it was None before)
                         assign_scouting_team_to_model(match)
                         matches_updated += 1
@@ -599,9 +647,14 @@ def sync_from_config():
                         }
                         # Filter match_data to only include valid fields
                         filtered_data = {k: v for k, v in match_data.items() if k in valid_fields}
+                        
+                        # Ensure event_id is set
+                        filtered_data['event_id'] = event.id
+                        
                         match = Match(**filtered_data)
                         assign_scouting_team_to_model(match)  # Assign current scouting team
                         db.session.add(match)
+                        db.session.flush()  # Flush to catch any DB errors immediately
                         matches_added += 1
 
                     nested.commit()  # Release SAVEPOINT
@@ -610,7 +663,10 @@ def sync_from_config():
                         nested.rollback()  # Rollback only this SAVEPOINT
                     except Exception:
                         pass
-                    print(f"Warning: Failed to sync match {match_type} {match_number}: {e}")
+                    error_msg = f"{match_type} {match_number}: {str(e)}"
+                    failed_matches.append(error_msg)
+                    current_app.logger.error(f"Failed to sync match {error_msg}")
+                    print(f"Warning: Failed to sync match {error_msg}")
                     continue
 
                 batch_count += 1
@@ -619,6 +675,17 @@ def sync_from_config():
             
             # Final commit for remaining items
             db.session.commit()
+            
+            # Report any failed matches to the user
+            if failed_matches:
+                failed_count = len(failed_matches)
+                if failed_count <= 5:
+                    # Show details for a few failures
+                    flash(f"Warning: {failed_count} match(es) failed to sync: {'; '.join(failed_matches[:5])}", 'warning')
+                else:
+                    # Too many to show details
+                    flash(f"Warning: {failed_count} match(es) failed to sync. Check logs for details.", 'warning')
+                current_app.logger.warning(f"Match sync failures: {failed_matches}")
         
         # Merge any duplicate events that may have been created
         try:
@@ -760,9 +827,13 @@ def view(match_id):
             scouting_team_number = None
 
         # Use the scouting data we already fetched (which is alliance-aware)
-        if scouting_data:
-            entries = scouting_data
-            if entries:
+        from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
+        epa_source = get_current_epa_source()
+        use_epa = epa_source in ('scouted_with_statbotics', 'statbotics_only')
+        statbotics_only = epa_source == 'statbotics_only'
+
+        entries = scouting_data if scouting_data and not statbotics_only else []
+        if entries:
                 latest_by_team = {}
                 for e in entries:
                     tid = e.team_id
@@ -774,6 +845,7 @@ def view(match_id):
                 any_points = False
                 red_team_numbers = set(match.red_teams)
                 blue_team_numbers = set(match.blue_teams)
+                scored_team_numbers = set()
 
                 for e in latest_by_team.values():
                     try:
@@ -789,12 +861,49 @@ def view(match_id):
                     if tn in red_team_numbers:
                         red_sum += pts
                         any_points = any_points or pts > 0
+                        scored_team_numbers.add(tn)
                     elif tn in blue_team_numbers:
                         blue_sum += pts
                         any_points = any_points or pts > 0
+                        scored_team_numbers.add(tn)
+
+                # EPA fallback for teams without scouting data
+                if use_epa:
+                    all_match_teams = red_team_numbers | blue_team_numbers
+                    for tn in all_match_teams:
+                        if not statbotics_only and tn in scored_team_numbers:
+                            continue
+                        epa = get_epa_metrics_for_team(tn)
+                        epa_total = epa.get('total') if epa else None
+                        if epa_total and epa_total > 0:
+                            if tn in red_team_numbers:
+                                red_sum += int(epa_total)
+                                any_points = True
+                            elif tn in blue_team_numbers:
+                                blue_sum += int(epa_total)
+                                any_points = True
 
                 if any_points:
                     display_score = {'red_score': red_sum, 'blue_score': blue_sum, 'source': 'local'}
+        elif use_epa:
+            # No scouting data at all — try pure EPA prediction
+            red_sum = 0
+            blue_sum = 0
+            any_points = False
+            red_team_numbers = set(match.red_teams)
+            blue_team_numbers = set(match.blue_teams)
+            for tn in (red_team_numbers | blue_team_numbers):
+                epa = get_epa_metrics_for_team(tn)
+                epa_total = epa.get('total') if epa else None
+                if epa_total and epa_total > 0:
+                    if tn in red_team_numbers:
+                        red_sum += int(epa_total)
+                        any_points = True
+                    elif tn in blue_team_numbers:
+                        blue_sum += int(epa_total)
+                        any_points = True
+            if any_points:
+                display_score = {'red_score': red_sum, 'blue_score': blue_sum, 'source': 'epa'}
 
     return render_template('matches/view.html', match=match, 
                           scouting_data=scouting_data, game_config=game_config, display_score=display_score, **get_theme_context())
@@ -1155,36 +1264,40 @@ def strategy_all():
         def _compute_local_scores_for_match(m):
             # Check if alliance mode is active
             alliance_id = get_active_alliance_id()
-            
-            if alliance_id:
-                # Alliance mode - query from shared tables by match_number and event_code
-                # since match IDs differ across alliance members
-                from sqlalchemy import func
-                event = Event.query.get(m.event_id)
-                entries = AllianceSharedScoutingData.query.join(
-                    Match, AllianceSharedScoutingData.match_id == Match.id
-                ).join(
-                    Event, Match.event_id == Event.id
-                ).filter(
-                    Match.match_number == m.match_number,
-                    Match.match_type == m.match_type,
-                    func.upper(Event.code) == func.upper(event.code) if event and event.code else Match.event_id == m.event_id,
-                    AllianceSharedScoutingData.alliance_id == alliance_id,
-                    AllianceSharedScoutingData.is_active == True
-                ).all()
-            elif scouting_team_number:
-                # Exclude alliance-copied data when not in alliance mode
-                from sqlalchemy import or_
-                entries = ScoutingData.query.filter_by(match_id=m.id, scouting_team_number=scouting_team_number).filter(
-                    or_(
-                        ScoutingData.scout_name == None,
-                        ~ScoutingData.scout_name.like('[Alliance-%')
-                    )
-                ).all()
-            else:
-                return (None, None)
-                
-            if not entries:
+            from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
+            epa_source = get_current_epa_source()
+            use_epa = epa_source in ('scouted_with_statbotics', 'statbotics_only')
+            statbotics_only = epa_source == 'statbotics_only'
+
+            entries = []
+            if not statbotics_only:
+                if alliance_id:
+                    # Alliance mode - query from shared tables by match_number and event_code
+                    # since match IDs differ across alliance members
+                    from sqlalchemy import func
+                    event = Event.query.get(m.event_id)
+                    entries = AllianceSharedScoutingData.query.join(
+                        Match, AllianceSharedScoutingData.match_id == Match.id
+                    ).join(
+                        Event, Match.event_id == Event.id
+                    ).filter(
+                        Match.match_number == m.match_number,
+                        Match.match_type == m.match_type,
+                        func.upper(Event.code) == func.upper(event.code) if event and event.code else Match.event_id == m.event_id,
+                        AllianceSharedScoutingData.alliance_id == alliance_id,
+                        AllianceSharedScoutingData.is_active == True
+                    ).all()
+                elif scouting_team_number:
+                    # Exclude alliance-copied data when not in alliance mode
+                    from sqlalchemy import or_
+                    entries = ScoutingData.query.filter_by(match_id=m.id, scouting_team_number=scouting_team_number).filter(
+                        or_(
+                            ScoutingData.scout_name == None,
+                            ~ScoutingData.scout_name.like('[Alliance-%')
+                        )
+                    ).all()
+
+            if not entries and not use_epa:
                 return (None, None)
 
             latest_by_team = {}
@@ -1199,6 +1312,7 @@ def strategy_all():
             # m.red_alliance/blue_alliance stored as comma-separated strings of team numbers
             red_team_numbers = set([t.strip() for t in str(m.red_alliance or '').split(',') if t.strip()])
             blue_team_numbers = set([t.strip() for t in str(m.blue_alliance or '').split(',') if t.strip()])
+            scored_team_numbers = set()
 
             for e in latest_by_team.values():
                 try:
@@ -1214,9 +1328,27 @@ def strategy_all():
                 if tn in red_team_numbers:
                     red_sum += pts
                     any_points = any_points or pts > 0
+                    scored_team_numbers.add(tn)
                 elif tn in blue_team_numbers:
                     blue_sum += pts
                     any_points = any_points or pts > 0
+                    scored_team_numbers.add(tn)
+
+            # EPA fallback for teams without scouting data
+            if use_epa:
+                all_match_teams = red_team_numbers | blue_team_numbers
+                for tn in all_match_teams:
+                    if not statbotics_only and tn in scored_team_numbers:
+                        continue
+                    epa = get_epa_metrics_for_team(tn)
+                    epa_total = epa.get('total') if epa else None
+                    if epa_total and epa_total > 0:
+                        if tn in red_team_numbers:
+                            red_sum += int(epa_total)
+                            any_points = True
+                        elif tn in blue_team_numbers:
+                            blue_sum += int(epa_total)
+                            any_points = True
 
             if not any_points:
                 return (None, None)

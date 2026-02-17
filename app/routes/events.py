@@ -4,7 +4,7 @@ from sqlalchemy import func
 from app import db
 from datetime import datetime, date
 from app.utils.config_manager import get_current_game_config, get_effective_game_config, save_game_config
-from app.utils.team_isolation import get_event_by_code, filter_events_by_scouting_team, get_current_scouting_team_number
+from app.utils.team_isolation import get_event_by_code, filter_events_by_scouting_team, filter_matches_by_scouting_team, get_current_scouting_team_number
 from app.models import TeamAllianceStatus
 from sqlalchemy.exc import IntegrityError
 

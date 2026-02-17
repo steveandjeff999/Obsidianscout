@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% import '_help_icon.html' as help %}
+{% block title %}EPA Data Source Settings{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2>
+                <i class="fas fa-chart-line"></i> EPA Data Source Settings
+                {{ help.help_icon('Control how EPA (Expected Points Added) data is sourced for graphs, predictions, and simulations. This setting applies to all users on your scouting team.', 'EPA settings') }}
+            </h2>
+            <p class="text-muted">Choose how your team's graphs, predictions, and simulations source their performance data.</p>
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-database"></i> Data Source Mode</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('auth.epa_settings_save') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                        <!-- Option 1 -->
+                        <div class="form-check mb-3 p-3 border rounded {% if epa_source == 'scouted_only' %}border-primary bg-primary bg-opacity-10{% endif %}">
+                            <input class="form-check-input" type="radio" name="epa_source"
+                                   id="epa_scouted_only" value="scouted_only"
+                                   {% if epa_source == 'scouted_only' %}checked{% endif %}>
+                            <label class="form-check-label fw-bold" for="epa_scouted_only">
+                                <i class="fas fa-clipboard-list text-primary"></i> Use Scouted Data Only
+                            </label>
+                            <p class="text-muted small mb-0 mt-1 ms-4">
+                                All graphs, predictions, and simulations use only the data your scouts have collected.
+                                Teams with no scouting data will show as zero / unknown.
+                            </p>
+                        </div>
+
+                        <!-- Option 2 -->
+                        <div class="form-check mb-3 p-3 border rounded {% if epa_source == 'scouted_with_statbotics' %}border-success bg-success bg-opacity-10{% endif %}">
+                            <input class="form-check-input" type="radio" name="epa_source"
+                                   id="epa_scouted_with_statbotics" value="scouted_with_statbotics"
+                                   {% if epa_source == 'scouted_with_statbotics' %}checked{% endif %}>
+                            <label class="form-check-label fw-bold" for="epa_scouted_with_statbotics">
+                                <i class="fas fa-puzzle-piece text-success"></i> Use Scouted Data &amp; Fill Gaps with Statbotics EPA
+                            </label>
+                            <p class="text-muted small mb-0 mt-1 ms-4">
+                                Your scouted data is used whenever available. For teams with <strong>no scouted matches</strong>,
+                                Statbotics EPA values are substituted automatically so every team has data in graphs and predictions.
+                            </p>
+                        </div>
+
+                        <!-- Option 3 -->
+                        <div class="form-check mb-3 p-3 border rounded {% if epa_source == 'statbotics_only' %}border-warning bg-warning bg-opacity-10{% endif %}">
+                            <input class="form-check-input" type="radio" name="epa_source"
+                                   id="epa_statbotics_only" value="statbotics_only"
+                                   {% if epa_source == 'statbotics_only' %}checked{% endif %}>
+                            <label class="form-check-label fw-bold" for="epa_statbotics_only">
+                                <i class="fas fa-globe text-warning"></i> Use Statbotics EPA Only
+                            </label>
+                            <p class="text-muted small mb-0 mt-1 ms-4">
+                                All graphs, predictions, and simulations use Statbotics EPA data exclusively.
+                                Your scouted match data is <strong>not</strong> used for performance metrics (it is still stored).
+                            </p>
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a href="{{ url_for('auth.admin_settings') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left"></i> Back to Admin Settings
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Setting
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info sidebar -->
+        <div class="col-lg-4">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="fas fa-info-circle"></i> About Statbotics EPA</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small">
+                        <strong>EPA (Expected Points Added)</strong> is a metric from
+                        <a href="https://www.statbotics.io" target="_blank" rel="noopener">Statbotics</a>
+                        that estimates how many points a team contributes to their alliance per match.
+                    </p>
+                    <p class="small">
+                        EPA is broken into <strong>Auto</strong>, <strong>Teleop</strong>, and <strong>Endgame</strong>
+                        components and is updated continuously throughout the season.
+                    </p>
+                    <p class="small mb-0">
+                        <strong>Tip:</strong> Use <em>"Scouted + Gap-Fill"</em> mode for the best of both worlds &mdash;
+                        your scouts' detailed data for teams you've watched, plus Statbotics data for teams you haven't scouted yet.
+                    </p>
+                </div>
+            </div>
+
+            <div class="card mt-3" id="epaCurrent">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-signal"></i> Current Status</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small" id="epaStatusText"><i class="fas fa-spinner fa-spin"></i> Checking&hellip;</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Highlight selected radio card
+    document.querySelectorAll('input[name="epa_source"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            document.querySelectorAll('.form-check.border').forEach(function(el) {
+                el.classList.remove('border-primary', 'bg-primary', 'bg-opacity-10',
+                                   'border-success', 'bg-success',
+                                   'border-warning', 'bg-warning');
+            });
+            var parent = this.closest('.form-check');
+            if (this.value === 'scouted_only') {
+                parent.classList.add('border-primary', 'bg-primary', 'bg-opacity-10');
+            } else if (this.value === 'scouted_with_statbotics') {
+                parent.classList.add('border-success', 'bg-success', 'bg-opacity-10');
+            } else {
+                parent.classList.add('border-warning', 'bg-warning', 'bg-opacity-10');
+            }
+        });
+    });
+
+    // Fetch current status
+    async function refreshEpaStatus() {
+        try {
+            var resp = await fetch("{{ url_for('auth.epa_source_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
+            var data = await resp.json();
+            var labels = {
+                'scouted_only': '<span class="badge bg-primary">Scouted Data Only</span>',
+                'scouted_with_statbotics': '<span class="badge bg-success">Scouted + Statbotics Gap-Fill</span>',
+                'statbotics_only': '<span class="badge bg-warning text-dark">Statbotics EPA Only</span>'
+            };
+            document.getElementById('epaStatusText').innerHTML =
+                'Active mode: ' + (labels[data.epa_source] || '<span class="badge bg-secondary">Unknown</span>');
+        } catch(e) {
+            document.getElementById('epaStatusText').textContent = 'Could not fetch status.';
+        }
+    }
+    refreshEpaStatus();
+});
+</script>
+{% endblock %}

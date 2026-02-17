@@ -1672,6 +1672,76 @@ def toggle_account_lock():
     db.session.commit()
     return redirect(url_for('auth.admin_settings'))
 
+
+# -------------------------------------------------------------------------
+# EPA Data Source Settings
+# -------------------------------------------------------------------------
+
+@bp.route('/admin/epa-settings', methods=['GET'])
+@admin_required
+def epa_settings():
+    """Standalone EPA data-source settings page"""
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.get_or_create_for_team(current_user.scouting_team_number)
+    epa_source = getattr(team_settings, 'epa_source', 'scouted_only') or 'scouted_only'
+
+    ctx = get_theme_context()
+    ctx['no_chrome'] = False
+    return render_template('auth/epa_settings.html',
+                           epa_source=epa_source,
+                           scouting_team_settings=team_settings,
+                           **ctx)
+
+
+@bp.route('/admin/epa-settings', methods=['POST'])
+@admin_required
+def epa_settings_save():
+    """Save EPA data-source setting for the admin's scouting team"""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.epa_settings'))
+
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.get_or_create_for_team(current_user.scouting_team_number)
+
+    new_source = request.form.get('epa_source', 'scouted_only')
+    valid_sources = ('scouted_only', 'scouted_with_statbotics', 'statbotics_only')
+    if new_source not in valid_sources:
+        new_source = 'scouted_only'
+
+    team_settings.epa_source = new_source
+    team_settings.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    # Immediately flush all EPA caches so the new setting takes effect
+    try:
+        from app.utils.analysis import invalidate_epa_caches
+        invalidate_epa_caches()
+    except Exception:
+        pass
+
+    labels = {
+        'scouted_only': 'Scouted Data Only',
+        'scouted_with_statbotics': 'Scouted Data + Statbotics EPA Gap-Fill',
+        'statbotics_only': 'Statbotics EPA Only',
+    }
+    flash(f'EPA data source set to: {labels.get(new_source, new_source)}', 'success')
+    return redirect(url_for('auth.epa_settings'))
+
+
+@bp.route('/admin/epa-source-status', methods=['GET'])
+def epa_source_status():
+    """Return JSON with current EPA source setting for the user's team"""
+    if not current_user.is_authenticated:
+        return jsonify({'epa_source': 'scouted_only'})
+
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.query.filter_by(
+        scouting_team_number=current_user.scouting_team_number
+    ).first()
+    source = getattr(team_settings, 'epa_source', 'scouted_only') if team_settings else 'scouted_only'
+    return jsonify({'epa_source': source or 'scouted_only'})
+
+
 # Context processor to make current_user and role functions available in templates
 @bp.app_context_processor
 def inject_auth_vars():

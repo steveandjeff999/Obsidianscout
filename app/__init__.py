@@ -1318,6 +1318,12 @@ def create_app(test_config=None, use_postgres=False):
             # Skip tables that belong to other binds – they were already
             # created on their own engines above.
             try:
+                # Ensure ALL model classes are registered with metadata so
+                # their tables are discovered by the loop below.  This is
+                # important when optional binds (users/pages/misc) are not
+                # configured – importing the module guarantees model
+                # classes like StatboticsCache are visible to sorted_tables.
+                from app import models as _models  # noqa: F401 – register all models
                 try:
                     default_engine = db.get_engine(bind_key=None)
                 except TypeError:
@@ -1488,7 +1494,62 @@ def create_app(test_config=None, use_postgres=False):
             return {'teams_config_issue': issue}
         except Exception:
             return {'teams_config_issue': None}
-    
+
+    @app.context_processor
+    def inject_api_key_status():
+        """Show a top-banner for admins when API keys are missing or clearly placeholder values.
+
+        - Only visible to users with the `admin` or `superadmin` role.
+        - Detects empty/placeholder values (e.g. "first", "tba", "[REDACTED]", "your ... key here").
+        """
+        try:
+            from flask_login import current_user
+            # Only show to admins/superadmins
+            try:
+                roles = [r.name for r in getattr(current_user, 'roles', []) if hasattr(r, 'name')]
+            except Exception:
+                roles = []
+            if not any(r in ('admin', 'superadmin') for r in roles):
+                return {'api_key_issue': None}
+
+            from app.utils.config_manager import get_effective_game_config
+            cfg = get_effective_game_config() or {}
+
+            def _is_placeholder(v):
+                if not v:
+                    return True
+                if not isinstance(v, str):
+                    return False
+                s = v.strip().lower()
+                if s in ('first', 'tba'):
+                    return True
+                # common placeholder patterns
+                if 'redact' in s or 'your' in s or 'placeholder' in s or 'example' in s or 'replace' in s:
+                    return True
+                return False
+
+            preferred = (cfg.get('preferred_api_source') or '').strip().lower()
+            api_settings = cfg.get('api_settings') or {}
+            tba_settings = cfg.get('tba_api_settings') or {}
+            first_key = api_settings.get('auth_token') if isinstance(api_settings, dict) else None
+            tba_key = tba_settings.get('auth_key') if isinstance(tba_settings, dict) else None
+
+            message = None
+            if preferred == 'tba':
+                if _is_placeholder(tba_key):
+                    message = 'Preferred API source is set to The Blue Alliance but no valid TBA API key is configured. Please set a TBA API key in the Game Configuration.'
+            elif preferred == 'first':
+                if _is_placeholder(first_key):
+                    message = 'Preferred API source is set to FIRST but no valid FIRST API auth token is configured. Please set an API key in the Game Configuration.'
+            else:
+                # If no preferred source, warn if both are missing/placeholder
+                if _is_placeholder(first_key) and _is_placeholder(tba_key):
+                    message = 'No API key configured for FIRST or The Blue Alliance. Set an API key in the Game Configuration to enable automatic syncs and API lookups.'
+
+            return {'api_key_issue': message}
+        except Exception:
+            return {'api_key_issue': None}
+
     # Add a context processor to make theme data available in all templates
     @app.context_processor
     def inject_theme_data():
@@ -1503,7 +1564,16 @@ def create_app(test_config=None, use_postgres=False):
             return dict(current_theme=current_theme, current_theme_id=current_id, theme_css_variables=theme_css, themes=themes)
         except Exception:
             return dict(current_theme={}, current_theme_id='light', theme_css_variables='', themes={})
-    
+
+    @app.context_processor
+    def inject_runtime_flags():
+        """Expose `use_postgres` to templates so Jinja can check it without using `current_app`.
+        """
+        try:
+            return {'use_postgres': app.config.get('USE_POSTGRES', False)}
+        except Exception:
+            return {'use_postgres': False}
+
     # Initialize real-time replication system
     try:
         from app.utils.real_time_replication import enable_real_time_replication, real_time_replicator
@@ -1538,6 +1608,14 @@ def create_app(test_config=None, use_postgres=False):
         app.logger.info(" Catch-up scheduler started")
     except Exception as e:
         app.logger.error(f" Failed to initialize catch-up sync: {e}")
+
+    # Start EPA (Statbotics) data refresh scheduler
+    try:
+        from app.utils.epa_scheduler import start_epa_scheduler
+        start_epa_scheduler(app)
+        app.logger.info(" EPA refresh scheduler started")
+    except Exception as e:
+        app.logger.error(f" Failed to start EPA refresh scheduler: {e}")
     
     # Initialize API key system
     try:

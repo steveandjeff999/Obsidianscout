@@ -1112,7 +1112,7 @@
                             {% if user_has_role('admin') or user_has_role('analytics') %}
                             <li><a class="dropdown-item py-2 {% if request.endpoint == 'main.config' %}active{% endif %}" href="{{ url_for('main.config') }}"><i class="fas fa-wrench me-2 text-primary"></i>Game Configuration</a></li>
                             {% endif %}
-                            {% if user_has_role('superadmin') %}
+                            {% if user_has_role('superadmin') and not use_postgres %}
                             <li><a class="dropdown-item py-2" href="{{ url_for('db_admin.database_status') }}"><i class="fas fa-database me-2 text-success"></i>Database Admin</a></li>
                             {% endif %}
                             <li><hr class="dropdown-divider my-1"></li>
@@ -1256,7 +1256,7 @@
                 <button id="darkModeButton" class="btn btn-outline-secondary btn-sm rounded-pill-soft w-100 text-start" type="button">
                     <i class="fas fa-moon me-2" id="darkModeIcon"></i><span id="darkModeLabel">Dark Mode</span>
                 </button>
-                {% if user_has_role('superadmin') %}
+                {% if user_has_role('superadmin') and not use_postgres %}
                 <a class="btn btn-outline-secondary btn-sm w-100 text-start" href="{{ url_for('db_admin.database_status') }}"><i class="fas fa-database me-2"></i>DB Admin</a>
                 {% endif %}
                 <a class="btn btn-outline-danger btn-sm w-100 text-start" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a>
@@ -1671,6 +1671,9 @@
 
     {# Teams configuration banner (shown to admins when teams config is missing or invalid) #}
     {% include '_teams_config_banner.html' %}
+
+    {# API key configuration banner (shown to admins when API key is missing/placeholder) #}
+    {% include '_api_key_banner.html' %}
 
     <div class="toast-container position-fixed top-0 end-0 p-3">
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -4040,6 +4043,25 @@
         // Initialize dropdown positioning fix
         initDropdownPositioning();
 
+        // Ensure card dropdowns use static display to avoid Popper placement flicker.
+        // This forces Bootstrap not to attach Popper for dropdowns inside `.card` and
+        // lets our positioning/portal logic run deterministically.
+        (function enforceStaticDisplayForCardDropdowns(){
+            try {
+                document.querySelectorAll('.card .dropdown-toggle[data-bs-toggle="dropdown"]').forEach(btn => {
+                    if (!btn.hasAttribute('data-bs-display')) btn.setAttribute('data-bs-display', 'static');
+                    // Recreate Bootstrap Dropdown instance so it respects the new option
+                    try {
+                        if (window.bootstrap && window.bootstrap.Dropdown) {
+                            const inst = window.bootstrap.Dropdown.getInstance(btn);
+                            if (inst && typeof inst.dispose === 'function') inst.dispose();
+                            window.bootstrap.Dropdown.getOrCreateInstance(btn);
+                        }
+                    } catch (e) { /* non-fatal */ }
+                });
+            } catch (e) { console.warn('Failed to enforce static display for card dropdowns', e); }
+        })();
+
         // Mobile: ensure touch devices reliably open dropdown toggles
         (function ensureTouchDropdowns(){
             if (!('ontouchstart' in window)) return; // only for touch devices
@@ -4068,18 +4090,64 @@
             });
         })();
         
-        // Global fallback for any dropdown that opens in the navbar/topbar
+        // Global fallback for dropdowns inside navbar/topbar **and** cards
+        // Portals card dropdowns on `show.bs.dropdown` to avoid Popper flicker/incorrect initial placement.
         document.addEventListener('show.bs.dropdown', function(event) {
-            const dropdown = event.target.closest('.navbar .dropdown, .topbar .dropdown');
-            if (dropdown && window.innerWidth >= 992) {
-                const toggle = dropdown.querySelector('.dropdown-toggle');
-                const menu = dropdown.querySelector('.dropdown-menu');
-                if (toggle && menu) {
-                    setTimeout(() => {
-                        positionFixedDropdown(toggle, menu);
-                    }, 1);
-                }
+            const dropdown = event.target.closest('.navbar .dropdown, .topbar .dropdown, .card .dropdown');
+            if (!dropdown) return;
+
+            // Only portal navbar/topbar on desktop (keep mobile behavior unchanged)
+            const isNavbarTopbar = dropdown.matches('.navbar .dropdown') || dropdown.matches('.topbar .dropdown');
+            if (isNavbarTopbar && window.innerWidth < 992) return;
+
+            const toggle = dropdown.querySelector('.dropdown-toggle');
+            const menu = dropdown.querySelector('.dropdown-menu');
+            if (!toggle || !menu) return;
+
+            // If already portalled, ensure position will be updated shortly
+            if (menu.__portalPlaceholder) {
+                setTimeout(() => positionFixedDropdown(toggle, menu), 1);
+                return;
             }
+
+            // Create placeholder in original location and move menu to <body>
+            const placeholder = document.createComment('dropdown-portal-placeholder');
+            menu.parentNode.insertBefore(placeholder, menu);
+            menu.__portalPlaceholder = placeholder;
+            menu.__portalToggle = toggle;
+            menu.__isPortalled = true;
+
+            menu.classList.add('navbar-glass');
+            document.body.appendChild(menu);
+
+            // Hide while we re-position to avoid visible Popper flicker
+            const prevVis = menu.style.visibility;
+            menu.style.visibility = 'hidden';
+            menu.style.position = 'fixed';
+            menu.style.zIndex = '2147483647';
+            menu.style.willChange = 'transform, top, left';
+
+            // Destroy any Popper instance so it won't overwrite our fixed placement
+            try {
+                if (window.bootstrap && window.bootstrap.Dropdown) {
+                    const bsInstance = window.bootstrap.Dropdown.getInstance(toggle) || window.bootstrap.Dropdown.getOrCreateInstance(toggle);
+                    if (bsInstance && bsInstance._popper) {
+                        try { bsInstance._popper.destroy(); } catch(e){}
+                        try { bsInstance._popper = null; } catch(e){}
+                    }
+                }
+            } catch (e) { /* ignore */ }
+
+            // Position and then restore visibility
+            setTimeout(() => {
+                try {
+                    positionFixedDropdown(toggle, menu);
+                    menu.style.removeProperty('transform');
+                    menu.style.removeProperty('inset');
+                    menu.style.removeProperty('right');
+                } catch (e) { /* ignore */ }
+                try { menu.style.visibility = prevVis || ''; } catch(e){}
+            }, 1);
         });
 
         // Also catch the shown event as a final fallback
@@ -4131,13 +4199,16 @@
             } catch(e) { /* ignore */ }
         });
 
-        // Portal navbar/topbar dropdowns to body so they stay fixed during page scroll (desktop only)
+        // Portal navbar/topbar **and card** dropdowns to body so they stay fixed during page scroll
+        // - Navbar/topbar portalling is still desktop-only; card dropdowns are portalled on all viewports
         document.addEventListener('shown.bs.dropdown', function(event) {
             try {
-                const dropdown = event.target.closest('.navbar .dropdown, .topbar .dropdown');
+                const dropdown = event.target.closest('.navbar .dropdown, .topbar .dropdown, .card .dropdown');
                 if (!dropdown) return;
-                // Only portal dropdowns on desktop where we handle fixed positioning.
-                if (window.innerWidth < 992) return;
+
+                // For navbar/topbar, only portal on desktop; allow card dropdowns on any viewport
+                if ((dropdown.closest('.navbar') || dropdown.closest('.topbar')) && window.innerWidth < 992) return;
+
                 const menu = dropdown.querySelector('.dropdown-menu');
                 const toggle = dropdown.querySelector('.dropdown-toggle');
                 if (!menu || !toggle) return;
@@ -4151,7 +4222,7 @@
                 // Create placeholder in original location
                 const placeholder = document.createComment('dropdown-portal-placeholder');
                 menu.parentNode.insertBefore(placeholder, menu);
-                // Move menu to body and mark as navbar-glass so it matches topbar surface
+                // Move menu to body and mark as navbar-glass so it matches app surfaces and is found by restoration logic
                 menu.classList.add('navbar-glass');
                 document.body.appendChild(menu);
                 // Mark placeholder and toggle for restoration/repositioning
@@ -4160,9 +4231,9 @@
                 menu.__portalToggle = toggle;
                 menu.__isPortalled = true;
 
-                // Make it fixed and position it
+                // Make it fixed and position it (use a very-high z-index to escape stacking contexts)
                 menu.style.position = 'fixed';
-                menu.style.zIndex = '1060';
+                menu.style.zIndex = '2147483647';
                 menu.style.willChange = 'transform, top, left';
                 positionFixedDropdown(toggle, menu);
 
@@ -4270,7 +4341,65 @@
             }
         });
     });
-    
+
+    // Watch for dropdown `show` mutations inside `.card` and force-portalling/positioning
+    (function observeCardDropdownShows(){
+        try {
+            const observer = new MutationObserver(mutations => {
+                mutations.forEach(m => {
+                    if (m.attributeName !== 'class') return;
+                    const menu = m.target;
+                    if (!menu || !menu.classList.contains('dropdown-menu')) return;
+                    const cardAncestor = menu.closest('.card');
+                    if (!cardAncestor) return; // only care about card dropdowns
+
+                    if (menu.classList.contains('show')) {
+                        const dropdown = menu.closest('.dropdown');
+                        const toggle = dropdown?.querySelector('.dropdown-toggle');
+                        if (!toggle) return;
+
+                        // Ensure Bootstrap won't attempt Popper placement for card dropdowns
+                        try { toggle.setAttribute('data-bs-display', 'static'); } catch(e){}
+
+                        // Portal if not already
+                        if (!menu.__portalPlaceholder) {
+                            try {
+                                const placeholder = document.createComment('dropdown-portal-placeholder');
+                                menu.parentNode.insertBefore(placeholder, menu);
+                                menu.__portalPlaceholder = placeholder;
+                                menu.__portalToggle = toggle;
+                                menu.__isPortalled = true;
+                                menu.classList.add('navbar-glass');
+                                document.body.appendChild(menu);
+                            } catch (e) { /* ignore */ }
+                        }
+
+                        // Hide while we compute position to avoid visible fallback positioning
+                        const prevVis = menu.style.visibility;
+                        menu.style.visibility = 'hidden';
+                        menu.style.position = 'fixed';
+                        menu.style.zIndex = '2147483647';
+
+                        // Position on next tick
+                        setTimeout(() => {
+                            try {
+                                positionFixedDropdown(toggle, menu);
+                                menu.style.removeProperty('transform');
+                                menu.style.removeProperty('inset');
+                                menu.style.visibility = prevVis || '';
+                                menu.style.opacity = '1';
+                            } catch (e) { /* ignore */ }
+                        }, 1);
+                    }
+                });
+            });
+
+            document.querySelectorAll('.card .dropdown .dropdown-menu').forEach(menu => {
+                observer.observe(menu, { attributes: true, attributeFilter: ['class'] });
+            });
+        } catch (e) { console.warn('card dropdown observer failed', e); }
+    })();
+
     // Fix dropdown positioning for navbar dropdowns
     function initDropdownPositioning() {
         // Only apply to desktop navbar dropdowns

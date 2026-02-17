@@ -118,3 +118,24 @@ def test_year_prefixed_event_code_matches_alliance():
         assert getattr(found[0], 'is_alliance', False) is True
 
 
+def test_events_page_uses_two_click_delete():
+    """Verify /events page uses the inline two-click delete (no modal) for deletable events."""
+    app = create_app()
+    with app.app_context():
+        # create a regular (non-alliance) event
+        evt = Event(name='UI Test Event', code='UITEST', location='Loc', year=2026, scouting_team_number=1)
+        db.session.add(evt)
+        db.session.commit()
+
+        client = app.test_client()
+        resp_html = client.get('/events', follow_redirects=True)
+        assert resp_html.status_code == 200
+        html = resp_html.get_data(as_text=True)
+
+        # Should render the inline delete-confirm form/button
+        assert 'delete-confirm-form' in html
+        assert 'delete-confirm-btn' in html
+        # Should not render the modal for this event id
+        assert f'deleteModal{evt.id}' not in html
+
+

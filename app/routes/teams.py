@@ -796,7 +796,53 @@ def view(team_number):
                 # Calculate average if we have values
                 if metric_values:
                     metrics[metric_id] = sum(metric_values) / len(metric_values)
-    
+
+    # --- EPA enrichment for team detail page ---
+    try:
+        from app.utils.analysis import get_epa_metrics_for_team, blend_epa_value
+        epa_data = get_epa_metrics_for_team(team_number)
+        _epa_source = epa_data['epa_source']
+        _match_count = len(scouting_data) if scouting_data else 0
+
+        if _epa_source != 'scouted_only':
+            # Blend total metric
+            if epa_data['total'] is not None:
+                scouted_total = metrics.get(total_metric_id)
+                blended_total, _ = blend_epa_value(
+                    scouted_total, epa_data['total'], _match_count, _epa_source
+                )
+                if blended_total is not None:
+                    metrics[total_metric_id] = blended_total
+
+            # Blend component metrics (auto / teleop / endgame)
+            _epa_comp_map = {
+                'auto': epa_data.get('auto'),
+                'teleop': epa_data.get('teleop'),
+                'endgame': epa_data.get('endgame'),
+            }
+            for comp_id in component_metric_ids:
+                comp_lower = comp_id.lower()
+                epa_val = None
+                for key, val in _epa_comp_map.items():
+                    if val is not None and key in comp_lower:
+                        epa_val = val
+                        break
+                else:
+                    _alias = {'apt': 'auto', 'tpt': 'teleop', 'ept': 'endgame'}
+                    mapped_key = _alias.get(comp_lower)
+                    if mapped_key and _epa_comp_map.get(mapped_key) is not None:
+                        epa_val = _epa_comp_map[mapped_key]
+                if epa_val is not None:
+                    scouted_comp = metrics.get(comp_id)
+                    blended_comp, _ = blend_epa_value(
+                        scouted_comp, epa_val, _match_count, _epa_source
+                    )
+                    if blended_comp is not None:
+                        metrics[comp_id] = blended_comp
+                        component_metrics[comp_id] = blended_comp
+    except Exception as e:
+        print(f"EPA enrichment for team detail failed: {e}")
+
     # Get events this team is competing at from the API
     team_events = []
     try:
@@ -934,8 +980,30 @@ def ranks():
         team_rankings.append({
             'team': team,
             'avg_points': avg_points,
-            'num_entries': num_entries
+            'num_entries': num_entries,
+            'is_epa': False
         })
+
+    # --- EPA enrichment for rankings ---
+    try:
+        from app.utils.analysis import get_epa_metrics_for_team, get_current_epa_source, blend_epa_value
+        # Check EPA source once (setting is per-scouting-team, not per target team)
+        _epa_source = get_current_epa_source()
+        if _epa_source != 'scouted_only':
+            for entry in team_rankings:
+                epa_data = get_epa_metrics_for_team(entry['team'].team_number)
+                if epa_data['total'] is not None:
+                    blended, src_tag = blend_epa_value(
+                        entry['avg_points'], epa_data['total'],
+                        entry['num_entries'], _epa_source
+                    )
+                    if blended is not None:
+                        entry['avg_points'] = blended
+                        entry['num_entries'] = max(entry['num_entries'], 1)
+                        entry['is_epa'] = (src_tag in ('statbotics', 'blended'))
+    except Exception as e:
+        print(f"EPA enrichment for rankings failed: {e}")
+
     # Sort so teams with data come first (by descending avg_points), then teams with no data
     team_rankings.sort(key=lambda x: (x['avg_points'] is None, -(x['avg_points'] or 0)))
     return render_template('teams/ranks.html',

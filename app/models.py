@@ -146,6 +146,11 @@ class ScoutingTeamSettings(db.Model):
     liquid_glass_buttons = db.Column(db.Boolean, default=False, nullable=False)
     # If true, allow spinning/rotating counters on the scouting form (admin-controlled)
     spinning_counters_enabled = db.Column(db.Boolean, default=False, nullable=False)
+    # EPA data source for graphs/predictions:
+    #   'scouted_only'             – use only locally scouted data (default)
+    #   'scouted_with_statbotics'  – use scouted data, fill gaps with Statbotics EPA
+    #   'statbotics_only'          – use Statbotics EPA exclusively
+    epa_source = db.Column(db.String(30), default='scouted_only', nullable=False)
     locked_by_user_id = db.Column(db.Integer, nullable=True)
     locked_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
@@ -195,6 +200,125 @@ class ScoutingTeamSettings(db.Model):
         self.locked_at = None
         self.updated_at = datetime.now(timezone.utc)
         db.session.commit()
+
+
+class StatboticsCache(ConcurrentModelMixin, db.Model):
+    """Persistent cache for Statbotics EPA data.
+
+    Stores EPA breakdown, ranks, and the year the data corresponds to so
+    the app doesn't need to re-fetch from the Statbotics API on every
+    request.  A configurable TTL (default 24 h) allows periodic refresh.
+    """
+    __tablename__ = 'statbotics_cache'
+    __table_args__ = (
+        db.UniqueConstraint('team_number', 'year', 'scouting_team_number',
+                            name='uq_statbotics_team_year_scouting'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    team_number = db.Column(db.Integer, nullable=False, index=True)
+    year = db.Column(db.Integer, nullable=False)
+    scouting_team_number = db.Column(db.Integer, nullable=True, index=True)
+
+    # EPA breakdown
+    epa_total = db.Column(db.Float, nullable=True)
+    epa_auto = db.Column(db.Float, nullable=True)
+    epa_teleop = db.Column(db.Float, nullable=True)
+    epa_endgame = db.Column(db.Float, nullable=True)
+
+    # Rankings
+    rank_world = db.Column(db.Integer, nullable=True)
+    rank_country = db.Column(db.Integer, nullable=True)
+
+    # Metadata
+    fetched_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    # True when the API returned no data / error for this team+year — avoids
+    # repeatedly re-querying teams that don't exist on Statbotics.
+    is_miss = db.Column(db.Boolean, default=False, nullable=False)
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    DEFAULT_TTL_HOURS = 24
+
+    @classmethod
+    def get_cached(cls, team_number, year, scouting_team_number=None,
+                   ttl_hours=None):
+        """Return a cached row if it exists and hasn't expired."""
+        if ttl_hours is None:
+            ttl_hours = cls.DEFAULT_TTL_HOURS
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=ttl_hours)
+        row = cls.query.filter_by(
+            team_number=int(team_number),
+            year=int(year),
+            scouting_team_number=scouting_team_number,
+        ).first()
+        if row and row.fetched_at and row.fetched_at >= cutoff:
+            return row
+        return None
+
+    @classmethod
+    def upsert(cls, team_number, year, epa_dict=None,
+               scouting_team_number=None):
+        """Insert or update a cache entry.
+
+        *epa_dict* should match the shape returned by
+        ``statbotics_api_utils.get_statbotics_team_epa()`` (keys:
+        total, auto, teleop, endgame, rank_world, rank_country) or be
+        ``None`` to record a miss.
+        """
+        row = cls.query.filter_by(
+            team_number=int(team_number),
+            year=int(year),
+            scouting_team_number=scouting_team_number,
+        ).first()
+        if row is None:
+            row = cls(
+                team_number=int(team_number),
+                year=int(year),
+                scouting_team_number=scouting_team_number,
+            )
+            db.session.add(row)
+        if epa_dict:
+            row.epa_total = epa_dict.get('total')
+            row.epa_auto = epa_dict.get('auto')
+            row.epa_teleop = epa_dict.get('teleop')
+            row.epa_endgame = epa_dict.get('endgame')
+            row.rank_world = epa_dict.get('rank_world')
+            row.rank_country = epa_dict.get('rank_country')
+            row.is_miss = False
+        else:
+            row.epa_total = None
+            row.epa_auto = None
+            row.epa_teleop = None
+            row.epa_endgame = None
+            row.rank_world = None
+            row.rank_country = None
+            row.is_miss = True
+        row.fetched_at = datetime.now(timezone.utc)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return row
+
+    def to_epa_dict(self):
+        """Return the data in the standard EPA dict format."""
+        if self.is_miss:
+            return None
+        return {
+            'total': self.epa_total,
+            'auto': self.epa_auto,
+            'teleop': self.epa_teleop,
+            'endgame': self.epa_endgame,
+            'rank_world': self.rank_world,
+            'rank_country': self.rank_country,
+        }
+
+    def __repr__(self):
+        return f'<StatboticsCache team={self.team_number} year={self.year} total={self.epa_total}>'
+
 
 class Team(ConcurrentModelMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)

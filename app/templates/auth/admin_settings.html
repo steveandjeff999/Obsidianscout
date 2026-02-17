@@ -154,6 +154,22 @@
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
+                    <h5><i class="fas fa-chart-line"></i> EPA Data Source {{ help.help_icon('Control how performance data is sourced for graphs and predictions. Choose between your scouted data, Statbotics EPA, or both.', 'EPA source') }}</h5>
+                </div>
+                <div class="card-body">
+                    <p>Configure Statbotics EPA integration for graphs &amp; predictions.</p>
+                    <p id="epaQuickStatus" class="small text-muted"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</p>
+                    <a href="{{ url_for('auth.epa_settings') }}" class="btn btn-info">
+                        <i class="fas fa-chart-line"></i> EPA Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
                     <h5><i class="fas fa-database"></i> System Status {{ help.help_icon('View system health and monitoring information including recent integrity checks and background jobs.', 'System status') }}</h5>
                 </div>
                 <div class="card-body">
@@ -418,6 +434,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
     refreshSpinningCounterStatus();
     setInterval(refreshSpinningCounterStatus, 10000);
+
+    // --- EPA quick-status badge on admin page ---
+    async function refreshEpaQuickStatus() {
+        try {
+            const resp = await fetch("{{ url_for('auth.epa_source_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
+            const data = await resp.json();
+            const labels = {
+                'scouted_only': '<span class="badge bg-primary">Scouted Only</span>',
+                'scouted_with_statbotics': '<span class="badge bg-success">Scouted + Statbotics</span>',
+                'statbotics_only': '<span class="badge bg-warning text-dark">Statbotics Only</span>'
+            };
+            const el = document.getElementById('epaQuickStatus');
+            if (el) el.innerHTML = 'Mode: ' + (labels[data.epa_source] || '<span class="badge bg-secondary">Unknown</span>');
+        } catch(e) {
+            const el = document.getElementById('epaQuickStatus');
+            if (el) el.textContent = 'Status unavailable';
+        }
+    }
+    refreshEpaQuickStatus();
 
 });
 </script>
