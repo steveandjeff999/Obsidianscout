@@ -184,20 +184,34 @@ def _build_page_context(page, scouting_team_number):
 
             team_data = {}
             if teams:
-                from app.utils.analysis import get_analysis_data_for_team
+                from app.utils.analysis import get_analysis_data_for_team, get_epa_metrics_for_team, get_current_epa_source
+                # Pre-fetch EPA source (same for all teams, setting is per-scouting-team)
+                _epa_source = get_current_epa_source()
+
                 for team in teams:
                     # Use centralized data retrieval which includes synthetic starting points
                     scouting_data = get_analysis_data_for_team(team.id)
                     
                     if team.team_number not in team_data:
                         team_data[team.team_number] = {'team_name': team.team_name, 'matches': []}
-                        
+
+                    # Fetch EPA once per team (not per data point)
+                    _team_epa = None
+                    if _epa_source != 'scouted_only':
+                        _team_epa = get_epa_metrics_for_team(team.team_number)
+
+                    has_match_data = False
                     for data in scouting_data:
                         match = data.match
                         if metric_alias == 'tot':
                             metric_value = data.calculate_metric('tot')
                         else:
                             metric_value = data.calculate_metric(metric_alias)
+
+                        # In statbotics_only mode, override total metric with EPA
+                        if _epa_source == 'statbotics_only' and metric_alias in ('tot', 'points', ''):
+                            if _team_epa and _team_epa['total'] is not None:
+                                metric_value = _team_epa['total']
                         
                         # For synthetic data (match is None), use match_number 0 so it appears at the start
                         match_num = match.match_number if match else 0
@@ -208,6 +222,28 @@ def _build_page_context(page, scouting_team_number):
                             'metric_value': metric_value, 
                             'timestamp': ts
                         })
+                        has_match_data = True
+
+                    # If no scouting data but EPA is available, inject EPA baseline point
+                    if not has_match_data and _epa_source != 'scouted_only':
+                        if _team_epa is None:
+                            _team_epa = get_epa_metrics_for_team(team.team_number)
+                        epa_val = _team_epa.get('total')
+                        if metric_alias not in ('tot', 'points', ''):
+                            # Try mapping component metrics
+                            for _key in ('auto', 'teleop', 'endgame'):
+                                if _key in metric_alias.lower():
+                                    epa_val = _team_epa.get(_key)
+                                    break
+                            _alias_map = {'apt': 'auto', 'tpt': 'teleop', 'ept': 'endgame'}
+                            if metric_alias.lower() in _alias_map:
+                                epa_val = _team_epa.get(_alias_map[metric_alias.lower()])
+                        if epa_val is not None:
+                            team_data[team.team_number]['matches'].append({
+                                'match_number': 0,
+                                'metric_value': epa_val,
+                                'timestamp': datetime.min
+                            })
 
             # Generate plots unless user_select controls exist
             if widget.get('user_select') or widget.get('graphtype_user_select') or widget.get('teams_user_select'):
@@ -499,7 +535,9 @@ def index():
         if teams:
             # Create team performance graphs using shared graph helper structure
             team_data = {}
-            from app.utils.analysis import get_analysis_data_for_team
+            from app.utils.analysis import get_analysis_data_for_team, get_epa_metrics_for_team, get_current_epa_source
+            # Pre-fetch EPA source
+            _epa_source = get_current_epa_source()
             
             for team in teams:
                 # Use centralized data retrieval which includes synthetic starting points
@@ -510,6 +548,11 @@ def index():
                         'team_name': team.team_name, 
                         'matches': []
                     }
+
+                # Fetch EPA once per team (not per data point)
+                _team_epa = None
+                if _epa_source != 'scouted_only':
+                    _team_epa = get_epa_metrics_for_team(team.team_number)
                 
                 if scouting_data:
                     for data in scouting_data:
@@ -520,6 +563,11 @@ def index():
                             metric_value = data.calculate_metric('tot')
                         else:
                             metric_value = data.calculate_metric(selected_metric)
+
+                        # In statbotics_only mode, override total metric with EPA
+                        if _epa_source == 'statbotics_only' and selected_metric in ('points', '', 'tot', 'total_points'):
+                            if _team_epa and _team_epa['total'] is not None:
+                                metric_value = _team_epa['total']
                         
                         # Handle synthetic data
                         match_num = match.match_number if match else 0
@@ -533,8 +581,26 @@ def index():
                             'timestamp': ts
                         })
                 else:
-                    # No data for this team
-                    pass
+                    # No scouting data — inject EPA baseline if EPA is enabled
+                    if _epa_source != 'scouted_only':
+                        if _team_epa is None:
+                            _team_epa = get_epa_metrics_for_team(team.team_number)
+                        epa_val = _team_epa.get('total')
+                        if selected_metric not in ('points', '', 'tot', 'total_points'):
+                            for _key in ('auto', 'teleop', 'endgame'):
+                                if _key in selected_metric.lower():
+                                    epa_val = _team_epa.get(_key)
+                                    break
+                            _alias_map = {'apt': 'auto', 'tpt': 'teleop', 'ept': 'endgame'}
+                            if selected_metric.lower() in _alias_map:
+                                epa_val = _team_epa.get(_alias_map[selected_metric.lower()])
+                        if epa_val is not None:
+                            team_data[team.team_number]['matches'].append({
+                                'match_number': 0,
+                                'match_type': 'EPA',
+                                'metric_value': epa_val,
+                                'timestamp': datetime.min
+                            })
         else:
             team_data = {}
 
@@ -636,6 +702,17 @@ def scout_leaderboard():
         try:
             team_scouting = ScoutingData.query.filter_by(team_id=team_id).all()
             if not team_scouting:
+                # No scouting data — try EPA fallback
+                try:
+                    from app.utils.analysis import get_epa_metrics_for_team
+                    team_obj = Team.query.get(team_id)
+                    if team_obj:
+                        epa_data = get_epa_metrics_for_team(team_obj.team_number)
+                        if epa_data['epa_source'] != 'scouted_only' and epa_data['total'] is not None:
+                            team_avg_scores[cache_key] = epa_data['total']
+                            return epa_data['total']
+                except Exception:
+                    pass
                 team_avg_scores[cache_key] = None
                 return None
             
@@ -669,6 +746,17 @@ def scout_leaderboard():
             
             if scores:
                 avg = sum(scores) / len(scores)
+                # In statbotics_only mode, override with EPA
+                try:
+                    from app.utils.analysis import get_epa_metrics_for_team
+                    team_obj = Team.query.get(team_id)
+                    if team_obj:
+                        epa_data = get_epa_metrics_for_team(team_obj.team_number)
+                        if epa_data['epa_source'] == 'statbotics_only' and epa_data['total'] is not None:
+                            team_avg_scores[cache_key] = epa_data['total']
+                            return epa_data['total']
+                except Exception:
+                    pass
                 team_avg_scores[cache_key] = avg
                 return avg
             
@@ -1195,6 +1283,16 @@ def side_by_side():
         # We use rep_team for injection config
         scouting_data = inject_starting_points(rep_team, scouting_data)
 
+        # EPA integration for side-by-side comparison
+        from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
+        _sbs_epa_source = get_current_epa_source()
+        _sbs_use_epa = _sbs_epa_source in ('scouted_with_statbotics', 'statbotics_only')
+        _sbs_statbotics_only = _sbs_epa_source == 'statbotics_only'
+
+        # In statbotics_only mode, ignore scouting data
+        if _sbs_statbotics_only:
+            scouting_data = []
+
         # Build team_info container
         team_info = {
             'team': rep_team,
@@ -1231,6 +1329,24 @@ def side_by_side():
                     match_value = data.data.get(metric_id, 0)
 
                 match_values.append({'match': match_number, 'value': match_value})
+
+            # EPA fallback: inject EPA when no scouting data (or always in statbotics_only mode)
+            if not match_values and _sbs_use_epa:
+                epa = get_epa_metrics_for_team(team_number)
+                epa_val = None
+                if epa:
+                    metric_to_epa = {
+                        'auto_points': 'auto',
+                        'teleop_points': 'teleop',
+                        'endgame_points': 'endgame',
+                        'total_points': 'total',
+                    }
+                    epa_key = metric_to_epa.get(metric_id)
+                    if epa_key:
+                        epa_val = epa.get(epa_key)
+                if epa_val is not None and epa_val > 0:
+                    match_values.append({'match': 'EPA', 'value': epa_val})
+                    team_info['has_data'] = True
 
             # Derive aggregates from match_values
             values = [mv['value'] for mv in match_values if isinstance(mv.get('value'), (int, float))]
@@ -1453,7 +1569,8 @@ def view_shared(share_id):
             data_by_team[data.team_id].append(data)
 
         # Process each team
-        from app.utils.analysis import inject_starting_points
+        from app.utils.analysis import inject_starting_points, get_epa_metrics_for_team, get_current_epa_source
+        _epa_source = get_current_epa_source()
         for team in teams:
             team_scouting_data = data_by_team.get(team.id, [])
             
@@ -1466,6 +1583,7 @@ def view_shared(share_id):
                     'matches': []
                 }
 
+            _has_data = False
             for data in calc_data:
                 # Handle FakeSD
                 if hasattr(data, 'match') and data.match:
@@ -1482,6 +1600,12 @@ def view_shared(share_id):
                     metric_value = data.calculate_metric('tot')
                 else:
                     metric_value = data.calculate_metric(shared_graph.metric)
+
+                # Override with EPA in statbotics_only mode
+                if _epa_source == 'statbotics_only' and shared_graph.metric in ('points', '', 'tot', 'total_points'):
+                    _team_epa = get_epa_metrics_for_team(team.team_number)
+                    if _team_epa['total'] is not None:
+                        metric_value = _team_epa['total']
                 
                 team_data[team.team_number]['matches'].append({
                     'match_number': match_number,
@@ -1489,6 +1613,18 @@ def view_shared(share_id):
                     'metric_value': metric_value,
                     'timestamp': timestamp
                 })
+                _has_data = True
+
+            # Inject EPA baseline for teams with no data
+            if not _has_data and _epa_source != 'scouted_only':
+                _team_epa = get_epa_metrics_for_team(team.team_number)
+                if _team_epa['total'] is not None:
+                    team_data[team.team_number]['matches'].append({
+                        'match_number': 0,
+                        'match_type': 'EPA',
+                        'metric_value': _team_epa['total'],
+                        'timestamp': datetime.min
+                    })
         
         # Generate the requested graph types
     # Use the selected/overridden list of graph types for rendering
@@ -1849,8 +1985,9 @@ def public_page_widget_render(token, widget_index):
                                 data_by_team[data.team_id] = []
                             data_by_team[data.team_id].append(data)
 
-                        from app.utils.analysis import inject_starting_points
+                        from app.utils.analysis import inject_starting_points, get_epa_metrics_for_team, get_current_epa_source
                         from datetime import datetime
+                        _epa_source_cp = get_current_epa_source()
 
                         for t in teams:
                                 if t.team_number not in team_data:
@@ -1860,6 +1997,7 @@ def public_page_widget_render(token, widget_index):
                                 # Inject starting points
                                 calc_data = inject_starting_points(t, team_scouting_data)
                                 
+                                _has_data_cp = False
                                 for data in calc_data:
                                     # Handle FakeSD
                                     if hasattr(data, 'match') and data.match:
@@ -1873,8 +2011,21 @@ def public_page_widget_render(token, widget_index):
                                             metric_value = data.calculate_metric('tot')
                                     else:
                                             metric_value = data.calculate_metric(metric_alias)
+
+                                    # Override with EPA in statbotics_only mode
+                                    if _epa_source_cp == 'statbotics_only' and metric_alias in ('tot', 'points', ''):
+                                        _t_epa = get_epa_metrics_for_team(t.team_number)
+                                        if _t_epa['total'] is not None:
+                                            metric_value = _t_epa['total']
                                     
                                     team_data[t.team_number]['matches'].append({'match_number': match_number, 'metric_value': metric_value, 'timestamp': timestamp})
+                                    _has_data_cp = True
+
+                                # Inject EPA baseline for teams with no data
+                                if not _has_data_cp and _epa_source_cp != 'scouted_only':
+                                    _t_epa = get_epa_metrics_for_team(t.team_number)
+                                    if _t_epa['total'] is not None:
+                                        team_data[t.team_number]['matches'].append({'match_number': 0, 'metric_value': _t_epa['total'], 'timestamp': datetime.min})
 
                 for gt in graph_types:
                         if gt == 'bar':
@@ -2483,6 +2634,8 @@ def pages_widget_render(page_id, widget_index):
 
             # Use alliance-aware data retrieval
             scouting_data, _ = get_scouting_data_for_teams(team_ids)
+            from app.utils.analysis import get_epa_metrics_for_team as _get_epa_w4, get_current_epa_source as _get_src_w4
+            _epa_source_w4 = _get_src_w4()
             for data in scouting_data:
                 team = data.team
                 match = data.match
@@ -2492,7 +2645,20 @@ def pages_widget_render(page_id, widget_index):
                     metric_value = data.calculate_metric('tot')
                 else:
                     metric_value = data.calculate_metric(metric_alias)
+                # Override with EPA in statbotics_only mode
+                if _epa_source_w4 == 'statbotics_only' and metric_alias in ('tot', 'points', ''):
+                    _t_epa_w4 = _get_epa_w4(team.team_number)
+                    if _t_epa_w4['total'] is not None:
+                        metric_value = _t_epa_w4['total']
                 team_data[team.team_number]['matches'].append({'match_number': match.match_number if match else None, 'metric_value': metric_value, 'timestamp': match.timestamp if match else None})
+
+            # Inject EPA baseline for teams with no scouting data
+            if _epa_source_w4 != 'scouted_only':
+                for t in teams:
+                    if t.team_number in team_data and not team_data[t.team_number]['matches']:
+                        _t_epa_w4 = _get_epa_w4(t.team_number)
+                        if _t_epa_w4['total'] is not None:
+                            team_data[t.team_number]['matches'].append({'match_number': 0, 'metric_value': _t_epa_w4['total'], 'timestamp': None})
 
         for gt in graph_types:
             if gt == 'bar':
@@ -2951,6 +3117,8 @@ def pages_view(page_id):
                 team_ids = [t.id for t in teams]
                 # Use alliance-aware data retrieval
                 scouting_data, _ = get_scouting_data_for_teams(team_ids)
+                from app.utils.analysis import get_epa_metrics_for_team as _get_epa_w5, get_current_epa_source as _get_src_w5
+                _epa_source_w5 = _get_src_w5()
                 for data in scouting_data:
                     team = data.team
                     match = data.match
@@ -2960,7 +3128,22 @@ def pages_view(page_id):
                         metric_value = data.calculate_metric('tot')
                     else:
                         metric_value = data.calculate_metric(metric_alias)
+                    # Override with EPA in statbotics_only mode
+                    if _epa_source_w5 == 'statbotics_only' and metric_alias in ('tot', 'points', ''):
+                        _t_epa_w5 = _get_epa_w5(team.team_number)
+                        if _t_epa_w5['total'] is not None:
+                            metric_value = _t_epa_w5['total']
                     team_data[team.team_number]['matches'].append({'match_number': match.match_number if match else None, 'metric_value': metric_value, 'timestamp': match.timestamp if match else None})
+
+                # Inject EPA baseline for teams with no scouting data
+                if _epa_source_w5 != 'scouted_only':
+                    for t in teams:
+                        if t.team_number not in team_data or not team_data.get(t.team_number, {}).get('matches'):
+                            if t.team_number not in team_data:
+                                team_data[t.team_number] = {'team_name': t.team_name, 'matches': []}
+                            _t_epa_w5 = _get_epa_w5(t.team_number)
+                            if _t_epa_w5['total'] is not None:
+                                team_data[t.team_number]['matches'].append({'match_number': 0, 'metric_value': _t_epa_w5['total'], 'timestamp': None})
 
             # If this widget exposes user-select controls to viewers, don't auto-generate the plots here.
             # The viewer will click Refresh to generate with their overrides. This avoids heavy rendering when viewers need to pick options.

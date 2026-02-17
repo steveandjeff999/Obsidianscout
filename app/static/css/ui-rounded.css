@@ -486,6 +486,12 @@ html.glass-off .nav-theme-green .topbar { background: var(--bs-body-bg) !importa
 /* Cards, panels and KPI surfaces */
 /* ============================ */
 .rounded-ui .card { border-radius: var(--border-radius) !important; overflow: hidden !important; }
+
+/* Allow the Game Configuration card's dropdown to escape the rounded-card clipping
+   and sit above list-group/content. Scoped and specific so global rounded behaviour
+   isn't changed for other cards. */
+.rounded-ui .card.game-config-card { overflow: visible !important; }
+.card.game-config-card .dropdown-menu { z-index: 2147483647 !important; }
 .rounded-ui .card .card-header { border-radius: calc(var(--border-radius) - 6px) calc(var(--border-radius) - 6px) 0 0 !important; }
 .rounded-ui .card .card-body { border-radius: 0 0 calc(var(--border-radius) - 6px) calc(var(--border-radius) - 6px) !important; }
 

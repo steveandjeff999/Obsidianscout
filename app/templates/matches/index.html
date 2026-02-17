@@ -57,7 +57,8 @@
 </div>
 
 <div class="row mb-4">
-    <div class="col-lg-4 col-md-12 mb-3">
+    <!-- Filter moved above the matches table so the table can use full width -->
+    <div class="col-12 mb-3">
         <div class="card">
             <div class="card-body">
                 <form id="match-filter-form" class="row gx-2 gy-2" method="get" action="{{ url_for('matches.index') }}">
@@ -91,7 +92,7 @@
         </div>
     </div>
 
-    <div class="col-lg-8 col-md-12 mb-3">
+    <div class="col-12 mb-3">
         <div class="card">
             <div class="card-body">
                 <style>

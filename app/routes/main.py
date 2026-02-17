@@ -1175,16 +1175,16 @@ def save_simple_config():
         # Update preferred API source
         updated_config['preferred_api_source'] = request.form.get('preferred_api_source', 'first')
         
-        # Update API settings if provided
-        if request.form.get('api_username') or request.form.get('api_auth_token'):
+        # Update API settings (allow clearing fields). Use presence check so blank values are saved.
+        if 'api_username' in request.form or 'api_auth_token' in request.form or 'api_base_url' in request.form:
             updated_config['api_settings'] = {
                 'username': request.form.get('api_username', ''),
                 'auth_token': request.form.get('api_auth_token', ''),
                 'base_url': request.form.get('api_base_url', 'https://frc-api.firstinspires.org')
             }
         
-        # Update TBA API settings if provided
-        if request.form.get('tba_auth_key') or request.form.get('tba_base_url'):
+        # Update TBA API settings (allow clearing fields). Use presence check so blank values are saved.
+        if 'tba_auth_key' in request.form or 'tba_base_url' in request.form:
             updated_config['tba_api_settings'] = {
                 'auth_key': request.form.get('tba_auth_key', ''),
                 'base_url': request.form.get('tba_base_url', 'https://www.thebluealliance.com/api/v3')
@@ -2261,10 +2261,16 @@ def api_brief_data():
                 blue_score = 0
                 red_count = 0
                 blue_count = 0
+
+                from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
+                _epa_source = get_current_epa_source()
+                _use_epa = _epa_source in ('scouted_with_statbotics', 'statbotics_only')
+                _statbotics_only = _epa_source == 'statbotics_only'
                 
                 for team_num in match.red_teams:
                     team = Team.query.filter_by(team_number=int(team_num)).first()
-                    if team:
+                    scored = False
+                    if team and not _statbotics_only:
                         entries = ScoutingData.query.filter_by(
                             team_id=team.id, 
                             scouting_team_number=scouting_team_number
@@ -2281,10 +2287,19 @@ def api_brief_data():
                             if scores:
                                 red_score += sum(scores) / len(scores)
                                 red_count += 1
+                                scored = True
+                    # EPA fallback
+                    if not scored and _use_epa:
+                        epa = get_epa_metrics_for_team(int(team_num))
+                        epa_total = epa.get('total') if epa else None
+                        if epa_total and epa_total > 0:
+                            red_score += epa_total
+                            red_count += 1
                 
                 for team_num in match.blue_teams:
                     team = Team.query.filter_by(team_number=int(team_num)).first()
-                    if team:
+                    scored = False
+                    if team and not _statbotics_only:
                         entries = ScoutingData.query.filter_by(
                             team_id=team.id, 
                             scouting_team_number=scouting_team_number
@@ -2301,6 +2316,14 @@ def api_brief_data():
                             if scores:
                                 blue_score += sum(scores) / len(scores)
                                 blue_count += 1
+                                scored = True
+                    # EPA fallback
+                    if not scored and _use_epa:
+                        epa = get_epa_metrics_for_team(int(team_num))
+                        epa_total = epa.get('total') if epa else None
+                        if epa_total and epa_total > 0:
+                            blue_score += epa_total
+                            blue_count += 1
                 
                 # Determine predicted winner
                 predicted_winner = None
@@ -2374,47 +2397,63 @@ def api_brief_data():
                     .all()
             
             team_scores = []
+            from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
+            _tp_epa_source = get_current_epa_source()
+            _tp_use_epa = _tp_epa_source in ('scouted_with_statbotics', 'statbotics_only')
+            _tp_statbotics_only = _tp_epa_source == 'statbotics_only'
+
             for team in teams:
+                avg_score = None
                 # Calculate average score from scouting data using the model's calculate_metric method
-                entries = ScoutingData.query\
-                    .filter_by(team_id=team.id, scouting_team_number=scouting_team_number)\
-                    .all()
-                
-                if entries:
-                    scores = []
-                    for entry in entries:
-                        try:
-                            # Try to use calculate_metric for total points
-                            score = entry.calculate_metric('tot')
-                            if score is not None and score > 0:
-                                scores.append(score)
-                            else:
-                                # Fallback: try to get from data directly
-                                data = entry.data if isinstance(entry.data, dict) else json.loads(entry.data or '{}')
-                                # Look for various field names
-                                total = (
-                                    data.get('total_points', 0) or
-                                    data.get('tot', 0) or
-                                    (data.get('auto_points', 0) or 0) + 
-                                    (data.get('teleop_points', 0) or 0) + 
-                                    (data.get('endgame_points', 0) or 0) or
-                                    (data.get('apt', 0) or 0) + 
-                                    (data.get('tpt', 0) or 0) + 
-                                    (data.get('ept', 0) or 0)
-                                )
-                                if total > 0:
-                                    scores.append(total)
-                        except Exception as e:
-                            current_app.logger.warning(f"Error calculating score for entry {entry.id}: {e}")
-                            pass
+                if not _tp_statbotics_only:
+                    entries = ScoutingData.query\
+                        .filter_by(team_id=team.id, scouting_team_number=scouting_team_number)\
+                        .all()
                     
-                    if scores:
-                        avg_score = sum(scores) / len(scores)
-                        team_scores.append({
-                            'team_number': team.team_number,
-                            'team_name': team.team_name or '',
-                            'avg_score': avg_score
-                        })
+                    if entries:
+                        scores = []
+                        for entry in entries:
+                            try:
+                                # Try to use calculate_metric for total points
+                                score = entry.calculate_metric('tot')
+                                if score is not None and score > 0:
+                                    scores.append(score)
+                                else:
+                                    # Fallback: try to get from data directly
+                                    data = entry.data if isinstance(entry.data, dict) else json.loads(entry.data or '{}')
+                                    # Look for various field names
+                                    total = (
+                                        data.get('total_points', 0) or
+                                        data.get('tot', 0) or
+                                        (data.get('auto_points', 0) or 0) + 
+                                        (data.get('teleop_points', 0) or 0) + 
+                                        (data.get('endgame_points', 0) or 0) or
+                                        (data.get('apt', 0) or 0) + 
+                                        (data.get('tpt', 0) or 0) + 
+                                        (data.get('ept', 0) or 0)
+                                    )
+                                    if total > 0:
+                                        scores.append(total)
+                            except Exception as e:
+                                current_app.logger.warning(f"Error calculating score for entry {entry.id}: {e}")
+                                pass
+                        
+                        if scores:
+                            avg_score = sum(scores) / len(scores)
+
+                # EPA fallback when no scouting data or statbotics_only mode
+                if avg_score is None and _tp_use_epa:
+                    epa = get_epa_metrics_for_team(team.team_number)
+                    epa_total = epa.get('total') if epa else None
+                    if epa_total and epa_total > 0:
+                        avg_score = epa_total
+
+                if avg_score is not None:
+                    team_scores.append({
+                        'team_number': team.team_number,
+                        'team_name': team.team_name or '',
+                        'avg_score': avg_score
+                    })
             
             # Sort by average score and take top 5
             team_scores.sort(key=lambda x: x['avg_score'], reverse=True)

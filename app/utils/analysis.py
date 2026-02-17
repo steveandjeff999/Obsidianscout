@@ -3,6 +3,7 @@ import statistics
 from flask import current_app
 import random
 import math
+import time as _time
 from datetime import datetime
 try:
     import numpy as np
@@ -11,6 +12,244 @@ except ImportError:
     NUMPY_AVAILABLE = False
 from app.utils.config_manager import get_current_game_config, load_game_config
 from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number, filter_scouting_data_only_by_scouting_team
+
+# Cached EPA source setting (avoids DB query per call)
+_epa_source_cache: dict = {'value': None, 'ts': 0.0}
+_EPA_SOURCE_CACHE_TTL = 30  # seconds
+
+
+def _get_epa_source_for_team(scouting_team_number=None):
+    """Return the EPA data-source setting for the given scouting team.
+
+    Returns one of: 'scouted_only', 'scouted_with_statbotics', 'statbotics_only'.
+    Falls back to 'scouted_only' on any error.  Result is cached for 30 s.
+    """
+    now = _time.time()
+    if _epa_source_cache['value'] is not None and (now - _epa_source_cache['ts']) < _EPA_SOURCE_CACHE_TTL:
+        return _epa_source_cache['value']
+    try:
+        if scouting_team_number is None:
+            scouting_team_number = get_current_scouting_team_number()
+        if not scouting_team_number:
+            return 'scouted_only'
+        from app.models import ScoutingTeamSettings
+        settings = ScoutingTeamSettings.query.filter_by(
+            scouting_team_number=scouting_team_number
+        ).first()
+        if settings:
+            val = getattr(settings, 'epa_source', 'scouted_only') or 'scouted_only'
+            _epa_source_cache['value'] = val
+            _epa_source_cache['ts'] = now
+            return val
+    except Exception:
+        pass
+    return 'scouted_only'
+
+
+def get_current_epa_source():
+    """Return the current EPA source setting (DB-only, no API call)."""
+    return _get_epa_source_for_team()
+
+
+def invalidate_epa_caches() -> None:
+    """Immediately flush ALL EPA-related caches.
+
+    Call this after the admin changes the EPA source setting so the
+    new value takes effect on the very next request.
+    """
+    # 1. Reset the cached EPA source setting
+    _epa_source_cache['value'] = None
+    _epa_source_cache['ts'] = 0.0
+    # 2. Clear in-memory Statbotics EPA data
+    try:
+        from app.utils.statbotics_api_utils import clear_epa_caches
+        clear_epa_caches()
+    except Exception:
+        pass
+
+
+def _apply_statbotics_epa(result, epa_source):
+    """Enrich a ``calculate_team_metrics`` result dict with Statbotics EPA.
+
+    Depending on *epa_source*:
+      - ``'scouted_only'`` — no changes (returns *result* untouched).
+      - ``'scouted_with_statbotics'`` — graduated blend based on how many
+        scouted matches exist:
+          * 0 matches → 100 % EPA
+          * 1 match   → 70 % EPA / 30 % scouted  (favour EPA, nudge toward scouted)
+          * 2 matches → 30 % EPA / 70 % scouted  (favour scouted)
+          * 3+ matches → 100 % scouted (EPA ignored)
+      - ``'statbotics_only'`` — always overwrite metrics with EPA.
+    """
+    if epa_source == 'scouted_only':
+        return result
+
+    team_number = result.get('team_number')
+    match_count = result.get('match_count', 0)
+    metrics = result.get('metrics', {})
+
+    # For graduated-blend mode, bail out entirely once we have enough data
+    if epa_source == 'scouted_with_statbotics' and match_count >= 3:
+        return result
+
+    # Fetch Statbotics EPA (uses internal cache / stale DB data)
+    try:
+        from app.utils.statbotics_api_utils import get_statbotics_team_epa
+        epa = get_statbotics_team_epa(team_number)
+    except Exception as e:
+        print(f"    Statbotics EPA fetch failed for team {team_number}: {e}")
+        return result
+
+    if not epa:
+        print(f"    No Statbotics EPA data available for team {team_number}")
+        return result
+
+    # ---- Determine blend weight (EPA fraction) --------------------------
+    #   match_count  |  epa_weight  | meaning
+    #   -------------|--------------|-------------------------------------
+    #     0          |  1.00        | no scouting data → pure EPA
+    #     1          |  0.70        | mostly EPA, slight scouted nudge
+    #     2          |  0.30        | mostly scouted, slight EPA nudge
+    #     3+         |  0.00        | (already returned above)
+    # statbotics_only always uses 1.0
+    if epa_source == 'statbotics_only':
+        epa_weight = 1.0
+    elif match_count == 0:
+        epa_weight = 1.0
+    elif match_count == 1:
+        epa_weight = 0.70
+    elif match_count == 2:
+        epa_weight = 0.30
+    else:
+        epa_weight = 0.0  # shouldn't reach here (guarded above)
+
+    scouted_weight = 1.0 - epa_weight
+
+    print(f"    Applying Statbotics EPA for team {team_number} "
+          f"(mode={epa_source}, matches={match_count}, epa_wt={epa_weight:.0%}): "
+          f"auto={epa.get('auto')}, teleop={epa.get('teleop')}, "
+          f"endgame={epa.get('endgame')}, total={epa.get('total')}")
+
+    # ---- Helper to blend a single metric --------------------------------
+    def _blend(metric_key, epa_key):
+        epa_val = epa.get(epa_key)
+        if epa_val is None:
+            return  # nothing from Statbotics to blend
+        scouted_val = metrics.get(metric_key)
+        if scouted_val is not None and scouted_weight > 0:
+            # Weighted average of scouted and EPA values
+            metrics[metric_key] = scouted_val * scouted_weight + epa_val * epa_weight
+        else:
+            # Either pure EPA or no scouted value exists
+            metrics[metric_key] = epa_val
+        metrics.setdefault(f"{metric_key}_std", 0.0)
+
+    _blend('auto_points',    'auto')
+    _blend('teleop_points',  'teleop')
+    _blend('endgame_points', 'endgame')
+    _blend('total_points',   'total')
+
+    # Keep legacy total_points_base in sync
+    if 'total_points' in metrics:
+        metrics.setdefault('total_points_base', metrics['total_points'])
+
+    # Legacy `tot` / key-metric slots so simulations pick it up
+    _blend('tot', 'total')
+    metrics.setdefault('tot_std', 0.0)
+
+    # Mark the data source so the UI can badge it
+    if epa_weight >= 1.0:
+        metrics['_epa_source'] = 'statbotics'
+    elif epa_weight > 0:
+        metrics['_epa_source'] = 'blended'
+    # else: pure scouted — no tag
+
+    result['metrics'] = metrics
+    return result
+
+
+def blend_epa_value(scouted_value, epa_value, match_count, epa_source):
+    """Blend a single scouted metric with its EPA counterpart.
+
+    Uses the same graduated weighting as ``_apply_statbotics_epa``:
+
+    * ``'scouted_only'``              → always returns *scouted_value*
+    * ``'statbotics_only'``           → always returns *epa_value*
+    * ``'scouted_with_statbotics'``:
+       - 0 matches  → 100 % EPA
+       - 1 match    → 70 % EPA / 30 % scouted
+       - 2 matches  → 30 % EPA / 70 % scouted
+       - 3+ matches → 100 % scouted
+
+    Returns ``(blended_value, source_tag)`` where *source_tag* is one of
+    ``'scouted'``, ``'statbotics'``, ``'blended'``, or ``None`` when no
+    value can be produced.
+    """
+    if epa_source == 'scouted_only':
+        return (scouted_value, 'scouted' if scouted_value is not None else None)
+
+    if epa_source == 'statbotics_only':
+        if epa_value is not None:
+            return (epa_value, 'statbotics')
+        return (scouted_value, 'scouted' if scouted_value is not None else None)
+
+    # --- scouted_with_statbotics graduated blend ---
+    if match_count >= 3:
+        return (scouted_value, 'scouted' if scouted_value is not None else None)
+
+    if epa_value is None:
+        return (scouted_value, 'scouted' if scouted_value is not None else None)
+
+    if match_count == 0:
+        return (epa_value, 'statbotics')
+
+    if scouted_value is None:
+        return (epa_value, 'statbotics')
+
+    # Weighted blend
+    epa_weight = 0.70 if match_count == 1 else 0.30
+    blended = scouted_value * (1.0 - epa_weight) + epa_value * epa_weight
+    return (blended, 'blended')
+
+
+def get_epa_metrics_for_team(team_number):
+    """Return Statbotics EPA metrics for *team_number* if EPA is enabled.
+
+    Lightweight helper intended for direct use by graphs / rankings code
+    that does NOT go through ``calculate_team_metrics``.
+
+    Returns a dict::
+
+        {
+            'epa_source': 'scouted_only' | 'scouted_with_statbotics' | 'statbotics_only',
+            'total': float | None,
+            'auto': float | None,
+            'teleop': float | None,
+            'endgame': float | None,
+        }
+    """
+    epa_source = _get_epa_source_for_team()
+    result = {
+        'epa_source': epa_source,
+        'total': None,
+        'auto': None,
+        'teleop': None,
+        'endgame': None,
+    }
+    if epa_source == 'scouted_only' or not team_number:
+        return result
+    try:
+        from app.utils.statbotics_api_utils import get_statbotics_team_epa
+        epa = get_statbotics_team_epa(team_number)
+        if epa:
+            result['total'] = epa.get('total')
+            result['auto'] = epa.get('auto')
+            result['teleop'] = epa.get('teleop')
+            result['endgame'] = epa.get('endgame')
+    except Exception:
+        pass
+    return result
+
 
 def _detect_outliers_adaptive(values):
     """Adaptive outlier detection that works well on both small and large datasets.
@@ -512,11 +751,18 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
 
     if not scouting_data and not calc_data:
         print(f"    No scouting data found for team {team_number} (ID: {team_id})")
-        return {
+        result = {
             'team_number': team_number,
             'match_count': 0,
             'metrics': {}
         }
+        # --- Statbotics EPA enrichment even when there is no scouting data ---
+        try:
+            epa_source = _get_epa_source_for_team()
+            result = _apply_statbotics_epa(result, epa_source)
+        except Exception as e:
+            print(f"    EPA enrichment skipped for team {team_number}: {e}")
+        return result
     else:
         print(f"    Found {len(scouting_data)} scouting records for team {team_number}")
         
@@ -799,11 +1045,20 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
                     metrics[metric_id] = statistics.mean(values)
                     metrics[f"{metric_id}_std"] = statistics.stdev(values) if len(values) > 1 else 0.0
     
-    return {
+    result = {
         'team_number': team_number,
         'match_count': len(scouting_data),
         'metrics': metrics
     }
+
+    # --- Statbotics EPA enrichment (respects admin setting) ---
+    try:
+        epa_source = _get_epa_source_for_team()
+        result = _apply_statbotics_epa(result, epa_source)
+    except Exception as e:
+        print(f"    EPA enrichment skipped for team {team_number}: {e}")
+
+    return result
 
 
 def _simulate_match_outcomes(red_alliance_teams, blue_alliance_teams, total_metric_id, n_simulations=3000, seed=None):

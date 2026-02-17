@@ -163,7 +163,7 @@
                     </a>
                     
                     <div>
-                        {% if user.has_role('superadmin') %}
+                        {% if user.has_role('superadmin') and not use_postgres %}
                         <a href="{{ url_for('db_admin.database_status') }}" class="btn btn-dark me-2">
                             <i class="fas fa-database me-2"></i>Database Admin
                         </a>

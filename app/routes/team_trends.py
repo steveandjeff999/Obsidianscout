@@ -200,17 +200,39 @@ def _analyze_team(team_number):
     except Exception:
         entries = []
 
+    # EPA enrichment: if EPA is enabled, fetch it for potential fallback / display
+    from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
+    _tt_epa_source = get_current_epa_source()
+    _tt_use_epa = _tt_epa_source in ('scouted_with_statbotics', 'statbotics_only')
+    _tt_statbotics_only = _tt_epa_source == 'statbotics_only'
+    epa_data = None
+    if _tt_use_epa:
+        epa_data = get_epa_metrics_for_team(team_number)
+
     # Build timeline and compute a simple total points metric using available key metrics
     timeline = []
     x_vals = []
     y_vals = []
-    for idx, entry in enumerate(entries):
-        try:
-            data = entry.data
-            total_points = _compute_total_points_from_data(data)
-            y_vals.append(total_points)
-        except Exception:
-            continue
+
+    if _tt_statbotics_only:
+        # In statbotics-only mode, show EPA as a single flat data point
+        if epa_data and epa_data.get('total'):
+            y_vals.append(epa_data['total'])
+            x_vals.append(0)
+    else:
+        for idx, entry in enumerate(entries):
+            try:
+                data = entry.data
+                total_points = _compute_total_points_from_data(data)
+                y_vals.append(total_points)
+                x_vals.append(idx)
+            except Exception:
+                continue
+
+        # If no scouting data but EPA is available, inject EPA baseline
+        if not y_vals and epa_data and epa_data.get('total') and _tt_use_epa:
+            y_vals.append(epa_data['total'])
+            x_vals.append(0)
 
     slope, intercept = _simple_linear_regression(x_vals, y_vals)
 
@@ -368,7 +390,9 @@ def _analyze_team(team_number):
         'intercept': intercept,
         'predicted_next': predicted_next,
         'trend': overall_classification,
-        'data_points': len(x_vals)
+        'data_points': len(x_vals),
+        'epa_data': epa_data,
+        'epa_source': _tt_epa_source,
     }
 
     # merge trend details and classifications
@@ -411,18 +435,41 @@ def _analyze_multiple_teams(team_numbers):
         except Exception:
             entries = []
 
+        # EPA enrichment for multi-team trends
+        from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
+        _mt_epa_source = get_current_epa_source()
+        _mt_use_epa = _mt_epa_source in ('scouted_with_statbotics', 'statbotics_only')
+        _mt_statbotics_only = _mt_epa_source == 'statbotics_only'
+        _mt_epa_data = None
+        if _mt_use_epa:
+            _mt_epa_data = get_epa_metrics_for_team(tn)
+
         timeline = []
         x_vals = []
         y_vals = []
-        for i, entry in enumerate(entries):
-            try:
-                data = entry.data
-                tp = _compute_total_points_from_data(data)
-                timeline.append({'timestamp': entry.timestamp.isoformat(), 'total_points': tp})
-                x_vals.append(i)
-                y_vals.append(tp)
-            except Exception:
-                continue
+
+        if _mt_statbotics_only:
+            # In statbotics-only mode, show EPA as a single flat data point
+            if _mt_epa_data and _mt_epa_data.get('total'):
+                y_vals.append(_mt_epa_data['total'])
+                x_vals.append(0)
+                timeline.append({'timestamp': None, 'total_points': _mt_epa_data['total']})
+        else:
+            for i, entry in enumerate(entries):
+                try:
+                    data = entry.data
+                    tp = _compute_total_points_from_data(data)
+                    timeline.append({'timestamp': entry.timestamp.isoformat(), 'total_points': tp})
+                    x_vals.append(i)
+                    y_vals.append(tp)
+                except Exception:
+                    continue
+
+            # If no scouting data but EPA is available, inject EPA baseline
+            if not y_vals and _mt_epa_data and _mt_epa_data.get('total') and _mt_use_epa:
+                y_vals.append(_mt_epa_data['total'])
+                x_vals.append(0)
+                timeline.append({'timestamp': None, 'total_points': _mt_epa_data['total']})
 
         # Compute simple regression and basic stats for this team's timeline
         try:
