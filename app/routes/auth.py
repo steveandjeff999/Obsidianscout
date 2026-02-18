@@ -1704,7 +1704,8 @@ def epa_settings_save():
     team_settings = ScoutingTeamSettings.get_or_create_for_team(current_user.scouting_team_number)
 
     new_source = request.form.get('epa_source', 'scouted_only')
-    valid_sources = ('scouted_only', 'scouted_with_statbotics', 'statbotics_only')
+    valid_sources = ('scouted_only', 'scouted_with_statbotics', 'statbotics_only',
+                     'tba_opr_only', 'scouted_with_tba_opr')
     if new_source not in valid_sources:
         new_source = 'scouted_only'
 
@@ -1723,6 +1724,8 @@ def epa_settings_save():
         'scouted_only': 'Scouted Data Only',
         'scouted_with_statbotics': 'Scouted Data + Statbotics EPA Gap-Fill',
         'statbotics_only': 'Statbotics EPA Only',
+        'tba_opr_only': 'TBA OPR Only',
+        'scouted_with_tba_opr': 'Scouted Data + TBA OPR Gap-Fill',
     }
     flash(f'EPA data source set to: {labels.get(new_source, new_source)}', 'success')
     return redirect(url_for('auth.epa_settings'))

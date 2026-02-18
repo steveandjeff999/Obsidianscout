@@ -66,6 +66,39 @@
                             </p>
                         </div>
 
+                        <hr class="my-2">
+                        <p class="text-muted small mb-2"><i class="fas fa-link"></i> <strong>The Blue Alliance OPR</strong> — event-specific Offensive Power Rating sourced from TBA.</p>
+
+                        <!-- Option 4 -->
+                        <div class="form-check mb-3 p-3 border rounded {% if epa_source == 'scouted_with_tba_opr' %}border-info bg-info bg-opacity-10{% endif %}">
+                            <input class="form-check-input" type="radio" name="epa_source"
+                                   id="epa_scouted_with_tba_opr" value="scouted_with_tba_opr"
+                                   {% if epa_source == 'scouted_with_tba_opr' %}checked{% endif %}>
+                            <label class="form-check-label fw-bold" for="epa_scouted_with_tba_opr">
+                                <i class="fas fa-puzzle-piece text-info"></i> Use Scouted Data &amp; Fill Gaps with TBA OPR
+                            </label>
+                            <p class="text-muted small mb-0 mt-1 ms-4">
+                                Your scouted data is used whenever available. For teams with <strong>no scouted matches</strong>,
+                                The Blue Alliance OPR values are substituted automatically. OPR is event-specific and requires
+                                a TBA API key and current event to be configured.
+                            </p>
+                        </div>
+
+                        <!-- Option 5 -->
+                        <div class="form-check mb-3 p-3 border rounded {% if epa_source == 'tba_opr_only' %}border-danger bg-danger bg-opacity-10{% endif %}">
+                            <input class="form-check-input" type="radio" name="epa_source"
+                                   id="epa_tba_opr_only" value="tba_opr_only"
+                                   {% if epa_source == 'tba_opr_only' %}checked{% endif %}>
+                            <label class="form-check-label fw-bold" for="epa_tba_opr_only">
+                                <i class="fas fa-link text-danger"></i> Use TBA OPR Only
+                            </label>
+                            <p class="text-muted small mb-0 mt-1 ms-4">
+                                All graphs, predictions, and simulations use TBA OPR data exclusively.
+                                Requires a TBA API key and a current event code in your game configuration.
+                                OPR only provides a total score estimate — no auto/teleop/endgame breakdown.
+                            </p>
+                        </div>
+
                         <hr>
                         <div class="d-flex justify-content-between align-items-center">
                             <a href="{{ url_for('auth.admin_settings') }}" class="btn btn-outline-secondary">
@@ -84,21 +117,28 @@
         <div class="col-lg-4">
             <div class="card border-info">
                 <div class="card-header bg-info text-white">
-                    <h6 class="mb-0"><i class="fas fa-info-circle"></i> About Statbotics EPA</h6>
+                    <h6 class="mb-0"><i class="fas fa-info-circle"></i> About the Data Sources</h6>
                 </div>
                 <div class="card-body">
+                    <p class="small fw-bold mb-1">Statbotics EPA</p>
                     <p class="small">
                         <strong>EPA (Expected Points Added)</strong> is a metric from
                         <a href="https://www.statbotics.io" target="_blank" rel="noopener">Statbotics</a>
-                        that estimates how many points a team contributes to their alliance per match.
+                        that estimates how many points a team contributes per match.
+                        EPA includes <strong>Auto</strong>, <strong>Teleop</strong>, and <strong>Endgame</strong>
+                        breakdowns and is updated throughout the season.
                     </p>
+                    <p class="small fw-bold mb-1 mt-2">TBA OPR</p>
                     <p class="small">
-                        EPA is broken into <strong>Auto</strong>, <strong>Teleop</strong>, and <strong>Endgame</strong>
-                        components and is updated continuously throughout the season.
+                        <strong>OPR (Offensive Power Rating)</strong> is a metric from
+                        <a href="https://www.thebluealliance.com" target="_blank" rel="noopener">The Blue Alliance</a>
+                        calculated per-event using match alliance scores.
+                        OPR provides a <strong>total score only</strong> — no auto/teleop/endgame breakdown.
+                        A TBA API key and current event code must be set in your game config.
                     </p>
                     <p class="small mb-0">
                         <strong>Tip:</strong> Use <em>"Scouted + Gap-Fill"</em> mode for the best of both worlds &mdash;
-                        your scouts' detailed data for teams you've watched, plus Statbotics data for teams you haven't scouted yet.
+                        your scouts' detailed data for teams you've watched, plus external data for teams you haven't scouted yet.
                     </p>
                 </div>
             </div>
@@ -123,18 +163,25 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('input[name="epa_source"]').forEach(function(radio) {
         radio.addEventListener('change', function() {
             document.querySelectorAll('.form-check.border').forEach(function(el) {
-                el.classList.remove('border-primary', 'bg-primary', 'bg-opacity-10',
-                                   'border-success', 'bg-success',
-                                   'border-warning', 'bg-warning');
+                el.classList.remove(
+                    'border-primary', 'bg-primary',
+                    'border-success', 'bg-success',
+                    'border-warning', 'bg-warning',
+                    'border-info', 'bg-info',
+                    'border-danger', 'bg-danger',
+                    'bg-opacity-10'
+                );
             });
             var parent = this.closest('.form-check');
-            if (this.value === 'scouted_only') {
-                parent.classList.add('border-primary', 'bg-primary', 'bg-opacity-10');
-            } else if (this.value === 'scouted_with_statbotics') {
-                parent.classList.add('border-success', 'bg-success', 'bg-opacity-10');
-            } else {
-                parent.classList.add('border-warning', 'bg-warning', 'bg-opacity-10');
-            }
+            var colorMap = {
+                'scouted_only':             ['border-primary', 'bg-primary', 'bg-opacity-10'],
+                'scouted_with_statbotics':  ['border-success', 'bg-success', 'bg-opacity-10'],
+                'statbotics_only':          ['border-warning', 'bg-warning', 'bg-opacity-10'],
+                'scouted_with_tba_opr':     ['border-info',    'bg-info',    'bg-opacity-10'],
+                'tba_opr_only':             ['border-danger',  'bg-danger',  'bg-opacity-10'],
+            };
+            var classes = colorMap[this.value] || ['border-secondary'];
+            classes.forEach(function(c) { parent.classList.add(c); });
         });
     });
 
@@ -144,9 +191,11 @@ document.addEventListener('DOMContentLoaded', function() {
             var resp = await fetch("{{ url_for('auth.epa_source_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
             var data = await resp.json();
             var labels = {
-                'scouted_only': '<span class="badge bg-primary">Scouted Data Only</span>',
+                'scouted_only':            '<span class="badge bg-primary">Scouted Data Only</span>',
                 'scouted_with_statbotics': '<span class="badge bg-success">Scouted + Statbotics Gap-Fill</span>',
-                'statbotics_only': '<span class="badge bg-warning text-dark">Statbotics EPA Only</span>'
+                'statbotics_only':         '<span class="badge bg-warning text-dark">Statbotics EPA Only</span>',
+                'scouted_with_tba_opr':    '<span class="badge bg-info text-dark">Scouted + TBA OPR Gap-Fill</span>',
+                'tba_opr_only':            '<span class="badge bg-danger">TBA OPR Only</span>',
             };
             document.getElementById('epaStatusText').innerHTML =
                 'Active mode: ' + (labels[data.epa_source] || '<span class="badge bg-secondary">Unknown</span>');

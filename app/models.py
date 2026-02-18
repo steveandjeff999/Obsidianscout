@@ -320,6 +320,109 @@ class StatboticsCache(ConcurrentModelMixin, db.Model):
         return f'<StatboticsCache team={self.team_number} year={self.year} total={self.epa_total}>'
 
 
+class TbaOprCache(ConcurrentModelMixin, db.Model):
+    """Persistent cache for TBA OPR data.
+
+    Stores OPR, DPR, and CCWM values for teams at specific events.
+    A configurable TTL (default 15 min) allows periodic refresh.
+    """
+    __tablename__ = 'tba_opr_cache'
+    __table_args__ = (
+        db.UniqueConstraint('team_number', 'event_key', 'scouting_team_number',
+                            name='uq_tba_opr_team_event_scouting'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    team_number = db.Column(db.Integer, nullable=False, index=True)
+    event_key = db.Column(db.String(20), nullable=False, index=True)
+    scouting_team_number = db.Column(db.Integer, nullable=True, index=True)
+
+    # OPR breakdown
+    opr = db.Column(db.Float, nullable=True)
+    dpr = db.Column(db.Float, nullable=True)
+    ccwm = db.Column(db.Float, nullable=True)
+
+    # Metadata
+    fetched_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    # True when the API returned no data / error for this team+event — avoids
+    # repeatedly re-querying teams that don't exist.
+    is_miss = db.Column(db.Boolean, default=False, nullable=False)
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    DEFAULT_TTL_MINUTES = 15
+
+    @classmethod
+    def get_cached(cls, team_number, event_key, scouting_team_number=None,
+                   ttl_minutes=None):
+        """Return a cached row if it exists and hasn't expired."""
+        if ttl_minutes is None:
+            ttl_minutes = cls.DEFAULT_TTL_MINUTES
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=ttl_minutes)
+        row = cls.query.filter_by(
+            team_number=int(team_number),
+            event_key=event_key,
+            scouting_team_number=scouting_team_number,
+        ).first()
+        if row and row.fetched_at and row.fetched_at >= cutoff:
+            return row
+        return None
+
+    @classmethod
+    def upsert(cls, team_number, event_key, opr_dict=None,
+               scouting_team_number=None):
+        """Insert or update a cache entry.
+
+        *opr_dict* should match the shape returned by
+        ``tba_api_utils.get_tba_team_opr()`` (keys:
+        total, opr, dpr, ccwm) or be ``None`` to record a miss.
+        """
+        row = cls.query.filter_by(
+            team_number=int(team_number),
+            event_key=event_key,
+            scouting_team_number=scouting_team_number,
+        ).first()
+        if row is None:
+            row = cls(
+                team_number=int(team_number),
+                event_key=event_key,
+                scouting_team_number=scouting_team_number,
+            )
+            db.session.add(row)
+        if opr_dict:
+            row.opr = opr_dict.get('opr')
+            row.dpr = opr_dict.get('dpr')
+            row.ccwm = opr_dict.get('ccwm')
+            row.is_miss = False
+        else:
+            row.opr = None
+            row.dpr = None
+            row.ccwm = None
+            row.is_miss = True
+        row.fetched_at = datetime.now(timezone.utc)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return row
+
+    def to_opr_dict(self):
+        """Return the data in the standard OPR dict format."""
+        if self.is_miss:
+            return None
+        return {
+            'total': self.opr,  # Use OPR as the total value
+            'opr': self.opr,
+            'dpr': self.dpr,
+            'ccwm': self.ccwm,
+        }
+
+    def __repr__(self):
+        return f'<TbaOprCache team={self.team_number} event={self.event_key} opr={self.opr}>'
+
+
 class Team(ConcurrentModelMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     team_number = db.Column(db.Integer, nullable=False)

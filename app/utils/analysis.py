@@ -66,10 +66,16 @@ def invalidate_epa_caches() -> None:
         clear_epa_caches()
     except Exception:
         pass
+    # 3. Clear in-memory TBA OPR data
+    try:
+        from app.utils.tba_api_utils import clear_opr_cache
+        clear_opr_cache()
+    except Exception:
+        pass
 
 
 def _apply_statbotics_epa(result, epa_source):
-    """Enrich a ``calculate_team_metrics`` result dict with Statbotics EPA.
+    """Enrich a ``calculate_team_metrics`` result dict with external EPA / OPR data.
 
     Depending on *epa_source*:
       - ``'scouted_only'`` — no changes (returns *result* untouched).
@@ -79,7 +85,9 @@ def _apply_statbotics_epa(result, epa_source):
           * 1 match   → 70 % EPA / 30 % scouted  (favour EPA, nudge toward scouted)
           * 2 matches → 30 % EPA / 70 % scouted  (favour scouted)
           * 3+ matches → 100 % scouted (EPA ignored)
-      - ``'statbotics_only'`` — always overwrite metrics with EPA.
+      - ``'statbotics_only'`` — always overwrite metrics with Statbotics EPA.
+      - ``'tba_opr_only'`` — always overwrite metrics with TBA OPR.
+      - ``'scouted_with_tba_opr'`` — same graduated blend, but uses TBA OPR.
     """
     if epa_source == 'scouted_only':
         return result
@@ -88,20 +96,41 @@ def _apply_statbotics_epa(result, epa_source):
     match_count = result.get('match_count', 0)
     metrics = result.get('metrics', {})
 
+    _is_tba_opr = epa_source in ('tba_opr_only', 'scouted_with_tba_opr')
+    _is_graduated = epa_source in ('scouted_with_statbotics', 'scouted_with_tba_opr')
+
     # For graduated-blend mode, bail out entirely once we have enough data
-    if epa_source == 'scouted_with_statbotics' and match_count >= 3:
+    if _is_graduated and match_count >= 3:
         return result
 
-    # Fetch Statbotics EPA (uses internal cache / stale DB data)
-    try:
-        from app.utils.statbotics_api_utils import get_statbotics_team_epa
-        epa = get_statbotics_team_epa(team_number)
-    except Exception as e:
-        print(f"    Statbotics EPA fetch failed for team {team_number}: {e}")
-        return result
+    # Fetch external metric data (Statbotics EPA or TBA OPR)
+    epa = None
+    source_tag = 'statbotics'
+    if _is_tba_opr:
+        source_tag = 'tba_opr'
+        try:
+            from app.utils.tba_api_utils import get_tba_team_opr
+            opr = get_tba_team_opr(team_number)
+            if opr:
+                epa = {
+                    'auto': None,
+                    'teleop': None,
+                    'endgame': None,
+                    'total': opr.get('total'),
+                }
+        except Exception as e:
+            print(f"    TBA OPR fetch failed for team {team_number}: {e}")
+            return result
+    else:
+        try:
+            from app.utils.statbotics_api_utils import get_statbotics_team_epa
+            epa = get_statbotics_team_epa(team_number)
+        except Exception as e:
+            print(f"    Statbotics EPA fetch failed for team {team_number}: {e}")
+            return result
 
     if not epa:
-        print(f"    No Statbotics EPA data available for team {team_number}")
+        print(f"    No external metric data available for team {team_number} (source={epa_source})")
         return result
 
     # ---- Determine blend weight (EPA fraction) --------------------------
@@ -111,8 +140,8 @@ def _apply_statbotics_epa(result, epa_source):
     #     1          |  0.70        | mostly EPA, slight scouted nudge
     #     2          |  0.30        | mostly scouted, slight EPA nudge
     #     3+         |  0.00        | (already returned above)
-    # statbotics_only always uses 1.0
-    if epa_source == 'statbotics_only':
+    # *_only modes always use 1.0
+    if epa_source in ('statbotics_only', 'tba_opr_only'):
         epa_weight = 1.0
     elif match_count == 0:
         epa_weight = 1.0
@@ -125,7 +154,7 @@ def _apply_statbotics_epa(result, epa_source):
 
     scouted_weight = 1.0 - epa_weight
 
-    print(f"    Applying Statbotics EPA for team {team_number} "
+    print(f"    Applying {source_tag} for team {team_number} "
           f"(mode={epa_source}, matches={match_count}, epa_wt={epa_weight:.0%}): "
           f"auto={epa.get('auto')}, teleop={epa.get('teleop')}, "
           f"endgame={epa.get('endgame')}, total={epa.get('total')}")
@@ -134,13 +163,13 @@ def _apply_statbotics_epa(result, epa_source):
     def _blend(metric_key, epa_key):
         epa_val = epa.get(epa_key)
         if epa_val is None:
-            return  # nothing from Statbotics to blend
+            return  # nothing from external source to blend
         scouted_val = metrics.get(metric_key)
         if scouted_val is not None and scouted_weight > 0:
-            # Weighted average of scouted and EPA values
+            # Weighted average of scouted and external values
             metrics[metric_key] = scouted_val * scouted_weight + epa_val * epa_weight
         else:
-            # Either pure EPA or no scouted value exists
+            # Either pure external or no scouted value exists
             metrics[metric_key] = epa_val
         metrics.setdefault(f"{metric_key}_std", 0.0)
 
@@ -159,7 +188,7 @@ def _apply_statbotics_epa(result, epa_source):
 
     # Mark the data source so the UI can badge it
     if epa_weight >= 1.0:
-        metrics['_epa_source'] = 'statbotics'
+        metrics['_epa_source'] = source_tag
     elif epa_weight > 0:
         metrics['_epa_source'] = 'blended'
     # else: pure scouted — no tag
@@ -169,21 +198,22 @@ def _apply_statbotics_epa(result, epa_source):
 
 
 def blend_epa_value(scouted_value, epa_value, match_count, epa_source):
-    """Blend a single scouted metric with its EPA counterpart.
+    """Blend a single scouted metric with its EPA / OPR counterpart.
 
     Uses the same graduated weighting as ``_apply_statbotics_epa``:
 
     * ``'scouted_only'``              → always returns *scouted_value*
-    * ``'statbotics_only'``           → always returns *epa_value*
-    * ``'scouted_with_statbotics'``:
+    * ``'statbotics_only'``           → always returns *epa_value* (tagged 'statbotics')
+    * ``'tba_opr_only'``              → always returns *epa_value* (tagged 'tba_opr')
+    * ``'scouted_with_statbotics'`` / ``'scouted_with_tba_opr'``:
        - 0 matches  → 100 % EPA
        - 1 match    → 70 % EPA / 30 % scouted
        - 2 matches  → 30 % EPA / 70 % scouted
        - 3+ matches → 100 % scouted
 
     Returns ``(blended_value, source_tag)`` where *source_tag* is one of
-    ``'scouted'``, ``'statbotics'``, ``'blended'``, or ``None`` when no
-    value can be produced.
+    ``'scouted'``, ``'statbotics'``, ``'tba_opr'``, ``'blended'``, or
+    ``None`` when no value can be produced.
     """
     if epa_source == 'scouted_only':
         return (scouted_value, 'scouted' if scouted_value is not None else None)
@@ -193,7 +223,13 @@ def blend_epa_value(scouted_value, epa_value, match_count, epa_source):
             return (epa_value, 'statbotics')
         return (scouted_value, 'scouted' if scouted_value is not None else None)
 
-    # --- scouted_with_statbotics graduated blend ---
+    if epa_source == 'tba_opr_only':
+        if epa_value is not None:
+            return (epa_value, 'tba_opr')
+        return (scouted_value, 'scouted' if scouted_value is not None else None)
+
+    # --- graduated blend (scouted_with_statbotics / scouted_with_tba_opr) ---
+    graduated_tag = 'tba_opr' if epa_source == 'scouted_with_tba_opr' else 'statbotics'
     if match_count >= 3:
         return (scouted_value, 'scouted' if scouted_value is not None else None)
 
@@ -201,10 +237,10 @@ def blend_epa_value(scouted_value, epa_value, match_count, epa_source):
         return (scouted_value, 'scouted' if scouted_value is not None else None)
 
     if match_count == 0:
-        return (epa_value, 'statbotics')
+        return (epa_value, graduated_tag)
 
     if scouted_value is None:
-        return (epa_value, 'statbotics')
+        return (epa_value, graduated_tag)
 
     # Weighted blend
     epa_weight = 0.70 if match_count == 1 else 0.30
@@ -213,7 +249,7 @@ def blend_epa_value(scouted_value, epa_value, match_count, epa_source):
 
 
 def get_epa_metrics_for_team(team_number):
-    """Return Statbotics EPA metrics for *team_number* if EPA is enabled.
+    """Return EPA/OPR metrics for *team_number* based on the active data-source setting.
 
     Lightweight helper intended for direct use by graphs / rankings code
     that does NOT go through ``calculate_team_metrics``.
@@ -221,7 +257,8 @@ def get_epa_metrics_for_team(team_number):
     Returns a dict::
 
         {
-            'epa_source': 'scouted_only' | 'scouted_with_statbotics' | 'statbotics_only',
+            'epa_source': 'scouted_only' | 'scouted_with_statbotics' | 'statbotics_only'
+                        | 'tba_opr_only' | 'scouted_with_tba_opr',
             'total': float | None,
             'auto': float | None,
             'teleop': float | None,
@@ -238,6 +275,18 @@ def get_epa_metrics_for_team(team_number):
     }
     if epa_source == 'scouted_only' or not team_number:
         return result
+    # TBA OPR sources
+    if epa_source in ('tba_opr_only', 'scouted_with_tba_opr'):
+        try:
+            from app.utils.tba_api_utils import get_tba_team_opr
+            opr = get_tba_team_opr(team_number)
+            if opr:
+                result['total'] = opr.get('total')
+                # OPR has no auto/teleop/endgame breakdown
+        except Exception:
+            pass
+        return result
+    # Statbotics EPA sources
     try:
         from app.utils.statbotics_api_utils import get_statbotics_team_epa
         epa = get_statbotics_team_epa(team_number)

@@ -1750,7 +1750,12 @@ def qualitative_leaderboard():
     ).all()
     
     # Aggregate rankings by team
-    team_rankings = defaultdict(lambda: {'rankings': [], 'notes': [], 'appearances': 0})
+    team_rankings = defaultdict(lambda: {
+        'rankings': [], 
+        'notes': [], 
+        'appearances': 0,
+        'roles': {'passer': 0, 'cleanup': 0, 'played_defense': 0, 'cycler': 0}
+    })
     
     for entry in all_entries:
         data = entry.data
@@ -1765,6 +1770,15 @@ def qualitative_leaderboard():
                     team_rankings[team_num]['appearances'] += 1
                     if team_data.get('notes'):
                         team_rankings[team_num]['notes'].append(team_data['notes'])
+                    # Track roles
+                    if team_data.get('passer'):
+                        team_rankings[team_num]['roles']['passer'] += 1
+                    if team_data.get('cleanup'):
+                        team_rankings[team_num]['roles']['cleanup'] += 1
+                    if team_data.get('played_defense'):
+                        team_rankings[team_num]['roles']['played_defense'] += 1
+                    if team_data.get('cycler'):
+                        team_rankings[team_num]['roles']['cycler'] += 1
         # Handle match-based entries (full alliance scouting)
         elif entry.match_id:
             for alliance in ['red', 'blue']:
@@ -1776,6 +1790,15 @@ def qualitative_leaderboard():
                             team_rankings[team_num]['appearances'] += 1
                             if team_data.get('notes'):
                                 team_rankings[team_num]['notes'].append(team_data['notes'])
+                            # Track roles
+                            if team_data.get('passer'):
+                                team_rankings[team_num]['roles']['passer'] += 1
+                            if team_data.get('cleanup'):
+                                team_rankings[team_num]['roles']['cleanup'] += 1
+                            if team_data.get('played_defense'):
+                                team_rankings[team_num]['roles']['played_defense'] += 1
+                            if team_data.get('cycler'):
+                                team_rankings[team_num]['roles']['cycler'] += 1
     
     # Calculate average rankings and prepare leaderboard data
     leaderboard = []
@@ -1787,7 +1810,8 @@ def qualitative_leaderboard():
                 'average_ranking': round(avg_ranking, 2),
                 'total_appearances': data['appearances'],
                 'rankings': data['rankings'],
-                'notes': data['notes']
+                'notes': data['notes'],
+                'roles': data['roles']
             })
     
     # Sort by average ranking (1 is best)

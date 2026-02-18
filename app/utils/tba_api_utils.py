@@ -650,8 +650,12 @@ def get_tba_team_matches_at_event(team_key, event_key):
 def construct_tba_event_key(event_code, year=None):
     """Construct TBA event key from event code and year"""
     if year is None:
-        year = datetime.now(timezone.utc).year
-    
+        try:
+            game_config = get_current_game_config()
+            year = int(game_config.get('season') or game_config.get('year') or datetime.now(timezone.utc).year)
+        except Exception:
+            year = datetime.now(timezone.utc).year
+
     # TBA event keys are lowercase
     return f"{year}{event_code.lower()}"
 
@@ -715,3 +719,112 @@ def get_display_label_for_team(team_identifier, event_key=None):
         pass
 
     return str(num)
+
+
+# ---------------------------------------------------------------------------
+# TBA OPR/DPR/CCWM helpers
+# ---------------------------------------------------------------------------
+
+
+def get_tba_event_oprs(event_key: str):
+    """Fetch OPR/DPR/CCWM data for all teams at a TBA event.
+
+    Returns a dict with keys ``'oprs'``, ``'dprs'``, ``'ccwms'`` (each a dict
+    mapping ``'frcXXXX'`` -> float), or ``None`` on failure.  Results are
+    cached in the database with a 15-minute TTL.
+    """
+    # Note: This function fetches ALL teams at an event, so we can't use
+    # per-team DB caching here. Instead, callers should use get_tba_team_opr()
+    # which handles per-team DB caching.
+    base_url = 'https://www.thebluealliance.com/api/v3'
+    url = f"{base_url}/event/{event_key}/oprs"
+    try:
+        headers = get_tba_api_headers()
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data
+        print(f"TBA OPR fetch returned HTTP {resp.status_code} for {event_key}")
+    except Exception as e:
+        print(f"Failed to fetch TBA OPRs for {event_key}: {e}")
+    return None
+
+
+def get_tba_team_opr(team_number, event_key=None):
+    """Return OPR/DPR/CCWM for *team_number* at the current (or given) event.
+
+    If *event_key* is ``None``, the active event code is read from the game
+    config and combined with the season year to build a TBA event key.
+
+    Returns a dict ``{'total': opr, 'opr': opr, 'dpr': dpr, 'ccwm': ccwm}``
+    or ``None`` when no data is available.
+    
+    Results are cached in the database with a 15-minute TTL.
+    """
+    if event_key is None:
+        try:
+            game_config = get_current_game_config()
+            season = int(game_config.get('season') or game_config.get('year') or datetime.now(timezone.utc).year)
+            event_code = (game_config.get('current_event_code') or '').strip()
+            if not event_code:
+                return None
+            # Strip year prefix when already embedded (e.g. "2025OKTU" -> "OKTU")
+            if len(event_code) >= 4 and event_code[:4].isdigit():
+                event_code = event_code[4:]
+            event_key = construct_tba_event_key(event_code, season)
+        except Exception:
+            return None
+
+    # Check DB cache first
+    try:
+        from app.models import TbaOprCache
+        cached_row = TbaOprCache.get_cached(team_number, event_key)
+        if cached_row:
+            if cached_row.is_miss:
+                return None
+            return cached_row.to_opr_dict()
+    except Exception as e:
+        print(f"DB cache lookup failed for OPR team {team_number} event {event_key}: {e}")
+
+    # Not in cache or expired, fetch from TBA API
+    opr_data = get_tba_event_oprs(event_key)
+    
+    team_key = f"frc{team_number}"
+    opr = None
+    if opr_data:
+        opr = opr_data.get('oprs', {}).get(team_key)
+
+    # Store result in DB cache
+    result_dict = None
+    if opr is not None:
+        result_dict = {
+            'total': opr,
+            'opr': opr,
+            'dpr': opr_data.get('dprs', {}).get(team_key),
+            'ccwm': opr_data.get('ccwms', {}).get(team_key),
+        }
+    
+    try:
+        from app.models import TbaOprCache
+        TbaOprCache.upsert(team_number, event_key, result_dict)
+    except Exception as e:
+        print(f"Failed to cache OPR for team {team_number} event {event_key}: {e}")
+
+    return result_dict
+
+
+def clear_opr_cache() -> None:
+    """Clear the TBA OPR cache (call when EPA source changes)."""
+    try:
+        from app.models import TbaOprCache
+        from app import db
+        # Delete all cached OPR entries
+        TbaOprCache.query.delete()
+        db.session.commit()
+    except Exception as e:
+        print(f"Failed to clear OPR cache: {e}")
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
