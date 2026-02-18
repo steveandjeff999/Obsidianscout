@@ -277,9 +277,6 @@ if __name__ == '__main__':
         try:
             print("Checking for missing database tables...")
             
-            # Import all models to ensure they're registered with SQLAlchemy
-            from app.models import StatboticsCache, TbaOprCache
-            
             # Create all tables for main database
             db.create_all()
             print("Main database tables verified/created")

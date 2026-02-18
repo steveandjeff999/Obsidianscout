@@ -49,126 +49,124 @@
     </div>
 
     <div class="row mt-4">
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-users"></i> User Management {{ help.help_icon('Create and manage user accounts and roles. Invite or revoke access and assign permissions.', 'User management') }}</h5>
-                </div>
-                <div class="card-body">
-                    <p>Manage user accounts, roles, and permissions.</p>
-                    <a href="{{ url_for('auth.manage_users') }}" class="btn btn-primary">
-                        <i class="fas fa-users"></i> Manage Users
-                    </a>
-                </div>
-            </div>
-        </div>
+        <div class="col-12">
+            <ul class="nav nav-tabs" id="adminSettingsTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="tab-site-controls" data-bs-toggle="tab" data-bs-target="#pane-site-controls" type="button" role="tab" aria-controls="pane-site-controls" aria-selected="true">Site controls</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tab-integrations" data-bs-toggle="tab" data-bs-target="#pane-integrations" type="button" role="tab" aria-controls="pane-integrations" aria-selected="false">Integrations &amp; configuration</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tab-data" data-bs-toggle="tab" data-bs-target="#pane-data" type="button" role="tab" aria-controls="pane-data" aria-selected="false">Data &amp; maintenance</button>
+                </li>
+            </ul>
 
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-user-lock"></i> Account Settings {{ help.help_icon('Control new account registration and lock/unlock account creation for your installation.', 'Account settings') }}</h5>
-                </div>
-                <div class="card-body">
-                    <p>Control new account registration for your team.</p>
-                    <form method="POST" action="{{ url_for('auth.toggle_account_lock') }}" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <button id="accountLockBtn" type="submit" class="btn btn-secondary">
-                            <i id="accountLockIcon" class="fas fa-spinner fa-spin"></i>
-                            <span id="accountLockText">Loading...</span>
-                        </button>
-                        <p id="accountLockStatus" class="mt-2 small text-muted">Checking server...</p>
-                    </form>
-                </div>
-            </div>
-        </div>
+            <div class="tab-content mt-3" id="adminSettingsTabsContent">
+                <div class="tab-pane fade show active" id="pane-site-controls" role="tabpanel" aria-labelledby="tab-site-controls">
+                    <div class="row">
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-users"></i> User Management {{ help.help_icon('Create and manage user accounts and roles. Invite or revoke access and assign permissions.', 'User management') }}</h5></div>
+                                <div class="card-body d-flex flex-column">
+                                    <p class="mb-3">Manage user accounts, roles, and permissions.</p>
+                                    <div class="mt-auto"><a href="{{ url_for('auth.manage_users') }}" class="btn btn-primary"><i class="fas fa-users"></i> Manage Users</a></div>
+                                </div>
+                            </div>
+                        </div>
 
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-palette"></i> Appearance {{ help.help_icon('Manage site appearance settings and visual features that apply to all users on this installation.', 'Appearance') }}</h5>
-                </div>
-                <div class="card-body">
-                    <p>Toggle a modern 'liquid glass' frosted button appearance across the UI for your team's users.</p>
-                    <form method="POST" action="{{ url_for('auth.toggle_liquid_glass_buttons') }}" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <button id="liquidGlassBtn" type="submit" class="btn btn-secondary">
-                            <i id="liquidGlassIcon" class="fas fa-spinner fa-spin"></i>
-                            <span id="liquidGlassText">Loading...</span>
-                        </button>
-                        <p id="liquidGlassStatus" class="mt-2 small text-muted">Checking server...</p>
-                    </form>
-                </div>
-            </div>
-        </div>
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-user-lock"></i> Account Settings {{ help.help_icon('Control new account registration and lock/unlock account creation for your installation.', 'Account settings') }}</h5></div>
+                                <div class="card-body d-flex flex-column">
+                                    <p class="mb-3">Control new account registration for your team.</p>
+                                    <div class="mt-auto">
+                                        <form method="POST" action="{{ url_for('auth.toggle_account_lock') }}" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button id="accountLockBtn" type="submit" class="btn btn-secondary"><i id="accountLockIcon" class="fas fa-spinner fa-spin"></i> <span id="accountLockText">Loading...</span></button>
+                                            <p id="accountLockStatus" class="mt-2 small text-muted">Checking server...</p>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-cog"></i> Game Configuration {{ help.help_icon('Open the game configuration editor to manage scoring elements, match periods, and API settings. Changes affect the entire installation.', 'Game config') }}</h5>
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-palette"></i> Appearance {{ help.help_icon('Manage site appearance settings and visual features that apply to all users on this installation.', 'Appearance') }}</h5></div>
+                                <div class="card-body d-flex flex-column">
+                                    <p class="mb-3">Toggle a modern 'liquid glass' frosted button appearance across the UI for your team's users.</p>
+                                    <div class="mt-auto">
+                                        <form method="POST" action="{{ url_for('auth.toggle_liquid_glass_buttons') }}" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button id="liquidGlassBtn" type="submit" class="btn btn-secondary"><i id="liquidGlassIcon" class="fas fa-spinner fa-spin"></i> <span id="liquidGlassText">Loading...</span></button>
+                                            <p id="liquidGlassStatus" class="mt-2 small text-muted">Checking server...</p>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <p>Configure game settings and scouting parameters.</p>
-                    <a href="{{ url_for('main.config') }}" class="btn btn-info">
-                        <i class="fas fa-cog"></i> Game Config
-                    </a>
-                </div>
-            </div>
-        </div>
 
-        <!-- Theme Management removed -->
+                <div class="tab-pane fade" id="pane-integrations" role="tabpanel" aria-labelledby="tab-integrations">
+                    <div class="row">
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-cog"></i> Game Configuration {{ help.help_icon('Open the game configuration editor to manage scoring elements, match periods, and API settings. Changes affect the entire installation.', 'Game config') }}</h5></div>
+                                <div class="card-body d-flex flex-column"><p class="mb-3">Configure game settings and scouting parameters.</p><div class="mt-auto"><a href="{{ url_for('main.config') }}" class="btn btn-info"><i class="fas fa-cog"></i> Game Config</a></div></div>
+                            </div>
+                        </div>
 
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-handshake"></i> Scouting Alliances {{ help.help_icon('Manage alliance collaboration settings for scouts. Configure shared dashboards, event participation, and data sharing preferences here.', 'Scouting alliances') }}</h5>
-                </div>
-                <div class="card-body">
-                    <p>Collaborate with other scouting teams by sharing data and resources.</p>
-                    <a href="{{ url_for('scouting_alliances.dashboard') }}" class="btn btn-warning">
-                        <i class="fas fa-handshake"></i> Alliance Dashboard
-                    </a>
-                </div>
-            </div>
-        </div>
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-handshake"></i> Scouting Alliances {{ help.help_icon('Manage alliance collaboration settings for scouts. Configure shared dashboards, event participation, and data sharing preferences here.', 'Scouting alliances') }}</h5></div>
+                                <div class="card-body d-flex flex-column"><p class="mb-3">Collaborate with other scouting teams by sharing data and resources.</p><div class="mt-auto"><a href="{{ url_for('scouting_alliances.dashboard') }}" class="btn btn-warning"><i class="fas fa-handshake"></i> Alliance Dashboard</a></div></div>
+                            </div>
+                        </div>
 
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-key"></i> API Keys {{ help.help_icon('Manage programmatic access via API keys. Revoke compromised keys and rotate periodically.', 'API keys') }}</h5>
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-key"></i> API Keys {{ help.help_icon('Manage programmatic access via API keys. Revoke compromised keys and rotate periodically.', 'API keys') }}</h5></div>
+                                <div class="card-body d-flex flex-column"><p class="mb-3">Manage API keys for programmatic access to your team's data.</p><div class="mt-auto"><a href="{{ url_for('api_keys.manage_api_keys') }}" class="btn btn-primary"><i class="fas fa-key"></i> Manage API Keys</a></div></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <p>Manage API keys for programmatic access to your team's data.</p>
-                    <a href="{{ url_for('api_keys.manage_api_keys') }}" class="btn btn-primary">
-                        <i class="fas fa-key"></i> Manage API Keys
-                    </a>
+
+                <div class="tab-pane fade" id="pane-data" role="tabpanel" aria-labelledby="tab-data">
+                    <div class="row">
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-chart-line"></i> EPA Data Source {{ help.help_icon('Control how performance data is sourced for graphs and predictions. Choose between your scouted data, Statbotics EPA, or both.', 'EPA source') }}</h5></div>
+                                <div class="card-body d-flex flex-column">
+                                    <p class="mb-3">Configure Statbotics EPA integration for graphs &amp; predictions.</p>
+                                    <p id="epaQuickStatus" class="small text-muted"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</p>
+                                    <div class="mt-auto"><a href="{{ url_for('auth.epa_settings') }}" class="btn btn-info"><i class="fas fa-chart-line"></i> EPA Settings</a>
+                                        <p class="small text-muted mt-2"><i class="fas fa-link"></i> Note: using <strong>TBA OPR</strong> modes requires a <strong>The Blue Alliance API key</strong> and a configured current event. Set the key under <a href="{{ url_for('api_keys.manage_api_keys') }}">API Keys</a> and the event in <a href="{{ url_for('main.config') }}">Game Config</a>.</p></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-database"></i> System Status {{ help.help_icon('View system health and monitoring information including recent integrity checks and background jobs.', 'System status') }}</h5></div>
+                                <div class="card-body d-flex flex-column"><p class="mb-3">View system health and monitoring information.</p><div class="mt-auto"><a href="{{ url_for('integrity.status') }}" class="btn btn-success"><i class="fas fa-heartbeat"></i> System Status</a></div></div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-download"></i> Data Export {{ help.help_icon('Export scouting data and system configurations to Excel or CSV for offline analysis or backups.', 'Data export') }}</h5></div>
+                                <div class="card-body d-flex flex-column"><p class="mb-3">Export scouting data and system configurations.</p><div class="mt-auto"><a href="{{ url_for('data.export_excel') }}" class="btn btn-dark"><i class="fas fa-download"></i> Export Data</a></div></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row mt-4">
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-chart-line"></i> EPA Data Source {{ help.help_icon('Control how performance data is sourced for graphs and predictions. Choose between your scouted data, Statbotics EPA, or both.', 'EPA source') }}</h5>
-                </div>
-                <div class="card-body">
-                    <p>Configure Statbotics EPA integration for graphs &amp; predictions.</p>
-                    <p id="epaQuickStatus" class="small text-muted"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</p>
-                    <a href="{{ url_for('auth.epa_settings') }}" class="btn btn-info">
-                        <i class="fas fa-chart-line"></i> EPA Settings
-                    </a>
-                    <p class="small text-muted mt-2">
-                        <i class="fas fa-link"></i> Note: using <strong>TBA OPR</strong> modes requires a <strong>The Blue Alliance API key</strong> and a configured current event. Set the key under
-                        <a href="{{ url_for('api_keys.manage_api_keys') }}">API Keys</a> and the event in <a href="{{ url_for('main.config') }}">Game Config</a>.
-                    </p>
-                </div>
-            </div>
-        </div>
 
     <div class="row mt-4">
         <div class="col-md-4">
@@ -458,6 +456,24 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     refreshEpaQuickStatus();
 
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const storageKey = 'adminSettingsActiveTab';
+    // restore saved tab (if present)
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+        const btn = document.getElementById(saved);
+        if (btn && typeof btn.click === 'function') btn.click();
+    }
+
+    // persist tab selection
+    document.querySelectorAll('#adminSettingsTabs button[data-bs-toggle="tab"]').forEach(function(b) {
+        b.addEventListener('shown.bs.tab', function(e) {
+            try { localStorage.setItem(storageKey, e.target.id); } catch (err) { /* ignore */ }
+        });
+    });
 });
 </script>
 <script>

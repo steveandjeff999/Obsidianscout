@@ -34,9 +34,52 @@ STATBOTICS_API_BASE = "https://api.statbotics.io/v3"
 _DEFAULT_TIMEOUT = 4
 _USER_AGENT = "FRC-Scouting-Platform/1.0"
 
-# Simple in-memory cache to avoid repeated requests during a single run.
-_team_epa_cache: Dict[str, Dict] = {}
+# In-memory EPA cache: key -> (value, last_access_time)
+# value is a dict | _CACHE_MISS sentinel
+_team_epa_cache: Dict[str, tuple] = {}
 _CACHE_MISS = object()  # sentinel: distinguishes "tried and failed" from "never tried"
+_EPA_IDLE_SECONDS = 1800          # evict entries unused for 30 min
+_EPA_CLEANUP_EVERY = 200          # run eviction sweep every N accesses
+_epa_access_counter = 0
+
+
+def _epa_cache_get(key: str):
+    """Read from L1 EPA cache, refreshing last-access time.
+    Returns (value, found).
+    """
+    import time as _time
+    global _epa_access_counter
+    entry = _team_epa_cache.get(key)
+    if entry is None:
+        return None, False
+    value, _ = entry
+    _team_epa_cache[key] = (value, _time.time())
+    _epa_access_counter += 1
+    if _epa_access_counter >= _EPA_CLEANUP_EVERY:
+        _epa_cache_evict()
+    return value, True
+
+
+def _epa_cache_set(key: str, value) -> None:
+    """Write to L1 EPA cache, recording current time as last-access."""
+    import time as _time
+    global _epa_access_counter
+    _team_epa_cache[key] = (value, _time.time())
+    _epa_access_counter += 1
+    if _epa_access_counter >= _EPA_CLEANUP_EVERY:
+        _epa_cache_evict()
+
+
+def _epa_cache_evict() -> None:
+    """Remove entries idle for >30 min."""
+    import time as _time
+    global _epa_access_counter
+    _epa_access_counter = 0
+    now = _time.time()
+    stale = [k for k, (_, ts) in list(_team_epa_cache.items())
+             if now - ts > _EPA_IDLE_SECONDS]
+    for k in stale:
+        del _team_epa_cache[k]
 
 # Lazily-created Statbotics client instance (reused across calls)
 _sb_instance = None
@@ -349,19 +392,20 @@ def get_statbotics_team_epa(team_number: int | str, use_cache: bool = True) -> O
     """
     key = str(team_number)
 
-    # --- L1: in-memory cache ---
-    if use_cache and key in _team_epa_cache:
-        cached = _team_epa_cache[key]
-        return None if cached is _CACHE_MISS else cached
+    # --- L1: in-memory cache (30-min idle TTL) ---
+    if use_cache:
+        cached, found = _epa_cache_get(key)
+        if found:
+            return None if cached is _CACHE_MISS else cached
 
     # --- L2: DB cache ---
     if use_cache:
         db_result = _db_cache_get(team_number)
         if db_result is _CACHE_MISS:
-            _team_epa_cache[key] = _CACHE_MISS
+            _epa_cache_set(key, _CACHE_MISS)
             return None
         if db_result is not None:
-            _team_epa_cache[key] = db_result
+            _epa_cache_set(key, db_result)
             return db_result
 
         # --- L2b: stale DB fallback (return old data instantly) ---
@@ -370,10 +414,10 @@ def get_statbotics_team_epa(team_number: int | str, use_cache: bool = True) -> O
         # refresh later.
         stale = _db_cache_get(team_number, stale_ok=True)
         if stale is _CACHE_MISS:
-            _team_epa_cache[key] = _CACHE_MISS
+            _epa_cache_set(key, _CACHE_MISS)
             return None
         if stale is not None:
-            _team_epa_cache[key] = stale
+            _epa_cache_set(key, stale)
             return stale
 
     result: Optional[Dict] = None
@@ -405,7 +449,7 @@ def get_statbotics_team_epa(team_number: int | str, use_cache: bool = True) -> O
 
     # Store in caches — even failures — to prevent repeated slow lookups
     if use_cache:
-        _team_epa_cache[key] = result if result is not None else _CACHE_MISS
+        _epa_cache_set(key, result if result is not None else _CACHE_MISS)
         _db_cache_put(team_number, result)
     else:
         # Scheduler path (use_cache=False) — always persist to DB
@@ -427,4 +471,6 @@ def clear_epa_caches() -> None:
     never served.  The DB cache (StatboticsCache) is intentionally kept
     — it stores raw API data which is source-agnostic.
     """
+    global _epa_access_counter
     _team_epa_cache.clear()
+    _epa_access_counter = 0

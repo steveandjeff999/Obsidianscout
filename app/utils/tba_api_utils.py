@@ -18,6 +18,66 @@ class TBAApiError(Exception):
 # Global cache for event remap_teams data to avoid repeated API calls
 _event_remap_cache = {}
 
+# ---------------------------------------------------------------------------
+# In-memory OPR caches (mirrors the Statbotics EPA in-memory cache pattern)
+# ---------------------------------------------------------------------------
+_OPR_CACHE_MISS = object()            # sentinel for "API returned nothing"
+# L1: team_number:event_key -> (value, last_access_time)
+# value is a dict | _OPR_CACHE_MISS
+_team_opr_cache: dict = {}
+_event_opr_cache: dict = {}            # event_key -> {full TBA response} (short-lived)
+_event_opr_cache_ts: dict = {}         # event_key -> float (time.time of last fetch)
+_EVENT_OPR_TTL_SECONDS = 120           # re-use event blob for 2 min in-memory
+_TEAM_OPR_IDLE_SECONDS = 1800          # evict per-team entries unused for 30 min
+_opr_access_counter = 0               # incremented on every L1 read/write
+_OPR_CLEANUP_EVERY = 200              # run eviction sweep every N accesses
+
+
+def _opr_cache_get(mem_key: str):
+    """Read from L1 team OPR cache, updating last-access time.
+    Returns (value, found) where value is dict | _OPR_CACHE_MISS.
+    """
+    import time as _time
+    global _opr_access_counter
+    entry = _team_opr_cache.get(mem_key)
+    if entry is None:
+        return None, False
+    value, _ = entry
+    _team_opr_cache[mem_key] = (value, _time.time())  # refresh access time
+    _opr_access_counter += 1
+    if _opr_access_counter >= _OPR_CLEANUP_EVERY:
+        _opr_cache_evict()
+    return value, True
+
+
+def _opr_cache_set(mem_key: str, value) -> None:
+    """Write to L1 team OPR cache, recording current time as last-access."""
+    import time as _time
+    global _opr_access_counter
+    _team_opr_cache[mem_key] = (value, _time.time())
+    _opr_access_counter += 1
+    if _opr_access_counter >= _OPR_CLEANUP_EVERY:
+        _opr_cache_evict()
+
+
+def _opr_cache_evict() -> None:
+    """Remove per-team entries idle for >30 min and stale event blobs."""
+    import time as _time
+    global _opr_access_counter
+    _opr_access_counter = 0
+    now = _time.time()
+    # Evict idle team entries
+    stale_keys = [k for k, (_, ts) in list(_team_opr_cache.items())
+                  if now - ts > _TEAM_OPR_IDLE_SECONDS]
+    for k in stale_keys:
+        del _team_opr_cache[k]
+    # Evict stale event blobs (older than TTL * 10, i.e. 20 min)
+    stale_events = [ek for ek, ts in list(_event_opr_cache_ts.items())
+                    if now - ts > _EVENT_OPR_TTL_SECONDS * 10]
+    for ek in stale_events:
+        _event_opr_cache.pop(ek, None)
+        _event_opr_cache_ts.pop(ek, None)
+
 def get_tba_api_key():
     """Get TBA API key from config"""
     # Prefer team-specific instance config when available
@@ -730,12 +790,18 @@ def get_tba_event_oprs(event_key: str):
     """Fetch OPR/DPR/CCWM data for all teams at a TBA event.
 
     Returns a dict with keys ``'oprs'``, ``'dprs'``, ``'ccwms'`` (each a dict
-    mapping ``'frcXXXX'`` -> float), or ``None`` on failure.  Results are
-    cached in the database with a 15-minute TTL.
+    mapping ``'frcXXXX'`` -> float), or ``None`` on failure.
+
+    Results are cached **in-memory** for 2 minutes so that loading a page
+    with 40 teams doesn't trigger 40 identical HTTP requests.
     """
-    # Note: This function fetches ALL teams at an event, so we can't use
-    # per-team DB caching here. Instead, callers should use get_tba_team_opr()
-    # which handles per-team DB caching.
+    import time as _time
+
+    # --- In-memory event-level cache ---
+    cached_ts = _event_opr_cache_ts.get(event_key, 0)
+    if _time.time() - cached_ts < _EVENT_OPR_TTL_SECONDS and event_key in _event_opr_cache:
+        return _event_opr_cache[event_key]
+
     base_url = 'https://www.thebluealliance.com/api/v3'
     url = f"{base_url}/event/{event_key}/oprs"
     try:
@@ -743,11 +809,52 @@ def get_tba_event_oprs(event_key: str):
         resp = requests.get(url, headers=headers, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
+            # Store in in-memory event cache
+            _event_opr_cache[event_key] = data
+            _event_opr_cache_ts[event_key] = _time.time()
             return data
         print(f"TBA OPR fetch returned HTTP {resp.status_code} for {event_key}")
     except Exception as e:
         print(f"Failed to fetch TBA OPRs for {event_key}: {e}")
+
+    # Cache the failure too so we don't retry every call for 2 min
+    _event_opr_cache[event_key] = None
+    _event_opr_cache_ts[event_key] = _time.time()
     return None
+
+
+def _bulk_cache_event_oprs(event_key: str, opr_data: dict) -> None:
+    """Persist OPR data for ALL teams in *opr_data* to the DB in one go.
+
+    This avoids N+1 DB writes when every team at an event misses cache
+    simultaneously.  Failures are silently ignored.
+    """
+    try:
+        from app.models import TbaOprCache
+        oprs = opr_data.get('oprs', {})
+        dprs = opr_data.get('dprs', {})
+        ccwms = opr_data.get('ccwms', {})
+        for team_key, opr_val in oprs.items():
+            try:
+                tn = int(team_key.replace('frc', ''))
+            except (ValueError, AttributeError):
+                continue
+            mem_key = f"{tn}:{event_key}"
+            result_dict = {
+                'total': opr_val,
+                'opr': opr_val,
+                'dpr': dprs.get(team_key),
+                'ccwm': ccwms.get(team_key),
+            }
+            # L1 in-memory (with access timestamp)
+            _opr_cache_set(mem_key, result_dict)
+            # L2 DB
+            try:
+                TbaOprCache.upsert(tn, event_key, result_dict)
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"Bulk OPR cache write failed for {event_key}: {e}")
 
 
 def get_tba_team_opr(team_number, event_key=None):
@@ -758,8 +865,11 @@ def get_tba_team_opr(team_number, event_key=None):
 
     Returns a dict ``{'total': opr, 'opr': opr, 'dpr': dpr, 'ccwm': ccwm}``
     or ``None`` when no data is available.
-    
-    Results are cached in the database with a 15-minute TTL.
+
+    Cache hierarchy (mirrors Statbotics EPA pattern):
+      L1 — in-memory dict  (instant, per-process lifetime)
+      L2 — DB ``tba_opr_cache`` table  (persists across restarts, 15 min TTL)
+      L3 — TBA API ``/event/{key}/oprs``  (bulk fetch, then fan-out to L1+L2)
     """
     if event_key is None:
         try:
@@ -775,54 +885,67 @@ def get_tba_team_opr(team_number, event_key=None):
         except Exception:
             return None
 
-    # Check DB cache first
+    mem_key = f"{team_number}:{event_key}"
+
+    # --- L1: in-memory cache (instant, 30-min idle TTL) ---
+    cached, found = _opr_cache_get(mem_key)
+    if found:
+        return None if cached is _OPR_CACHE_MISS else cached
+
+    # --- L2: DB cache (15-min TTL) ---
     try:
         from app.models import TbaOprCache
         cached_row = TbaOprCache.get_cached(team_number, event_key)
         if cached_row:
             if cached_row.is_miss:
+                _opr_cache_set(mem_key, _OPR_CACHE_MISS)
                 return None
-            return cached_row.to_opr_dict()
+            result = cached_row.to_opr_dict()
+            _opr_cache_set(mem_key, result)
+            return result
     except Exception as e:
         print(f"DB cache lookup failed for OPR team {team_number} event {event_key}: {e}")
 
-    # Not in cache or expired, fetch from TBA API
+    # --- L3: TBA API (bulk fetch for whole event) ---
     opr_data = get_tba_event_oprs(event_key)
-    
-    team_key = f"frc{team_number}"
-    opr = None
-    if opr_data:
-        opr = opr_data.get('oprs', {}).get(team_key)
 
-    # Store result in DB cache
-    result_dict = None
-    if opr is not None:
-        result_dict = {
-            'total': opr,
-            'opr': opr,
-            'dpr': opr_data.get('dprs', {}).get(team_key),
-            'ccwm': opr_data.get('ccwms', {}).get(team_key),
-        }
-    
+    if opr_data:
+        # Bulk-populate L1 + L2 for ALL teams at this event so subsequent
+        # calls in the same rankings loop are instant.
+        _bulk_cache_event_oprs(event_key, opr_data)
+
+        # Return this team's data from the freshly populated L1
+        val, found = _opr_cache_get(mem_key)
+        if found:
+            return None if val is _OPR_CACHE_MISS else val
+
+    # Team not in the event OPR data — record as miss
+    _opr_cache_set(mem_key, _OPR_CACHE_MISS)
     try:
         from app.models import TbaOprCache
-        TbaOprCache.upsert(team_number, event_key, result_dict)
+        TbaOprCache.upsert(team_number, event_key, None)  # miss
     except Exception as e:
-        print(f"Failed to cache OPR for team {team_number} event {event_key}: {e}")
+        print(f"Failed to cache OPR miss for team {team_number} event {event_key}: {e}")
 
-    return result_dict
+    return None
 
 
 def clear_opr_cache() -> None:
-    """Clear the TBA OPR cache (call when EPA source changes)."""
+    """Clear ALL OPR caches (call when EPA source changes)."""
+    global _opr_access_counter
+    # L1: in-memory caches
+    _team_opr_cache.clear()
+    _event_opr_cache.clear()
+    _event_opr_cache_ts.clear()
+    _opr_access_counter = 0
+    # L2: DB cache
     try:
         from app.models import TbaOprCache
         from app import db
-        # Delete all cached OPR entries
         TbaOprCache.query.delete()
         db.session.commit()
     except Exception as e:
-        print(f"Failed to clear OPR cache: {e}")
+        print(f"Failed to clear OPR DB cache: {e}")
         try:
             from app import db
             db.session.rollback()
