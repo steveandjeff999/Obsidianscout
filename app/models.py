@@ -248,13 +248,15 @@ class StatboticsCache(ConcurrentModelMixin, db.Model):
         if ttl_hours is None:
             ttl_hours = cls.DEFAULT_TTL_HOURS
         from datetime import timedelta
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=ttl_hours)
+        # SQLite returns naive datetimes; use naive UTC for comparison
+        cutoff = datetime.utcnow() - timedelta(hours=ttl_hours)
         row = cls.query.filter_by(
             team_number=int(team_number),
             year=int(year),
             scouting_team_number=scouting_team_number,
         ).first()
-        if row and row.fetched_at and row.fetched_at >= cutoff:
+        fetched_at = row.fetched_at.replace(tzinfo=None) if (row and row.fetched_at and row.fetched_at.tzinfo) else (row.fetched_at if row else None)
+        if row and fetched_at and fetched_at >= cutoff:
             return row
         return None
 
@@ -360,13 +362,16 @@ class TbaOprCache(ConcurrentModelMixin, db.Model):
         if ttl_minutes is None:
             ttl_minutes = cls.DEFAULT_TTL_MINUTES
         from datetime import timedelta
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=ttl_minutes)
+        # SQLite returns naive datetimes; use naive UTC for comparison
+        cutoff = datetime.utcnow() - timedelta(minutes=ttl_minutes)
         row = cls.query.filter_by(
             team_number=int(team_number),
             event_key=event_key,
             scouting_team_number=scouting_team_number,
         ).first()
-        if row and row.fetched_at and row.fetched_at >= cutoff:
+        # Strip tzinfo from fetched_at in case it was stored as aware
+        fetched_at = row.fetched_at.replace(tzinfo=None) if (row and row.fetched_at and row.fetched_at.tzinfo) else (row.fetched_at if row else None)
+        if row and fetched_at and fetched_at >= cutoff:
             return row
         return None
 
