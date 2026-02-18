@@ -504,6 +504,29 @@ document.addEventListener('DOMContentLoaded', function() {
             '<button type="button" class="btn btn-sm btn-outline-warning ranking-btn" data-team="' + teamNum + '" data-alliance="individual" data-ranking="3">3 - Average</button>' +
             '</div>' +
             '</div>' +
+            '<div class="mb-3">' +
+            '<label class="form-label">Robot Roles:</label>' +
+            '<div class="form-check">' +
+            '<input class="form-check-input team-checkbox" type="checkbox" data-team="' + teamNum + '" data-alliance="individual" data-role="passer" id="indiv_passer_' + teamNum + '">' +
+            '<label class="form-check-label" for="indiv_passer_' + teamNum + '">Passer</label>' +
+            '</div>' +
+            '<div class="form-check">' +
+            '<input class="form-check-input team-checkbox" type="checkbox" data-team="' + teamNum + '" data-alliance="individual" data-role="cleanup" id="indiv_cleanup_' + teamNum + '">' +
+            '<label class="form-check-label" for="indiv_cleanup_' + teamNum + '">Cleanup</label>' +
+            '</div>' +
+            '<div class="form-check">' +
+            '<input class="form-check-input team-checkbox" type="checkbox" data-team="' + teamNum + '" data-alliance="individual" data-role="played_defense" id="indiv_defense_' + teamNum + '">' +
+            '<label class="form-check-label" for="indiv_defense_' + teamNum + '">Played Defense</label>' +
+            '</div>' +
+            '<div class="form-check">' +
+            '<input class="form-check-input team-checkbox" type="checkbox" data-team="' + teamNum + '" data-alliance="individual" data-role="cycler" id="indiv_cycler_' + teamNum + '">' +
+            '<label class="form-check-label" for="indiv_cycler_' + teamNum + '">Cycler</label>' +
+            '</div>' +
+            '</div>' +
+            '<div class="mb-3">' +
+            '<label class="form-label">Endgame:</label>' +
+            '<input type="text" class="form-control team-endgame" data-team="' + teamNum + '" data-alliance="individual" placeholder="Describe endgame performance...">' +
+            '</div>' +
             '<div>' +
             '<label class="form-label">Notes:</label>' +
             '<textarea class="form-control team-notes" data-team="' + teamNum + '" data-alliance="individual" rows="5" placeholder="Add detailed notes about this team..."></textarea>' +
@@ -702,6 +725,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 '<button type="button" class="btn btn-sm btn-outline-warning ranking-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-ranking="3">3</button>' +
                 '</div>' +
                 '</div>' +
+                '<div class="mb-2">' +
+                '<label class="form-label small">Robot Roles:</label>' +
+                '<div class="form-check">' +
+                '<input class="form-check-input team-checkbox" type="checkbox" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-role="passer" id="' + alliance + '_passer_' + teamNum + '">' +
+                '<label class="form-check-label small" for="' + alliance + '_passer_' + teamNum + '">Passer</label>' +
+                '</div>' +
+                '<div class="form-check">' +
+                '<input class="form-check-input team-checkbox" type="checkbox" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-role="cleanup" id="' + alliance + '_cleanup_' + teamNum + '">' +
+                '<label class="form-check-label small" for="' + alliance + '_cleanup_' + teamNum + '">Cleanup</label>' +
+                '</div>' +
+                '<div class="form-check">' +
+                '<input class="form-check-input team-checkbox" type="checkbox" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-role="played_defense" id="' + alliance + '_defense_' + teamNum + '">' +
+                '<label class="form-check-label small" for="' + alliance + '_defense_' + teamNum + '">Played Defense</label>' +
+                '</div>' +
+                '<div class="form-check">' +
+                '<input class="form-check-input team-checkbox" type="checkbox" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-role="cycler" id="' + alliance + '_cycler_' + teamNum + '">' +
+                '<label class="form-check-label small" for="' + alliance + '_cycler_' + teamNum + '">Cycler</label>' +
+                '</div>' +
+                '</div>' +
+                '<div class="mb-2">' +
+                '<label class="form-label small">Endgame:</label>' +
+                '<input type="text" class="form-control form-control-sm team-endgame" data-team="' + teamNum + '" data-alliance="' + alliance + '" placeholder="Endgame...">' +
+                '</div>' +
                 '<div>' +
                 '<label class="form-label small">Notes:</label>' +
                 '<textarea class="form-control form-control-sm team-notes" data-team="' + teamNum + '" data-alliance="' + alliance + '" rows="3" placeholder="Add notes about this team..."></textarea>' +
@@ -749,6 +795,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     const notesArea = document.querySelector('textarea[data-team="' + teamNum + '"][data-alliance="red"]');
                     if (notesArea) notesArea.value = teamData.notes;
                 }
+                
+                // Set endgame
+                if (teamData.endgame) {
+                    const endgameInput = document.querySelector('.team-endgame[data-team="' + teamNum + '"][data-alliance="red"]');
+                    if (endgameInput) endgameInput.value = teamData.endgame;
+                }
+                
+                // Set checkboxes
+                ['passer', 'cleanup', 'played_defense', 'cycler'].forEach(function(role) {
+                    if (teamData[role]) {
+                        const checkbox = document.querySelector('.team-checkbox[data-team="' + teamNum + '"][data-alliance="red"][data-role="' + role + '"]');
+                        if (checkbox) checkbox.checked = true;
+                    }
+                });
             });
         }
         
@@ -769,6 +829,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     const notesArea = document.querySelector('textarea[data-team="' + teamNum + '"][data-alliance="blue"]');
                     if (notesArea) notesArea.value = teamData.notes;
                 }
+                
+                // Set endgame
+                if (teamData.endgame) {
+                    const endgameInput = document.querySelector('.team-endgame[data-team="' + teamNum + '"][data-alliance="blue"]');
+                    if (endgameInput) endgameInput.value = teamData.endgame;
+                }
+                
+                // Set checkboxes
+                ['passer', 'cleanup', 'played_defense', 'cycler'].forEach(function(role) {
+                    if (teamData[role]) {
+                        const checkbox = document.querySelector('.team-checkbox[data-team="' + teamNum + '"][data-alliance="blue"][data-role="' + role + '"]');
+                        if (checkbox) checkbox.checked = true;
+                    }
+                });
             });
         }
     }
@@ -786,6 +860,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const notes = document.querySelector('textarea[data-alliance="individual"]');
             const rankBtn = document.querySelector('.ranking-btn[data-alliance="individual"].active');
+            const endgameInput = document.querySelector('.team-endgame[data-alliance="individual"]');
+            const checkboxes = document.querySelectorAll('.team-checkbox[data-alliance="individual"]');
             
             // Get match info for QR payload
             const indivMatchOpt = indivMatchSelector.options[indivMatchSelector.selectedIndex];
@@ -803,10 +879,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.warn('Could not get scout name:', e);
             }
             
+            // Collect checkbox data
+            const roles = {};
+            checkboxes.forEach(function(cb) {
+                roles[cb.dataset.role] = cb.checked;
+            });
+            
             const teamData = {};
             teamData['team_' + teamNum] = {
                 notes: notes ? notes.value.trim() : '',
-                ranking: rankBtn ? parseInt(rankBtn.dataset.ranking) : null
+                ranking: rankBtn ? parseInt(rankBtn.dataset.ranking) : null,
+                endgame: endgameInput ? endgameInput.value.trim() : '',
+                passer: roles.passer || false,
+                cleanup: roles.cleanup || false,
+                played_defense: roles.played_defense || false,
+                cycler: roles.cycler || false
             };
 
             // Require a ranking for individual team entries
@@ -849,10 +936,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const notes = textarea.value.trim();
             const rankBtn = document.querySelector('.ranking-btn[data-team="' + teamNum + '"][data-alliance="red"].active');
             const ranking = rankBtn ? parseInt(rankBtn.dataset.ranking) : null;
+            const endgameInput = document.querySelector('.team-endgame[data-team="' + teamNum + '"][data-alliance="red"]');
+            const checkboxes = document.querySelectorAll('.team-checkbox[data-team="' + teamNum + '"][data-alliance="red"]');
+            
+            const roles = {};
+            checkboxes.forEach(function(cb) {
+                roles[cb.dataset.role] = cb.checked;
+            });
             
             teamData.red['team_' + teamNum] = {
                 notes: notes,
-                ranking: ranking
+                ranking: ranking,
+                endgame: endgameInput ? endgameInput.value.trim() : '',
+                passer: roles.passer || false,
+                cleanup: roles.cleanup || false,
+                played_defense: roles.played_defense || false,
+                cycler: roles.cycler || false
             };
         });
         
@@ -862,10 +961,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const notes = textarea.value.trim();
             const rankBtn = document.querySelector('.ranking-btn[data-team="' + teamNum + '"][data-alliance="blue"].active');
             const ranking = rankBtn ? parseInt(rankBtn.dataset.ranking) : null;
+            const endgameInput = document.querySelector('.team-endgame[data-team="' + teamNum + '"][data-alliance="blue"]');
+            const checkboxes = document.querySelectorAll('.team-checkbox[data-team="' + teamNum + '"][data-alliance="blue"]');
+            
+            const roles = {};
+            checkboxes.forEach(function(cb) {
+                roles[cb.dataset.role] = cb.checked;
+            });
             
             teamData.blue['team_' + teamNum] = {
                 notes: notes,
-                ranking: ranking
+                ranking: ranking,
+                endgame: endgameInput ? endgameInput.value.trim() : '',
+                passer: roles.passer || false,
+                cleanup: roles.cleanup || false,
+                played_defense: roles.played_defense || false,
+                cycler: roles.cycler || false
             };
         });
         

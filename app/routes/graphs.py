@@ -208,8 +208,8 @@ def _build_page_context(page, scouting_team_number):
                         else:
                             metric_value = data.calculate_metric(metric_alias)
 
-                        # In statbotics_only mode, override total metric with EPA
-                        if _epa_source == 'statbotics_only' and metric_alias in ('tot', 'points', ''):
+                        # In statbotics_only/tba_opr_only mode, override total metric with EPA/OPR
+                        if _epa_source in ('statbotics_only', 'tba_opr_only') and metric_alias in ('tot', 'points', ''):
                             if _team_epa and _team_epa['total'] is not None:
                                 metric_value = _team_epa['total']
                         
@@ -564,8 +564,8 @@ def index():
                         else:
                             metric_value = data.calculate_metric(selected_metric)
 
-                        # In statbotics_only mode, override total metric with EPA
-                        if _epa_source == 'statbotics_only' and selected_metric in ('points', '', 'tot', 'total_points'):
+                        # In statbotics_only/tba_opr_only mode, override total metric with EPA/OPR
+                        if _epa_source in ('statbotics_only', 'tba_opr_only') and selected_metric in ('points', '', 'tot', 'total_points'):
                             if _team_epa and _team_epa['total'] is not None:
                                 metric_value = _team_epa['total']
                         
@@ -752,7 +752,7 @@ def scout_leaderboard():
                     team_obj = Team.query.get(team_id)
                     if team_obj:
                         epa_data = get_epa_metrics_for_team(team_obj.team_number)
-                        if epa_data['epa_source'] == 'statbotics_only' and epa_data['total'] is not None:
+                        if epa_data['epa_source'] in ('statbotics_only', 'tba_opr_only') and epa_data['total'] is not None:
                             team_avg_scores[cache_key] = epa_data['total']
                             return epa_data['total']
                 except Exception:
@@ -1286,8 +1286,8 @@ def side_by_side():
         # EPA integration for side-by-side comparison
         from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
         _sbs_epa_source = get_current_epa_source()
-        _sbs_use_epa = _sbs_epa_source in ('scouted_with_statbotics', 'statbotics_only')
-        _sbs_statbotics_only = _sbs_epa_source == 'statbotics_only'
+        _sbs_use_epa = _sbs_epa_source in ('scouted_with_statbotics', 'statbotics_only', 'tba_opr_only', 'scouted_with_tba_opr')
+        _sbs_statbotics_only = _sbs_epa_source in ('statbotics_only', 'tba_opr_only')
 
         # In statbotics_only mode, ignore scouting data
         if _sbs_statbotics_only:
@@ -1601,8 +1601,8 @@ def view_shared(share_id):
                 else:
                     metric_value = data.calculate_metric(shared_graph.metric)
 
-                # Override with EPA in statbotics_only mode
-                if _epa_source == 'statbotics_only' and shared_graph.metric in ('points', '', 'tot', 'total_points'):
+                # Override with EPA/OPR in statbotics_only/tba_opr_only mode
+                if _epa_source in ('statbotics_only', 'tba_opr_only') and shared_graph.metric in ('points', '', 'tot', 'total_points'):
                     _team_epa = get_epa_metrics_for_team(team.team_number)
                     if _team_epa['total'] is not None:
                         metric_value = _team_epa['total']
@@ -2012,8 +2012,8 @@ def public_page_widget_render(token, widget_index):
                                     else:
                                             metric_value = data.calculate_metric(metric_alias)
 
-                                    # Override with EPA in statbotics_only mode
-                                    if _epa_source_cp == 'statbotics_only' and metric_alias in ('tot', 'points', ''):
+                                    # Override with EPA/OPR in statbotics_only/tba_opr_only mode
+                                    if _epa_source_cp in ('statbotics_only', 'tba_opr_only') and metric_alias in ('tot', 'points', ''):
                                         _t_epa = get_epa_metrics_for_team(t.team_number)
                                         if _t_epa['total'] is not None:
                                             metric_value = _t_epa['total']
@@ -2645,8 +2645,8 @@ def pages_widget_render(page_id, widget_index):
                     metric_value = data.calculate_metric('tot')
                 else:
                     metric_value = data.calculate_metric(metric_alias)
-                # Override with EPA in statbotics_only mode
-                if _epa_source_w4 == 'statbotics_only' and metric_alias in ('tot', 'points', ''):
+                # Override with EPA/OPR in statbotics_only/tba_opr_only mode
+                if _epa_source_w4 in ('statbotics_only', 'tba_opr_only') and metric_alias in ('tot', 'points', ''):
                     _t_epa_w4 = _get_epa_w4(team.team_number)
                     if _t_epa_w4['total'] is not None:
                         metric_value = _t_epa_w4['total']
@@ -3128,8 +3128,8 @@ def pages_view(page_id):
                         metric_value = data.calculate_metric('tot')
                     else:
                         metric_value = data.calculate_metric(metric_alias)
-                    # Override with EPA in statbotics_only mode
-                    if _epa_source_w5 == 'statbotics_only' and metric_alias in ('tot', 'points', ''):
+                    # Override with EPA/OPR in statbotics_only/tba_opr_only mode
+                    if _epa_source_w5 in ('statbotics_only', 'tba_opr_only') and metric_alias in ('tot', 'points', ''):
                         _t_epa_w5 = _get_epa_w5(team.team_number)
                         if _t_epa_w5['total'] is not None:
                             metric_value = _t_epa_w5['total']

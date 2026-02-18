@@ -46,6 +46,25 @@ class StatboticsError(Exception):
     """Raised for Statbotics-related errors (network or parsing)."""
 
 
+def _get_game_config_year() -> int:
+    """Return the season year from the active game config, or the current calendar year.
+
+    This ensures Statbotics EPA lookups always target the correct FRC season
+    regardless of when the server process started.
+    """
+    try:
+        from app.utils.config_manager import get_current_game_config
+        config = get_current_game_config()
+        if isinstance(config, dict):
+            year = config.get('season') or config.get('year')
+            if year:
+                return int(year)
+    except Exception:
+        pass
+    from datetime import datetime as _dt
+    return _dt.now().year
+
+
 def _safe_float(v: Any) -> Optional[float]:
     try:
         return float(v)
@@ -132,8 +151,7 @@ def _client_get_team_epa(team_number: int | str) -> Optional[Dict[str, Optional[
         if _sb_instance is None:
             _sb_instance = SBClass()
 
-        from datetime import datetime as _dt
-        current_year = _dt.now().year
+        current_year = _get_game_config_year()
 
         for year in (current_year, current_year - 1):
             try:
@@ -151,8 +169,7 @@ def _client_get_team_epa(team_number: int | str) -> Optional[Dict[str, Optional[
 
 def _rest_api_get_team_epa(team_number: int | str) -> Optional[Dict[str, Optional[float]]]:
     """Fetch EPA via the Statbotics REST API (v3) as a fallback."""
-    from datetime import datetime as _dt
-    current_year = _dt.now().year
+    current_year = _get_game_config_year()
 
     for year in (current_year, current_year - 1):
         try:
@@ -281,9 +298,8 @@ def _db_cache_get(team_number: int | str, ttl_hours: int = 24,
     try:
         from flask import current_app  # noqa: F401 – need app context
         from app.models import StatboticsCache
-        from datetime import datetime as _dt
 
-        year = _dt.now().year
+        year = _get_game_config_year()
 
         if stale_ok:
             # Accept ANY stored row regardless of age
@@ -313,9 +329,8 @@ def _db_cache_put(team_number: int | str, epa_dict: Optional[Dict]) -> None:
     """L2 cache: persist an EPA result (or miss) in the DB."""
     try:
         from app.models import StatboticsCache
-        from datetime import datetime as _dt
 
-        year = _dt.now().year
+        year = _get_game_config_year()
         StatboticsCache.upsert(int(team_number), year, epa_dict)
     except Exception:
         pass

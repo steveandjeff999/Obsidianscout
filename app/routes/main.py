@@ -2379,8 +2379,8 @@ def api_brief_data():
 
                 from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
                 _epa_source = get_current_epa_source()
-                _use_epa = _epa_source in ('scouted_with_statbotics', 'statbotics_only')
-                _statbotics_only = _epa_source == 'statbotics_only'
+                _use_epa = _epa_source in ('scouted_with_statbotics', 'statbotics_only', 'tba_opr_only', 'scouted_with_tba_opr')
+                _statbotics_only = _epa_source in ('statbotics_only', 'tba_opr_only')
                 
                 for team_num in match.red_teams:
                     team = Team.query.filter_by(team_number=int(team_num)).first()
@@ -2514,8 +2514,8 @@ def api_brief_data():
             team_scores = []
             from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
             _tp_epa_source = get_current_epa_source()
-            _tp_use_epa = _tp_epa_source in ('scouted_with_statbotics', 'statbotics_only')
-            _tp_statbotics_only = _tp_epa_source == 'statbotics_only'
+            _tp_use_epa = _tp_epa_source in ('scouted_with_statbotics', 'statbotics_only', 'tba_opr_only', 'scouted_with_tba_opr')
+            _tp_statbotics_only = _tp_epa_source in ('statbotics_only', 'tba_opr_only')
 
             for team in teams:
                 avg_score = None

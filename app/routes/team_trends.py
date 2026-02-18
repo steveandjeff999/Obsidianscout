@@ -203,8 +203,8 @@ def _analyze_team(team_number):
     # EPA enrichment: if EPA is enabled, fetch it for potential fallback / display
     from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
     _tt_epa_source = get_current_epa_source()
-    _tt_use_epa = _tt_epa_source in ('scouted_with_statbotics', 'statbotics_only')
-    _tt_statbotics_only = _tt_epa_source == 'statbotics_only'
+    _tt_use_epa = _tt_epa_source in ('scouted_with_statbotics', 'statbotics_only', 'tba_opr_only', 'scouted_with_tba_opr')
+    _tt_statbotics_only = _tt_epa_source in ('statbotics_only', 'tba_opr_only')
     epa_data = None
     if _tt_use_epa:
         epa_data = get_epa_metrics_for_team(team_number)
@@ -438,8 +438,8 @@ def _analyze_multiple_teams(team_numbers):
         # EPA enrichment for multi-team trends
         from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
         _mt_epa_source = get_current_epa_source()
-        _mt_use_epa = _mt_epa_source in ('scouted_with_statbotics', 'statbotics_only')
-        _mt_statbotics_only = _mt_epa_source == 'statbotics_only'
+        _mt_use_epa = _mt_epa_source in ('scouted_with_statbotics', 'statbotics_only', 'tba_opr_only', 'scouted_with_tba_opr')
+        _mt_statbotics_only = _mt_epa_source in ('statbotics_only', 'tba_opr_only')
         _mt_epa_data = None
         if _mt_use_epa:
             _mt_epa_data = get_epa_metrics_for_team(tn)

@@ -303,8 +303,8 @@ def index():
         from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
 
         epa_source = get_current_epa_source()
-        use_epa = epa_source in ('scouted_with_statbotics', 'statbotics_only')
-        statbotics_only = epa_source == 'statbotics_only'
+        use_epa = epa_source in ('scouted_with_statbotics', 'statbotics_only', 'tba_opr_only', 'scouted_with_tba_opr')
+        statbotics_only = epa_source in ('statbotics_only', 'tba_opr_only')
 
         if not scouting_team_number and not use_epa:
             return (None, None)
@@ -829,8 +829,8 @@ def view(match_id):
         # Use the scouting data we already fetched (which is alliance-aware)
         from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
         epa_source = get_current_epa_source()
-        use_epa = epa_source in ('scouted_with_statbotics', 'statbotics_only')
-        statbotics_only = epa_source == 'statbotics_only'
+        use_epa = epa_source in ('scouted_with_statbotics', 'statbotics_only', 'tba_opr_only', 'scouted_with_tba_opr')
+        statbotics_only = epa_source in ('statbotics_only', 'tba_opr_only')
 
         entries = scouting_data if scouting_data and not statbotics_only else []
         if entries:
@@ -1266,8 +1266,8 @@ def strategy_all():
             alliance_id = get_active_alliance_id()
             from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
             epa_source = get_current_epa_source()
-            use_epa = epa_source in ('scouted_with_statbotics', 'statbotics_only')
-            statbotics_only = epa_source == 'statbotics_only'
+            use_epa = epa_source in ('scouted_with_statbotics', 'statbotics_only', 'tba_opr_only', 'scouted_with_tba_opr')
+            statbotics_only = epa_source in ('statbotics_only', 'tba_opr_only')
 
             entries = []
             if not statbotics_only:

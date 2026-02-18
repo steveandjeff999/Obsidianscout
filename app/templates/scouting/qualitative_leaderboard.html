@@ -26,28 +26,70 @@
     </div>
 
     {% if leaderboard %}
+    <!-- Filter Controls -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <h6 class="mb-3"><i class="fas fa-filter me-2"></i>Filter by Robot Role</h6>
+            <div class="btn-group flex-wrap" role="group">
+                <input type="checkbox" class="btn-check" id="filter-all" autocomplete="off" checked>
+                <label class="btn btn-outline-secondary" for="filter-all">
+                    <i class="fas fa-list me-1"></i>All Teams
+                </label>
+                
+                <input type="checkbox" class="btn-check role-filter" id="filter-passer" data-role="passer" autocomplete="off">
+                <label class="btn btn-outline-primary" for="filter-passer">
+                    <i class="fas fa-hand-holding me-1"></i>Passer
+                </label>
+                
+                <input type="checkbox" class="btn-check role-filter" id="filter-cleanup" data-role="cleanup" autocomplete="off">
+                <label class="btn btn-outline-success" for="filter-cleanup">
+                    <i class="fas fa-broom me-1"></i>Cleanup
+                </label>
+                
+                <input type="checkbox" class="btn-check role-filter" id="filter-defense" data-role="played_defense" autocomplete="off">
+                <label class="btn btn-outline-danger" for="filter-defense">
+                    <i class="fas fa-shield-alt me-1"></i>Defense
+                </label>
+                
+                <input type="checkbox" class="btn-check role-filter" id="filter-cycler" data-role="cycler" autocomplete="off">
+                <label class="btn btn-outline-info" for="filter-cycler">
+                    <i class="fas fa-sync me-1"></i>Cycler
+                </label>
+            </div>
+            <p class="text-muted small mb-0 mt-2">
+                <i class="fas fa-info-circle me-1"></i>Select one or more roles to filter teams. "All Teams" shows everyone.
+            </p>
+        </div>
+    </div>
+    
     <div class="card">
         <div class="card-header bg-warning text-dark">
             <h5 class="mb-0">
                 <i class="fas fa-star me-2"></i>Team Rankings
+                <span id="filtered-count" class="badge bg-dark ms-2">{{ total_teams }} teams</span>
             </h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover table-striped mb-0">
+                <table class="table table-hover table-striped mb-0" id="leaderboard-table">
                     <thead class="table-dark">
                         <tr>
                             <th style="width: 80px;">Rank</th>
                             <th style="width: 120px;">Team</th>
                             <th style="width: 150px;">Average Rating</th>
                             <th style="width: 120px;">Appearances</th>
+                            <th style="width: 200px;">Roles</th>
                             <th>All Ratings</th>
                             <th style="width: 150px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for team in leaderboard %}
-                        <tr>
+                        <tr class="team-row" 
+                            data-passer="{{ team.roles.passer }}"
+                            data-cleanup="{{ team.roles.cleanup }}"
+                            data-defense="{{ team.roles.played_defense }}"
+                            data-cycler="{{ team.roles.cycler }}">
                             <td class="text-center">
                                 {% if loop.index <= 3 %}
                                 <span class="badge {% if loop.index == 1 %}bg-warning text-dark{% elif loop.index == 2 %}bg-secondary{% else %}bg-danger{% endif %} fs-5">
@@ -81,6 +123,31 @@
                             </td>
                             <td>
                                 <span class="badge bg-info">{{ team.total_appearances }} times</span>
+                            </td>
+                            <td>
+                                {% if team.roles.passer > 0 %}
+                                <span class="badge bg-primary me-1" title="Passer ({{ team.roles.passer }} times)">
+                                    <i class="fas fa-hand-holding me-1"></i>Passer
+                                </span>
+                                {% endif %}
+                                {% if team.roles.cleanup > 0 %}
+                                <span class="badge bg-success me-1" title="Cleanup ({{ team.roles.cleanup }} times)">
+                                    <i class="fas fa-broom me-1"></i>Cleanup
+                                </span>
+                                {% endif %}
+                                {% if team.roles.played_defense > 0 %}
+                                <span class="badge bg-danger me-1" title="Defense ({{ team.roles.played_defense }} times)">
+                                    <i class="fas fa-shield-alt me-1"></i>Defense
+                                </span>
+                                {% endif %}
+                                {% if team.roles.cycler > 0 %}
+                                <span class="badge bg-info me-1" title="Cycler ({{ team.roles.cycler }} times)">
+                                    <i class="fas fa-sync me-1"></i>Cycler
+                                </span>
+                                {% endif %}
+                                {% if team.roles.passer == 0 and team.roles.cleanup == 0 and team.roles.played_defense == 0 and team.roles.cycler == 0 %}
+                                <span class="text-muted small">No roles assigned</span>
+                                {% endif %}
                             </td>
                             <td>
                                 {% for rating in team.rankings %}
@@ -208,6 +275,100 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// Role filtering functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const filterAll = document.getElementById('filter-all');
+    const roleFilters = document.querySelectorAll('.role-filter');
+    const teamRows = document.querySelectorAll('.team-row');
+    const filteredCount = document.getElementById('filtered-count');
+    
+    // Function to update the display based on selected filters
+    function updateFilter() {
+        const selectedRoles = [];
+        
+        // Check if "All Teams" is selected
+        if (filterAll && filterAll.checked) {
+            // Show all teams
+            teamRows.forEach(function(row) {
+                row.style.display = '';
+            });
+            if (filteredCount) {
+                filteredCount.textContent = teamRows.length + ' teams';
+            }
+            return;
+        }
+        
+        // Get selected role filters
+        roleFilters.forEach(function(filter) {
+            if (filter.checked) {
+                selectedRoles.push(filter.dataset.role);
+            }
+        });
+        
+        // If no roles selected, show all
+        if (selectedRoles.length === 0) {
+            teamRows.forEach(function(row) {
+                row.style.display = '';
+            });
+            if (filteredCount) {
+                filteredCount.textContent = teamRows.length + ' teams';
+            }
+            return;
+        }
+        
+        // Filter teams based on selected roles
+        let visibleCount = 0;
+        teamRows.forEach(function(row) {
+            let hasRole = false;
+            
+            selectedRoles.forEach(function(role) {
+                const roleValue = parseInt(row.dataset[role === 'played_defense' ? 'defense' : role]) || 0;
+                if (roleValue > 0) {
+                    hasRole = true;
+                }
+            });
+            
+            if (hasRole) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        if (filteredCount) {
+            filteredCount.textContent = visibleCount + ' teams';
+        }
+    }
+    
+    // Add event listeners
+    if (filterAll) {
+        filterAll.addEventListener('change', function() {
+            if (this.checked) {
+                // Uncheck all role filters
+                roleFilters.forEach(function(filter) {
+                    filter.checked = false;
+                });
+            }
+            updateFilter();
+        });
+    }
+    
+    roleFilters.forEach(function(filter) {
+        filter.addEventListener('change', function() {
+            if (this.checked && filterAll) {
+                // Uncheck "All Teams" when a specific role is selected
+                filterAll.checked = false;
+            }
+            updateFilter();
+        });
+    });
+    
+    // Initial state
+    updateFilter();
+});
+
 </script>
 
 <style>
