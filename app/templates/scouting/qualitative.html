@@ -238,7 +238,7 @@
 
 .ranking-buttons .btn.active {
     font-weight: bold;
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3) !important;
 }
 
 /* Dark mode styles */
@@ -289,25 +289,38 @@
 /* Ranking button active states for dark mode */
 .dark-mode .ranking-buttons .btn.active {
     font-weight: bold;
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5) !important;
 }
 
 .dark-mode .ranking-buttons .btn-outline-success.active {
-    background-color: #198754;
-    border-color: #198754;
-    color: white;
+    background-color: #198754 !important;
+    border-color: #198754 !important;
+    color: white !important;
 }
 
 .dark-mode .ranking-buttons .btn-outline-primary.active {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
-    color: white;
+    background-color: #0d6efd !important;
+    border-color: #0d6efd !important;
+    color: white !important;
 }
 
 .dark-mode .ranking-buttons .btn-outline-warning.active {
-    background-color: #ffc107;
-    border-color: #ffc107;
-    color: black;
+    background-color: #ffc107 !important;
+    border-color: #ffc107 !important;
+    color: black !important;
+}
+
+/* Make driver/robot rating buttons clearly visible in dark mode when selected */
+.dark-mode .ranking-buttons .btn-outline-secondary.active {
+    background-color: #6c757d !important; /* secondary */
+    border-color: #6c757d !important;
+    color: white !important;
+}
+
+.dark-mode .ranking-buttons .btn-outline-info.active {
+    background-color: #0dcaf0 !important; /* info */
+    border-color: #0dcaf0 !important;
+    color: black !important;
 }
 </style>
 
@@ -497,11 +510,41 @@ document.addEventListener('DOMContentLoaded', function() {
         
         card.innerHTML = '<h5 class="text-' + allianceColor + ' mb-3"><i class="fas fa-user me-2"></i>Team ' + teamNum + '</h5>' +
             '<div class="mb-3">' +
-            '<label class="form-label">Ranking:</label>' +
+            '<label class="form-label">Ranking <span class="text-muted small">(lower is better)</span>:</label>' +
             '<div class="ranking-buttons">' +
             '<button type="button" class="btn btn-sm btn-outline-success ranking-btn" data-team="' + teamNum + '" data-alliance="individual" data-ranking="1">1 - Excellent</button>' +
             '<button type="button" class="btn btn-sm btn-outline-primary ranking-btn" data-team="' + teamNum + '" data-alliance="individual" data-ranking="2">2 - Good</button>' +
             '<button type="button" class="btn btn-sm btn-outline-warning ranking-btn" data-team="' + teamNum + '" data-alliance="individual" data-ranking="3">3 - Average</button>' +
+            '</div>' +
+            '</div>' +
+            '<div class="mb-3">' +
+            '<label class="form-label">Driver Rating <span class="text-muted small">(1-5, higher is better)</span>:</label>' +
+            '<div class="ranking-buttons">' +
+            '<button type="button" class="btn btn-sm btn-outline-secondary driver-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="1">1</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-secondary driver-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="2">2</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-secondary driver-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="3">3</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-secondary driver-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="4">4</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-secondary driver-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="5">5</button>' +
+            '</div>' +
+            '</div>' +
+            '<div class="mb-3">' +
+            '<label class="form-label">Robot Rating <span class="text-muted small">(1-5, higher is better)</span>:</label>' +
+            '<div class="ranking-buttons">' +
+            '<button type="button" class="btn btn-sm btn-outline-info robot-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="1">1</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-info robot-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="2">2</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-info robot-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="3">3</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-info robot-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="4">4</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-info robot-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="5">5</button>' +
+            '</div>' +
+            '</div>' +
+            '<div class="mb-3">' +
+            '<label class="form-label">Overall Rating <span class="text-danger">*</span> <span class="text-muted small">(1-5, higher is better)</span>:</label>' +
+            '<div class="ranking-buttons">' +
+            '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="1">1</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="2">2</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="3">3</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="4">4</button>' +
+            '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn" data-team="' + teamNum + '" data-alliance="individual" data-rating="5">5</button>' +
             '</div>' +
             '</div>' +
             '<div class="mb-3">' +
@@ -536,15 +579,29 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Add event listeners to ranking buttons
         card.querySelectorAll('.ranking-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                // Remove active from siblings
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                // Remove active from siblings and update aria-pressed
                 const siblings = this.parentElement.querySelectorAll('.ranking-btn');
                 siblings.forEach(function(s) {
                     s.classList.remove('active');
+                    s.setAttribute('aria-pressed', 'false');
                 });
-                
+
                 // Add active to clicked button
                 this.classList.add('active');
+                this.setAttribute('aria-pressed', 'true');
+            });
+        });
+        
+        // Add event listeners for driver/robot/overall rating buttons
+        ['.driver-rating-btn', '.robot-rating-btn', '.overall-rating-btn'].forEach(function(cls) {
+            card.querySelectorAll(cls).forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    const siblings = this.parentElement.querySelectorAll(cls);
+                    siblings.forEach(function(s) { s.classList.remove('active'); });
+                    this.classList.add('active');
+                });
             });
         });
     }
@@ -718,11 +775,41 @@ document.addEventListener('DOMContentLoaded', function() {
             
             card.innerHTML = '<h6 class="text-' + colorClass + '">Team ' + teamNum + '</h6>' +
                 '<div class="mb-2">' +
-                '<label class="form-label small">Ranking:</label>' +
+                '<label class="form-label small">Ranking <span class="text-muted small">(lower is better)</span>:</label>' +
                 '<div class="ranking-buttons">' +
                 '<button type="button" class="btn btn-sm btn-outline-success ranking-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-ranking="1">1</button>' +
                 '<button type="button" class="btn btn-sm btn-outline-primary ranking-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-ranking="2">2</button>' +
                 '<button type="button" class="btn btn-sm btn-outline-warning ranking-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-ranking="3">3</button>' +
+                '</div>' +
+                '</div>' +
+                '<div class="mb-2">' +
+                '<label class="form-label small">Driver Rating <span class="text-muted">(1-5, higher is better)</span>:</label>' +
+                '<div class="ranking-buttons">' +
+                '<button type="button" class="btn btn-sm btn-outline-secondary driver-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="1">1</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-secondary driver-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="2">2</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-secondary driver-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="3">3</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-secondary driver-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="4">4</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-secondary driver-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="5">5</button>' +
+                '</div>' +
+                '</div>' +
+                '<div class="mb-2">' +
+                '<label class="form-label small">Robot Rating <span class="text-muted">(1-5, higher is better)</span>:</label>' +
+                '<div class="ranking-buttons">' +
+                '<button type="button" class="btn btn-sm btn-outline-info robot-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="1">1</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-info robot-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="2">2</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-info robot-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="3">3</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-info robot-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="4">4</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-info robot-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="5">5</button>' +
+                '</div>' +
+                '</div>' +
+                '<div class="mb-2">' +
+                '<label class="form-label small">Overall Rating <span class="text-danger">*</span> <span class="text-muted">(1-5, higher is better)</span>:</label>' +
+                '<div class="ranking-buttons">' +
+                '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="1">1</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="2">2</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="3">3</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="4">4</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="5">5</button>' +
                 '</div>' +
                 '</div>' +
                 '<div class="mb-2">' +
@@ -759,18 +846,32 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Add event listeners to ranking buttons
         container.querySelectorAll('.ranking-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
                 const team = this.dataset.team;
                 const alliance = this.dataset.alliance;
                 
-                // Remove active from siblings
+                // Remove active from siblings and update aria-pressed
                 const siblings = this.parentElement.querySelectorAll('.ranking-btn');
                 siblings.forEach(function(s) {
                     s.classList.remove('active');
+                    s.setAttribute('aria-pressed', 'false');
                 });
                 
                 // Add active to clicked button
                 this.classList.add('active');
+                this.setAttribute('aria-pressed', 'true');
+            });
+        });
+        
+        // Add event listeners for driver/robot/overall rating buttons
+        ['.driver-rating-btn', '.robot-rating-btn', '.overall-rating-btn'].forEach(function(cls) {
+            container.querySelectorAll(cls).forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    const siblings = this.parentElement.querySelectorAll(cls);
+                    siblings.forEach(function(s) { s.classList.remove('active'); });
+                    this.classList.add('active');
+                });
             });
         });
     }
@@ -788,6 +889,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (teamData.ranking) {
                     const rankBtn = document.querySelector('.ranking-btn[data-team="' + teamNum + '"][data-alliance="red"][data-ranking="' + teamData.ranking + '"]');
                     if (rankBtn) rankBtn.classList.add('active');
+                }
+                
+                // Set driver rating
+                if (teamData.driver_rating) {
+                    const btn = document.querySelector('.driver-rating-btn[data-team="' + teamNum + '"][data-alliance="red"][data-rating="' + teamData.driver_rating + '"]');
+                    if (btn) btn.classList.add('active');
+                }
+                // Set robot rating
+                if (teamData.robot_rating) {
+                    const btn = document.querySelector('.robot-rating-btn[data-team="' + teamNum + '"][data-alliance="red"][data-rating="' + teamData.robot_rating + '"]');
+                    if (btn) btn.classList.add('active');
+                }
+                // Set overall rating
+                if (teamData.overall_rating) {
+                    const btn = document.querySelector('.overall-rating-btn[data-team="' + teamNum + '"][data-alliance="red"][data-rating="' + teamData.overall_rating + '"]');
+                    if (btn) btn.classList.add('active');
                 }
                 
                 // Set notes
@@ -822,6 +939,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (teamData.ranking) {
                     const rankBtn = document.querySelector('.ranking-btn[data-team="' + teamNum + '"][data-alliance="blue"][data-ranking="' + teamData.ranking + '"]');
                     if (rankBtn) rankBtn.classList.add('active');
+                }
+                
+                // Set driver rating
+                if (teamData.driver_rating) {
+                    const btn = document.querySelector('.driver-rating-btn[data-team="' + teamNum + '"][data-alliance="blue"][data-rating="' + teamData.driver_rating + '"]');
+                    if (btn) btn.classList.add('active');
+                }
+                // Set robot rating
+                if (teamData.robot_rating) {
+                    const btn = document.querySelector('.robot-rating-btn[data-team="' + teamNum + '"][data-alliance="blue"][data-rating="' + teamData.robot_rating + '"]');
+                    if (btn) btn.classList.add('active');
+                }
+                // Set overall rating
+                if (teamData.overall_rating) {
+                    const btn = document.querySelector('.overall-rating-btn[data-team="' + teamNum + '"][data-alliance="blue"][data-rating="' + teamData.overall_rating + '"]');
+                    if (btn) btn.classList.add('active');
                 }
                 
                 // Set notes
@@ -862,6 +995,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const rankBtn = document.querySelector('.ranking-btn[data-alliance="individual"].active');
             const endgameInput = document.querySelector('.team-endgame[data-alliance="individual"]');
             const checkboxes = document.querySelectorAll('.team-checkbox[data-alliance="individual"]');
+            const driverRatingBtn = document.querySelector('.driver-rating-btn[data-alliance="individual"].active');
+            const robotRatingBtn = document.querySelector('.robot-rating-btn[data-alliance="individual"].active');
+            const overallRatingBtn = document.querySelector('.overall-rating-btn[data-alliance="individual"].active');
             
             // Get match info for QR payload
             const indivMatchOpt = indivMatchSelector.options[indivMatchSelector.selectedIndex];
@@ -889,6 +1025,9 @@ document.addEventListener('DOMContentLoaded', function() {
             teamData['team_' + teamNum] = {
                 notes: notes ? notes.value.trim() : '',
                 ranking: rankBtn ? parseInt(rankBtn.dataset.ranking) : null,
+                driver_rating: driverRatingBtn ? parseInt(driverRatingBtn.dataset.rating) : null,
+                robot_rating: robotRatingBtn ? parseInt(robotRatingBtn.dataset.rating) : null,
+                overall_rating: overallRatingBtn ? parseInt(overallRatingBtn.dataset.rating) : null,
                 endgame: endgameInput ? endgameInput.value.trim() : '',
                 passer: roles.passer || false,
                 cleanup: roles.cleanup || false,
@@ -896,9 +1035,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 cycler: roles.cycler || false
             };
 
-            // Require a ranking for individual team entries
-            if (!teamData['team_' + teamNum].ranking) {
-                alert('Please select a ranking (1-3) for the individual team before saving.');
+            // Require an overall rating for individual team entries
+            if (!teamData['team_' + teamNum].overall_rating) {
+                alert('Please select an overall rating (1-5) for the individual team before saving.');
                 return null;
             }
             
@@ -938,6 +1077,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const ranking = rankBtn ? parseInt(rankBtn.dataset.ranking) : null;
             const endgameInput = document.querySelector('.team-endgame[data-team="' + teamNum + '"][data-alliance="red"]');
             const checkboxes = document.querySelectorAll('.team-checkbox[data-team="' + teamNum + '"][data-alliance="red"]');
+            const driverRatingBtn = document.querySelector('.driver-rating-btn[data-team="' + teamNum + '"][data-alliance="red"].active');
+            const robotRatingBtn = document.querySelector('.robot-rating-btn[data-team="' + teamNum + '"][data-alliance="red"].active');
+            const overallRatingBtn = document.querySelector('.overall-rating-btn[data-team="' + teamNum + '"][data-alliance="red"].active');
             
             const roles = {};
             checkboxes.forEach(function(cb) {
@@ -947,6 +1089,9 @@ document.addEventListener('DOMContentLoaded', function() {
             teamData.red['team_' + teamNum] = {
                 notes: notes,
                 ranking: ranking,
+                driver_rating: driverRatingBtn ? parseInt(driverRatingBtn.dataset.rating) : null,
+                robot_rating: robotRatingBtn ? parseInt(robotRatingBtn.dataset.rating) : null,
+                overall_rating: overallRatingBtn ? parseInt(overallRatingBtn.dataset.rating) : null,
                 endgame: endgameInput ? endgameInput.value.trim() : '',
                 passer: roles.passer || false,
                 cleanup: roles.cleanup || false,
@@ -963,6 +1108,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const ranking = rankBtn ? parseInt(rankBtn.dataset.ranking) : null;
             const endgameInput = document.querySelector('.team-endgame[data-team="' + teamNum + '"][data-alliance="blue"]');
             const checkboxes = document.querySelectorAll('.team-checkbox[data-team="' + teamNum + '"][data-alliance="blue"]');
+            const driverRatingBtn = document.querySelector('.driver-rating-btn[data-team="' + teamNum + '"][data-alliance="blue"].active');
+            const robotRatingBtn = document.querySelector('.robot-rating-btn[data-team="' + teamNum + '"][data-alliance="blue"].active');
+            const overallRatingBtn = document.querySelector('.overall-rating-btn[data-team="' + teamNum + '"][data-alliance="blue"].active');
             
             const roles = {};
             checkboxes.forEach(function(cb) {
@@ -972,6 +1120,9 @@ document.addEventListener('DOMContentLoaded', function() {
             teamData.blue['team_' + teamNum] = {
                 notes: notes,
                 ranking: ranking,
+                driver_rating: driverRatingBtn ? parseInt(driverRatingBtn.dataset.rating) : null,
+                robot_rating: robotRatingBtn ? parseInt(robotRatingBtn.dataset.rating) : null,
+                overall_rating: overallRatingBtn ? parseInt(overallRatingBtn.dataset.rating) : null,
                 endgame: endgameInput ? endgameInput.value.trim() : '',
                 passer: roles.passer || false,
                 cleanup: roles.cleanup || false,
@@ -980,20 +1131,20 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         });
         
-        // Require ranking for every team in the selected alliance(s)
+        // Require overall rating for every team in the selected alliance(s)
         const missingRanks = [];
         if (allianceScouted === 'red' || allianceScouted === 'both') {
             Object.keys(teamData.red).forEach(function(k) {
-                if (teamData.red[k].ranking === null || teamData.red[k].ranking === undefined) missingRanks.push(k);
+                if (!teamData.red[k].overall_rating) missingRanks.push(k);
             });
         }
         if (allianceScouted === 'blue' || allianceScouted === 'both') {
             Object.keys(teamData.blue).forEach(function(k) {
-                if (teamData.blue[k].ranking === null || teamData.blue[k].ranking === undefined) missingRanks.push(k);
+                if (!teamData.blue[k].overall_rating) missingRanks.push(k);
             });
         }
         if (missingRanks.length > 0) {
-            alert('Please rank every team in the selected alliance before saving. Missing ranks for: ' + missingRanks.map(function(k){ return k.replace('team_', '') }).join(', '));
+            alert('Please set an overall rating (1-5) for every team in the selected alliance before saving. Missing for: ' + missingRanks.map(function(k){ return k.replace('team_', '') }).join(', '));
             return null;
         }
         

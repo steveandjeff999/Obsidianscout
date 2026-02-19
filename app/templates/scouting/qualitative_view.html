@@ -77,7 +77,7 @@
                                     </div>
                                     <div class="card-body">
                                         <div class="mb-2">
-                                            <strong>Ranking:</strong>
+                                            <strong>Ranking <span class="text-muted small">(lower is better)</span>:</strong>
                                             {% if team_data.get('ranking') is not none %}
                                             <span class="badge {% if team_data.ranking == 1 %}bg-success{% elif team_data.ranking == 2 %}bg-primary{% else %}bg-warning{% endif %}">
                                                 {{ team_data.ranking }}
@@ -86,6 +86,22 @@
                                             <span class="text-muted">Not ranked</span>
                                             {% endif %}
                                         </div>
+                                        {% if team_data.get('driver_rating') or team_data.get('robot_rating') or team_data.get('overall_rating') %}
+                                        <div class="mb-2">
+                                            {% if team_data.get('driver_rating') %}
+                                            <strong>Driver:</strong> <span class="text-muted small">(higher is better)</span>
+                                            <span class="badge {% if team_data.driver_rating >= 4 %}bg-success{% elif team_data.driver_rating >= 3 %}bg-primary{% elif team_data.driver_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %} me-2">{{ team_data.driver_rating }}/5</span>
+                                            {% endif %}
+                                            {% if team_data.get('robot_rating') %}
+                                            <strong>Robot:</strong>
+                                            <span class="badge {% if team_data.robot_rating >= 4 %}bg-success{% elif team_data.robot_rating >= 3 %}bg-primary{% elif team_data.robot_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %} me-2">{{ team_data.robot_rating }}/5</span>
+                                            {% endif %}
+                                            {% if team_data.get('overall_rating') %}
+                                            <strong>Overall:</strong>
+                                            <span class="badge {% if team_data.overall_rating >= 4 %}bg-success{% elif team_data.overall_rating >= 3 %}bg-primary{% elif team_data.overall_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ team_data.overall_rating }}/5</span>
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
                                         {% if team_data.get('passer') or team_data.get('cleanup') or team_data.get('played_defense') or team_data.get('cycler') %}
                                         <div class="mb-2">
                                             <strong>Robot Roles:</strong>
@@ -133,7 +149,7 @@
                                     </div>
                                     <div class="card-body">
                                         <div class="mb-2">
-                                            <strong>Ranking:</strong>
+                                            <strong>Ranking <span class="text-muted small">(lower is better)</span>:</strong>
                                             {% if team_data.get('ranking') is not none %}
                                             <span class="badge {% if team_data.ranking == 1 %}bg-success{% elif team_data.ranking == 2 %}bg-primary{% else %}bg-warning{% endif %}">
                                                 {{ team_data.ranking }}
@@ -142,6 +158,22 @@
                                             <span class="text-muted">Not ranked</span>
                                             {% endif %}
                                         </div>
+                                        {% if team_data.get('driver_rating') or team_data.get('robot_rating') or team_data.get('overall_rating') %}
+                                        <div class="mb-2">
+                                            {% if team_data.get('driver_rating') %}
+                                            <strong>Driver:</strong> <span class="text-muted small">(higher is better)</span>
+                                            <span class="badge {% if team_data.driver_rating >= 4 %}bg-success{% elif team_data.driver_rating >= 3 %}bg-primary{% elif team_data.driver_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %} me-2">{{ team_data.driver_rating }}/5</span>
+                                            {% endif %}
+                                            {% if team_data.get('robot_rating') %}
+                                            <strong>Robot:</strong>
+                                            <span class="badge {% if team_data.robot_rating >= 4 %}bg-success{% elif team_data.robot_rating >= 3 %}bg-primary{% elif team_data.robot_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %} me-2">{{ team_data.robot_rating }}/5</span>
+                                            {% endif %}
+                                            {% if team_data.get('overall_rating') %}
+                                            <strong>Overall:</strong>
+                                            <span class="badge {% if team_data.overall_rating >= 4 %}bg-success{% elif team_data.overall_rating >= 3 %}bg-primary{% elif team_data.overall_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ team_data.overall_rating }}/5</span>
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
                                         {% if team_data.get('passer') or team_data.get('cleanup') or team_data.get('played_defense') or team_data.get('cycler') %}
                                         <div class="mb-2">
                                             <strong>Robot Roles:</strong>
@@ -189,7 +221,7 @@
                                     </div>
                                     <div class="card-body">
                                         <div class="mb-2">
-                                            <strong>Ranking:</strong>
+                                            <strong>Ranking <span class="text-muted small">(lower is better)</span>:</strong>
                                             {% if team_data.get('ranking') is not none %}
                                             <span class="badge {% if team_data.ranking == 1 %}bg-success{% elif team_data.ranking == 2 %}bg-primary{% elif team_data.ranking == 3 %}bg-warning{% else %}bg-secondary{% endif %}">
                                                 {{ team_data.ranking }}
@@ -202,6 +234,22 @@
                                             <span class="text-muted">Not ranked</span>
                                             {% endif %}
                                         </div>
+                                        {% if team_data.get('driver_rating') or team_data.get('robot_rating') or team_data.get('overall_rating') %}
+                                        <div class="mb-2">
+                                            {% if team_data.get('driver_rating') %}
+                                            <strong>Driver:</strong> <span class="text-muted small">(higher is better)</span>
+                                            <span class="badge {% if team_data.driver_rating >= 4 %}bg-success{% elif team_data.driver_rating >= 3 %}bg-primary{% elif team_data.driver_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %} me-2">{{ team_data.driver_rating }}/5</span>
+                                            {% endif %}
+                                            {% if team_data.get('robot_rating') %}
+                                            <strong>Robot:</strong>
+                                            <span class="badge {% if team_data.robot_rating >= 4 %}bg-success{% elif team_data.robot_rating >= 3 %}bg-primary{% elif team_data.robot_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %} me-2">{{ team_data.robot_rating }}/5</span>
+                                            {% endif %}
+                                            {% if team_data.get('overall_rating') %}
+                                            <strong>Overall:</strong>
+                                            <span class="badge {% if team_data.overall_rating >= 4 %}bg-success{% elif team_data.overall_rating >= 3 %}bg-primary{% elif team_data.overall_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ team_data.overall_rating }}/5</span>
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
                                         {% if team_data.get('passer') or team_data.get('cleanup') or team_data.get('played_defense') or team_data.get('cycler') %}
                                         <div class="mb-2">
                                             <strong>Robot Roles:</strong>

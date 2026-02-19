@@ -1765,8 +1765,9 @@ def qualitative_leaderboard():
             team_num = entry.alliance_scouted.replace('team_', '')
             individual_data = data.get('individual', {})
             for team_key, team_data in individual_data.items():
-                if team_data.get('ranking'):
-                    team_rankings[team_num]['rankings'].append(team_data['ranking'])
+                rating = team_data.get('overall_rating') or team_data.get('ranking')
+                if rating:
+                    team_rankings[team_num]['rankings'].append(rating)
                     team_rankings[team_num]['appearances'] += 1
                     if team_data.get('notes'):
                         team_rankings[team_num]['notes'].append(team_data['notes'])
@@ -1785,8 +1786,9 @@ def qualitative_leaderboard():
                 if alliance in data:
                     for team_key, team_data in data[alliance].items():
                         team_num = team_key.replace('team_', '')
-                        if team_data.get('ranking'):
-                            team_rankings[team_num]['rankings'].append(team_data['ranking'])
+                        rating = team_data.get('overall_rating') or team_data.get('ranking')
+                        if rating:
+                            team_rankings[team_num]['rankings'].append(rating)
                             team_rankings[team_num]['appearances'] += 1
                             if team_data.get('notes'):
                                 team_rankings[team_num]['notes'].append(team_data['notes'])
@@ -1814,8 +1816,8 @@ def qualitative_leaderboard():
                 'roles': data['roles']
             })
     
-    # Sort by average ranking (1 is best)
-    leaderboard.sort(key=lambda x: x['average_ranking'])
+    # Sort by average overall rating (5 is best), highest first
+    leaderboard.sort(key=lambda x: x['average_ranking'], reverse=True)
     
     return render_template('scouting/qualitative_leaderboard.html',
                          leaderboard=leaderboard,

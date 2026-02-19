@@ -11,7 +11,7 @@
         <div>
             <h2 class="mb-0">
                 <i class="fas fa-trophy me-2"></i>Qualitative Scouting Leaderboard
-                {{ help.help_icon('Teams ranked by their average qualitative scouting ratings', 'Leaderboard') }}
+                {{ help.help_icon('Teams ranked by their average overall rating (1-5 scale, higher is better)', 'Leaderboard') }}
             </h2>
             <p class="text-muted mb-0">{{ total_teams }} teams ranked</p>
         </div>
@@ -76,10 +76,10 @@
                         <tr>
                             <th style="width: 80px;">Rank</th>
                             <th style="width: 120px;">Team</th>
-                            <th style="width: 150px;">Average Rating</th>
+                            <th style="width: 220px;">Avg Overall Rating <span class="text-muted small">(higher is better)</span></th>
                             <th style="width: 120px;">Appearances</th>
                             <th style="width: 200px;">Roles</th>
-                            <th>All Ratings</th>
+                            <th>Overall Ratings</th>
                             <th style="width: 150px;">Actions</th>
                         </tr>
                     </thead>
@@ -107,10 +107,10 @@
                                 <div class="d-flex align-items-center">
                                     <span class="me-2 fs-5 fw-bold">{{ team.average_ranking }}</span>
                                     <div class="progress flex-grow-1" style="height: 20px;">
-                                        {% set rating_percent = (3 - team.average_ranking) / 2 * 100 %}
+                                        {% set rating_percent = (team.average_ranking - 1) / 4 * 100 %}
                                         <div class="progress-bar 
-                                            {% if team.average_ranking <= 1.5 %}bg-success
-                                            {% elif team.average_ranking <= 2.25 %}bg-primary
+                                            {% if team.average_ranking >= 4.0 %}bg-success
+                                            {% elif team.average_ranking >= 2.5 %}bg-primary
                                             {% else %}bg-warning{% endif %}"
                                             role="progressbar"
                                             style="width: {{ rating_percent }}%"
@@ -152,9 +152,10 @@
                             <td>
                                 {% for rating in team.rankings %}
                                 <span class="badge 
-                                    {% if rating == 1 %}bg-success
-                                    {% elif rating == 2 %}bg-primary
-                                    {% elif rating == 3 %}bg-warning text-dark
+                                    {% if rating == 5 %}bg-success
+                                    {% elif rating == 4 %}bg-primary
+                                    {% elif rating == 3 %}bg-info text-dark
+                                    {% elif rating == 2 %}bg-warning text-dark
                                     {% else %}bg-danger{% endif %} me-1 mb-1">
                                     {{ rating }}
                                 </span>
@@ -176,25 +177,33 @@
     <!-- Legend -->
     <div class="card mt-4">
         <div class="card-body">
-            <h6 class="mb-3"><i class="fas fa-info-circle me-2"></i>Rating Scale</h6>
+            <h6 class="mb-3"><i class="fas fa-info-circle me-2"></i>Overall Rating Scale</h6>
             <div class="row">
-                <div class="col-md-3 mb-2">
-                    <span class="badge bg-success me-2">1</span>
-                    <span>Excellent</span>
+                <div class="col-md-2 mb-2">
+                    <span class="badge bg-success me-2">5</span>
+                    <span>Exceptional</span>
                 </div>
-                <div class="col-md-3 mb-2">
-                    <span class="badge bg-primary me-2">2</span>
+                <div class="col-md-2 mb-2">
+                    <span class="badge bg-primary me-2">4</span>
                     <span>Good</span>
                 </div>
-                <div class="col-md-3 mb-2">
-                    <span class="badge bg-warning text-dark me-2">3</span>
+                <div class="col-md-2 mb-2">
+                    <span class="badge bg-info text-dark me-2">3</span>
                     <span>Average</span>
+                </div>
+                <div class="col-md-2 mb-2">
+                    <span class="badge bg-warning text-dark me-2">2</span>
+                    <span>Below Avg</span>
+                </div>
+                <div class="col-md-2 mb-2">
+                    <span class="badge bg-danger me-2">1</span>
+                    <span>Poor</span>
                 </div>
                 </div>
             </div>
             <p class="text-muted small mb-0 mt-2">
                 <i class="fas fa-lightbulb me-1"></i>
-                Lower average rating is better. Teams are ranked from best (1.0) to worst (3.0).
+                Higher average overall rating is better. Teams are ranked from best (5.0) to lowest (1.0).
             </p>
         </div>
     </div>
