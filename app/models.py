@@ -151,6 +151,9 @@ class ScoutingTeamSettings(db.Model):
     #   'scouted_with_statbotics'  – use scouted data, fill gaps with Statbotics EPA
     #   'statbotics_only'          – use Statbotics EPA exclusively
     epa_source = db.Column(db.String(30), default='scouted_only', nullable=False)
+    # JSON-encoded list of sidebar nav item keys that are hidden for this team.
+    # Example: '["qualitative_scouting", "sponsors", "contact"]'
+    hidden_nav_items = db.Column(db.Text, nullable=True, default='[]')
     locked_by_user_id = db.Column(db.Integer, nullable=True)
     locked_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
@@ -175,6 +178,20 @@ class ScoutingTeamSettings(db.Model):
         status = "LOCKED" if self.account_creation_locked else "UNLOCKED"
         return f'<ScoutingTeamSettings Team {self.scouting_team_number}: {status}>'
     
+    def get_hidden_nav_items(self):
+        """Return set of hidden nav item keys for this team."""
+        try:
+            import json
+            raw = self.hidden_nav_items or '[]'
+            return set(json.loads(raw))
+        except Exception:
+            return set()
+
+    def set_hidden_nav_items(self, items):
+        """Persist a set/list of nav item keys as JSON."""
+        import json
+        self.hidden_nav_items = json.dumps(sorted(set(items)))
+
     @staticmethod
     def get_or_create_for_team(team_number):
         """Get or create settings for a scouting team"""

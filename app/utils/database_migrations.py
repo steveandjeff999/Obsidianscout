@@ -91,6 +91,7 @@ MIGRATIONS = [
     ('scouting_team_settings', 'locked_at', 'DATETIME', None),
     ('scouting_team_settings', 'created_at', 'DATETIME', None),
     ('scouting_team_settings', 'updated_at', 'DATETIME', None),
+    ('scouting_team_settings', 'hidden_nav_items', "TEXT DEFAULT '[]'", None),
     
     # -------------------------------------------------------------------------
     # StrategyDrawing table migrations (default bind)
