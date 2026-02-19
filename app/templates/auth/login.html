@@ -36,6 +36,9 @@
                 {% endif %}
             {% endwith %}
 
+            {# Dynamic error target for WebSocket login failures #}
+            <div id="ws-login-error" class="alert alert-danger d-none" role="alert"></div>
+
             <form method="POST" novalidate class="needs-validation" id="loginForm">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-3">
@@ -90,4 +93,119 @@
 {% block scripts %}
     {{ super() }}
     <script src="{{ url_for('static', filename='js/auth-enhancements.js') }}"></script>
+    <script>
+    (function () {
+        'use strict';
+
+        var form      = document.getElementById('loginForm');
+        var submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+        var errorBox  = document.getElementById('ws-login-error');
+
+        function showError(msg) {
+            if (!errorBox) return;
+            errorBox.textContent = msg;
+            errorBox.classList.remove('d-none');
+        }
+
+        function hideError() {
+            if (!errorBox) return;
+            errorBox.classList.add('d-none');
+            errorBox.textContent = '';
+        }
+
+        function resetButton() {
+            if (!submitBtn) return;
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Sign In';
+        }
+
+        if (!form || !submitBtn || typeof io === 'undefined') {
+            // No socket.io available – fall back silently to regular form POST
+            return;
+        }
+
+        form.addEventListener('submit', function (e) {
+            // Let browser HTML5 validation run first
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+                return;  // let the browser show native validation errors
+            }
+
+            e.preventDefault();
+            hideError();
+
+            var username   = (document.getElementById('username')   || {}).value || '';
+            var teamNumber = (document.getElementById('team_number') || {}).value || '';
+            var password   = (document.getElementById('password')    || {}).value || '';
+            var rememberMe = !!(document.getElementById('remember_me') || {}).checked;
+            var csrfToken  = (form.querySelector('[name="csrf_token"]') || {}).value || '';
+            var nextPage   = new URLSearchParams(window.location.search).get('next') || '';
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Signing in…';
+
+            // Create a dedicated socket for the login exchange so we don’t
+            // interfere with the existing window.socket (if any).
+            var loginSocket;
+            try {
+                loginSocket = io({ transports: ['websocket', 'polling'], reconnection: false });
+            } catch (err) {
+                resetButton();
+                showError('Could not connect to server. Please try again.');
+                return;
+            }
+
+            var done = false;
+
+            function finish(socket) {
+                done = true;
+                try { socket.disconnect(); } catch (ignored) {}
+            }
+
+            // Safety timeout – 30 s
+            var timeoutId = setTimeout(function () {
+                if (!done) {
+                    finish(loginSocket);
+                    resetButton();
+                    showError('Login timed out. Please check your connection and try again.');
+                }
+            }, 30000);
+
+            loginSocket.on('connect', function () {
+                loginSocket.emit('ws_login', {
+                    username:    username,
+                    team_number: teamNumber,
+                    password:    password,
+                    remember_me: rememberMe,
+                    csrf_token:  csrfToken,
+                    next_page:   nextPage
+                });
+            });
+
+            loginSocket.on('ws_login_result', function (result) {
+                clearTimeout(timeoutId);
+                finish(loginSocket);
+                if (result && result.success) {
+                    // Navigate to the HTTP endpoint that sets the session cookie
+                    window.location.href = '/auth/ws-complete-login/' + result.nonce;
+                } else {
+                    resetButton();
+                    showError((result && result.error) || 'Login failed. Please try again.');
+                }
+            });
+
+            loginSocket.on('connect_error', function () {
+                if (done) return;
+                clearTimeout(timeoutId);
+                finish(loginSocket);
+                // Graceful fallback: submit the form the traditional way
+                form.removeEventListener('submit', arguments.callee);
+                resetButton();
+                showError('WebSocket unavailable – falling back to standard login…');
+                setTimeout(function () { form.submit(); }, 800);
+            });
+
+        }, false);
+    })();
+    </script>
 {% endblock %}

@@ -6,11 +6,11 @@ import threading
 class AuditorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Herod Corp - Directory Auditor")
+        self.root.title("Directory Auditor")
         self.root.geometry("400x250")
 
         # Define ignore lists
-        self.ignore_dirs = {'__pycache__', '.git', '.vscode', '.idea', 'configs', 'venv', 'node_modules' }
+        self.ignore_dirs = {'__pycache__', '.git', '.vscode', '.idea', 'configs', 'venv', 'node_modules', 'instance' }
         self.ignore_exts = {
             '.pyc', '.pyo', '.pyd', '.png', '.jpg', '.jpeg', '.gif', '.db', '.log', '.zip', '.tar', '.gz', '.7z',
             '.bmp', '.ico', '.svg', '.mp4', '.mov', '.exe', '.bin', '.obj'

@@ -10,12 +10,17 @@ from app.utils.config_manager import ConfigManager, get_current_game_config, loa
 import threading
 import re
 import traceback
+import hmac
+import secrets
 
 # Initialize extensions
 db = SQLAlchemy()
 migrate = Migrate()
 # SocketIO configuration - will be updated based on server choice in run.py
 socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")
+
+# Pending WebSocket login nonces: {nonce: {user_id, remember_me, redirect_to, expiry}}
+_pending_ws_logins = {}
 login_manager = LoginManager()
 config_manager = ConfigManager()
 
@@ -604,6 +609,94 @@ def on_connect():
             pass
         print(f"Error in socket connect: {e}")
         pass
+
+@socketio.on('ws_login')
+def handle_ws_login(data):
+    """WebSocket-based login handler.
+
+    Validates CSRF token, authenticates the user, stores a short-lived nonce
+    in ``_pending_ws_logins``, and emits a result event.  The client then
+    navigates to ``/auth/ws-complete-login/<nonce>`` which sets the session
+    cookie via a normal HTTP response — keeping credentials off the URL bar.
+    """
+    from flask_socketio import emit as _emit
+    from app.models import User
+    from app.utils.api_utils import safe_int_team_number
+    from flask import url_for
+    from datetime import timedelta
+
+    # --- CSRF validation (timing-safe) ---
+    supplied = (data or {}).get('csrf_token', '')
+    stored   = session.get('csrf_token', '')
+    if not supplied or not stored or not hmac.compare_digest(str(supplied), str(stored)):
+        _emit('ws_login_result', {'success': False, 'error': 'CSRF validation failed. Please refresh and try again.'})
+        return
+    # Rotate the token immediately so the same value cannot be replayed
+    session['csrf_token'] = secrets.token_urlsafe(32)
+
+    username    = ((data or {}).get('username') or '').strip()
+    password    = (data or {}).get('password') or ''
+    team_number = (data or {}).get('team_number')
+    remember_me = bool((data or {}).get('remember_me'))
+    next_page   = (data or {}).get('next_page') or ''
+
+    if not username or not password or not team_number:
+        _emit('ws_login_result', {'success': False, 'error': 'Username, team number, and password are required.'})
+        return
+
+    team_number = safe_int_team_number(str(team_number))
+    if team_number is None:
+        _emit('ws_login_result', {'success': False, 'error': 'Invalid team number.'})
+        return
+
+    user = User.query.filter_by(username=username, scouting_team_number=team_number).first()
+    if user is None or not user.check_password(password):
+        _emit('ws_login_result', {'success': False, 'error': 'Invalid username, password, or team number.'})
+        return
+
+    if not user.is_active:
+        _emit('ws_login_result', {'success': False, 'error': 'Your account has been deactivated. Please contact an administrator.'})
+        return
+
+    # Update last login timestamp
+    try:
+        user.last_login = datetime.now(timezone.utc)
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+    # Determine redirect destination
+    try:
+        from werkzeug.urls import url_parse as _url_parse
+    except ImportError:
+        from urllib.parse import urlparse as _url_parse
+
+    if next_page and _url_parse(next_page).netloc == '':
+        redirect_to = next_page
+    elif user.must_change_password:
+        redirect_to = url_for('auth.change_password')
+    elif not user.has_roles():
+        redirect_to = url_for('auth.select_role')
+    elif user.has_role('scout') and not user.has_role('admin') and not user.has_role('analytics'):
+        redirect_to = url_for('scouting.index')
+    else:
+        redirect_to = url_for('main.index')
+
+    # Store pending login indexed by a single-use random nonce (expires in 60 s)
+    nonce = secrets.token_urlsafe(32)
+    _pending_ws_logins[nonce] = {
+        'user_id':     user.id,
+        'remember_me': remember_me,
+        'redirect_to': redirect_to,
+        'expiry':      datetime.now(timezone.utc) + timedelta(seconds=60),
+        'username':    user.username,
+    }
+
+    _emit('ws_login_result', {'success': True, 'nonce': nonce})
+
 
 # Flask route to delete chat history (admin only)
 def register_chat_history_routes(app):

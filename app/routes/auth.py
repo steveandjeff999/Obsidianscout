@@ -23,8 +23,23 @@ from app.utils.emailer import send_email as send_email_util
 from app.utils import emailer as emailer_util
 from app.utils import token_utils as token_util
 import json
- 
+import hmac
+import secrets
+
+
 def validate_csrf_token():
+    """Validate the anti-CSRF token from the request.
+
+    Accepts the token from (in priority order):
+    - A ``csrf_token`` form field
+    - A ``csrf_token`` key inside a JSON body
+    - An ``X-CSRFToken`` request header
+
+    Uses :func:`hmac.compare_digest` for timing-safe comparison so the check
+    cannot be bypassed via a timing side-channel attack.  On successful
+    validation the session token is rotated so that the same value cannot be
+    replayed in a subsequent request.
+    """
     token = request.form.get('csrf_token')
     if not token and request.is_json:
         data = request.get_json()
@@ -33,10 +48,13 @@ def validate_csrf_token():
     if not token:
         token = request.headers.get('X-CSRFToken')
 
-    if not token or token != session.get('csrf_token'):
+    stored = session.get('csrf_token', '')
+    if not token or not stored or not hmac.compare_digest(str(token), str(stored)):
         if not request.is_json and request.headers.get('X-Requested-With') != 'XMLHttpRequest':
             flash('CSRF validation failed. Please try again.', 'error')
         return False
+    # Rotate the token so it cannot be replayed
+    session['csrf_token'] = secrets.token_urlsafe(32)
     return True
 
 def get_theme_context():
@@ -1785,6 +1803,42 @@ def epa_source_status():
     ).first()
     source = getattr(team_settings, 'epa_source', 'scouted_only') if team_settings else 'scouted_only'
     return jsonify({'epa_source': source or 'scouted_only'})
+
+
+@bp.route('/ws-complete-login/<nonce>')
+def ws_complete_login(nonce):
+    """Complete a WebSocket-initiated login by consuming a single-use nonce.
+
+    The ``ws_login`` SocketIO handler validates credentials and stores an
+    authenticated user record under a random nonce.  The client navigates here
+    to exchange the nonce for a proper session cookie — keeping credentials
+    out of the URL entirely.
+    """
+    from app import _pending_ws_logins
+    from datetime import datetime, timezone as _tz
+
+    pending = _pending_ws_logins.pop(nonce, None)
+    if pending is None:
+        flash('Login link is invalid or has already been used.', 'error')
+        return redirect(url_for('auth.login'))
+
+    if datetime.now(_tz.utc) > pending['expiry']:
+        flash('Login link expired. Please sign in again.', 'error')
+        return redirect(url_for('auth.login'))
+
+    user = User.query.get(pending['user_id'])
+    if user is None or not user.is_active:
+        flash('Account not found or deactivated.', 'error')
+        return redirect(url_for('auth.login'))
+
+    login_user(user, remember=pending.get('remember_me', False))
+
+    if pending.get('redirect_to') == url_for('auth.change_password'):
+        flash('You must change your password before continuing.', 'warning')
+    else:
+        flash(f"Welcome back, {user.username}!", 'success')
+
+    return redirect(pending.get('redirect_to') or url_for('main.index'))
 
 
 # Context processor to make current_user and role functions available in templates
