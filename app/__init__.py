@@ -1102,6 +1102,21 @@ def create_app(test_config=None, use_postgres=False):
             pass
         return {'liquid_glass_buttons_enabled': False, 'spinning_counters_enabled': False}
 
+    # Inject hidden sidebar nav items so base.html can conditionally skip them.
+    @app.context_processor
+    def inject_hidden_nav_items():
+        try:
+            from flask_login import current_user
+            if current_user and current_user.is_authenticated:
+                from app.models import ScoutingTeamSettings
+                team_settings = ScoutingTeamSettings.query.filter_by(
+                    scouting_team_number=current_user.scouting_team_number).first()
+                hidden = team_settings.get_hidden_nav_items() if team_settings else set()
+                return {'hidden_nav_items': hidden}
+        except Exception:
+            pass
+        return {'hidden_nav_items': set()}
+
     # Register chat history routes
     register_chat_history_routes(app)
 

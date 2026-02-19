@@ -1674,6 +1674,48 @@ def toggle_account_lock():
 
 
 # -------------------------------------------------------------------------
+# Navigation Visibility Settings
+# -------------------------------------------------------------------------
+
+@bp.route('/admin/save-nav-visibility', methods=['POST'])
+@admin_required
+def save_nav_visibility():
+    """Save which sidebar nav items are hidden for the admin's scouting team."""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.admin_settings'))
+
+    from app.models import ScoutingTeamSettings
+
+    team_settings = ScoutingTeamSettings.query.filter_by(
+        scouting_team_number=current_user.scouting_team_number).first()
+    if not team_settings:
+        team_settings = ScoutingTeamSettings(scouting_team_number=current_user.scouting_team_number)
+        db.session.add(team_settings)
+
+    # All known nav item keys
+    ALL_NAV_KEYS = [
+        'dashboard', 'scouting_dashboard', 'start_scouting', 'qualitative_scouting',
+        'pit_scouting', 'scouting_alliances_nav', 'all_data', 'text_elements',
+        'teams', 'team_rankings', 'matches', 'alliance_selection', 'graphs',
+        'comparison', 'config_averages', 'custom_pages', 'strategy', 'strategy_all',
+        'strategy_draw', 'strategy_live', 'my_graph_shares', 'my_ranking_shares',
+        'trends', 'data', 'simulations',
+        'users', 'chat', 'assistant', 'notifications_nav', 'sponsors', 'contact',
+        'scout_leaderboard', 'documentation', 'setup_tutorial',
+    ]
+
+    # Items that are NOT checked are hidden; items that ARE checked stay visible
+    visible = set(request.form.getlist('visible_nav_items'))
+    hidden = set(k for k in ALL_NAV_KEYS if k not in visible)
+    team_settings.set_hidden_nav_items(hidden)
+    team_settings.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    flash('Navigation visibility updated.', 'success')
+    return redirect(url_for('auth.admin_settings') + '#tab-navigation')
+
+
+# -------------------------------------------------------------------------
 # EPA Data Source Settings
 # -------------------------------------------------------------------------
 

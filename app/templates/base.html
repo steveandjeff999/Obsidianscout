@@ -1167,15 +1167,15 @@
                 </button>
                 <div class="nav-group-items" id="group-core-items">
                 {% if not (user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics')) %}
-                <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}"><i class="fas fa-home"></i><span>Dashboard</span></a>
+                {% if 'dashboard' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}"><i class="fas fa-home"></i><span>Dashboard</span></a>{% endif %}
                 {% endif %}
-                <a class="nav-link {% if request.endpoint == 'scouting.index' %}active{% endif %}" href="{{ url_for('scouting.index') }}"><i class="fas fa-clipboard"></i><span>Scouting Dashboard</span></a>
-                <a class="nav-link {% if request.endpoint == 'scouting.scouting_form' %}active{% endif %}" href="{{ url_for('scouting.scouting_form') }}"><i class="fas fa-rocket"></i><span>Start Scouting</span></a>
-                <a class="nav-link {% if request.endpoint == 'scouting.qualitative_scouting' %}active{% endif %}" href="{{ url_for('scouting.qualitative_scouting') }}"><i class="fas fa-star"></i><span>Qualitative Scouting</span></a>
-                <a class="nav-link {% if request.endpoint == 'pit_scouting.index' %}active{% endif %}" href="{{ url_for('pit_scouting.index') }}"><i class="fas fa-wrench"></i><span>Pit Scouting</span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('scouting_alliances') %}active{% endif %}" href="{{ url_for('scouting_alliances.dashboard') }}"><i class="fas fa-users"></i><span>Scouting Alliances</span></a>
-                <a class="nav-link {% if request.endpoint == 'scouting.list_data' %}active{% endif %}" href="{{ url_for('scouting.list_data') }}"><i class="fas fa-list"></i><span>All Data</span></a>
-                <a class="nav-link {% if request.endpoint == 'scouting.view_text_elements' %}active{% endif %}" href="{{ url_for('scouting.view_text_elements') }}"><i class="fas fa-comment-alt"></i><span>Text Elements</span></a>
+                {% if 'scouting_dashboard' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.index' %}active{% endif %}" href="{{ url_for('scouting.index') }}"><i class="fas fa-clipboard"></i><span>Scouting Dashboard</span></a>{% endif %}
+                {% if 'start_scouting' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.scouting_form' %}active{% endif %}" href="{{ url_for('scouting.scouting_form') }}"><i class="fas fa-rocket"></i><span>Start Scouting</span></a>{% endif %}
+                {% if 'qualitative_scouting' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.qualitative_scouting' %}active{% endif %}" href="{{ url_for('scouting.qualitative_scouting') }}"><i class="fas fa-star"></i><span>Qualitative Scouting</span></a>{% endif %}
+                {% if 'pit_scouting' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'pit_scouting.index' %}active{% endif %}" href="{{ url_for('pit_scouting.index') }}"><i class="fas fa-wrench"></i><span>Pit Scouting</span></a>{% endif %}
+                {% if 'scouting_alliances_nav' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('scouting_alliances') %}active{% endif %}" href="{{ url_for('scouting_alliances.dashboard') }}"><i class="fas fa-users"></i><span>Scouting Alliances</span></a>{% endif %}
+                {% if 'all_data' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.list_data' %}active{% endif %}" href="{{ url_for('scouting.list_data') }}"><i class="fas fa-list"></i><span>All Data</span></a>{% endif %}
+                {% if 'text_elements' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.view_text_elements' %}active{% endif %}" href="{{ url_for('scouting.view_text_elements') }}"><i class="fas fa-comment-alt"></i><span>Text Elements</span></a>{% endif %}
                 </div>
             </div>
             {% if user_has_role('admin') or user_has_role('analytics') %}
@@ -1184,25 +1184,25 @@
                     Analytics <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
                 </button>
                 <div class="nav-group-items" id="group-analytics-items">
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('teams') and not (request.endpoint == 'teams.ranks' or request.endpoint == 'teams.my_ranks_shares') %}active{% endif %}" href="{{ url_for('teams.index') }}"><i class="fas fa-users"></i><span>Teams</span></a>
-                <a class="nav-link {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}"><i class="fas fa-list-ol"></i><span>Team Rankings</span></a>
-                <a class="nav-link {% if request.endpoint == 'matches.index' %}active{% endif %}" href="{{ url_for('matches.index') }}"><i class="fas fa-gamepad"></i><span>Matches</span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" href="{{ url_for('alliances.index') }}"><i class="fas fa-handshake"></i><span>Alliance Selection</span></a>
+                {% if 'teams' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('teams') and not (request.endpoint == 'teams.ranks' or request.endpoint == 'teams.my_ranks_shares') %}active{% endif %}" href="{{ url_for('teams.index') }}"><i class="fas fa-users"></i><span>Teams</span></a>{% endif %}
+                {% if 'team_rankings' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}"><i class="fas fa-list-ol"></i><span>Team Rankings</span></a>{% endif %}
+                {% if 'matches' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.index' %}active{% endif %}" href="{{ url_for('matches.index') }}"><i class="fas fa-gamepad"></i><span>Matches</span></a>{% endif %}
+                {% if 'alliance_selection' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" href="{{ url_for('alliances.index') }}"><i class="fas fa-handshake"></i><span>Alliance Selection</span></a>{% endif %}
                 {# Main graphs link: treat as active for top-level graphs pages, but exclude side-by-side, custom pages, scout leaderboard, and my-shares which have their own nav items #}
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') and not (request.endpoint.startswith('graphs.side_by_side') or request.endpoint.startswith('graphs.pages') or request.endpoint == 'graphs.my_shares' or request.endpoint == 'graphs.scout_leaderboard') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Graphs</span></a>
+                {% if 'graphs' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') and not (request.endpoint.startswith('graphs.side_by_side') or request.endpoint.startswith('graphs.pages') or request.endpoint == 'graphs.my_shares' or request.endpoint == 'graphs.scout_leaderboard') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Graphs</span></a>{% endif %}
                 {# Comparison (side-by-side) link: match the actual endpoint name using underscore #}
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.side_by_side') %}active{% endif %}" href="{{ url_for('graphs.side_by_side') }}"><i class="fas fa-columns"></i><span>Comparison</span></a>
-                <a class="nav-link {% if request.endpoint == 'main.analytics_config_averages' %}active{% endif %}" href="{{ url_for('main.analytics_config_averages') }}"><i class="fas fa-calculator"></i><span>Config Averages</span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.pages') %}active{% endif %}" href="{{ url_for('graphs.pages_index') }}"><i class="fas fa-file-alt"></i><span>Custom Pages</span></a>
-                <a class="nav-link {% if request.endpoint == 'matches.strategy' %}active{% endif %}" href="{{ url_for('matches.strategy') }}"><i class="fas fa-chess"></i><span>Strategy</span></a>
-                <a class="nav-link {% if request.endpoint == 'matches.strategy_all' %}active{% endif %}" href="{{ url_for('matches.strategy_all') }}"><i class="fas fa-th-large"></i><span>Strategy — All Matches</span></a>
-                <a class="nav-link {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}" href="{{ url_for('matches.strategy_draw') }}"><i class="fas fa-pen-ruler"></i><span>Strategy Draw</span></a>
-                <a class="nav-link {% if request.endpoint == 'matches.strategy_live' %}active{% endif %}" href="{{ url_for('matches.strategy_live') }}"><i class="fas fa-broadcast-tower"></i><span>Live Strategy</span></a>
-                <a class="nav-link {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}" href="{{ url_for('graphs.my_shares') }}"><i class="fas fa-share-alt"></i><span>My Graph Shares</span></a>
-                    <a class="nav-link {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}" href="{{ url_for('teams.my_ranks_shares') }}"><i class="fas fa-trophy"></i><span>My Ranking Shares</span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('team_trends') %}active{% endif %}" href="{{ url_for('team_trends.index') }}"><i class="fas fa-chart-line"></i><span>Trends</span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" href="{{ url_for('data.index') }}"><i class="fas fa-database"></i><span>Data</span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('simulations') %}active{% endif %}" href="{{ url_for('simulations.index') }}"><i class="fas fa-dice"></i><span>Simulations</span></a>
+                {% if 'comparison' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.side_by_side') %}active{% endif %}" href="{{ url_for('graphs.side_by_side') }}"><i class="fas fa-columns"></i><span>Comparison</span></a>{% endif %}
+                {% if 'config_averages' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.analytics_config_averages' %}active{% endif %}" href="{{ url_for('main.analytics_config_averages') }}"><i class="fas fa-calculator"></i><span>Config Averages</span></a>{% endif %}
+                {% if 'custom_pages' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.pages') %}active{% endif %}" href="{{ url_for('graphs.pages_index') }}"><i class="fas fa-file-alt"></i><span>Custom Pages</span></a>{% endif %}
+                {% if 'strategy' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy' %}active{% endif %}" href="{{ url_for('matches.strategy') }}"><i class="fas fa-chess"></i><span>Strategy</span></a>{% endif %}
+                {% if 'strategy_all' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_all' %}active{% endif %}" href="{{ url_for('matches.strategy_all') }}"><i class="fas fa-th-large"></i><span>Strategy — All Matches</span></a>{% endif %}
+                {% if 'strategy_draw' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}" href="{{ url_for('matches.strategy_draw') }}"><i class="fas fa-pen-ruler"></i><span>Strategy Draw</span></a>{% endif %}
+                {% if 'strategy_live' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_live' %}active{% endif %}" href="{{ url_for('matches.strategy_live') }}"><i class="fas fa-broadcast-tower"></i><span>Live Strategy</span></a>{% endif %}
+                {% if 'my_graph_shares' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}" href="{{ url_for('graphs.my_shares') }}"><i class="fas fa-share-alt"></i><span>My Graph Shares</span></a>{% endif %}
+                {% if 'my_ranking_shares' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}" href="{{ url_for('teams.my_ranks_shares') }}"><i class="fas fa-trophy"></i><span>My Ranking Shares</span></a>{% endif %}
+                {% if 'trends' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('team_trends') %}active{% endif %}" href="{{ url_for('team_trends.index') }}"><i class="fas fa-chart-line"></i><span>Trends</span></a>{% endif %}
+                {% if 'data' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" href="{{ url_for('data.index') }}"><i class="fas fa-database"></i><span>Data</span></a>{% endif %}
+                {% if 'simulations' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('simulations') %}active{% endif %}" href="{{ url_for('simulations.index') }}"><i class="fas fa-dice"></i><span>Simulations</span></a>{% endif %}
                 </div>
             </div>
             {% endif %}
@@ -1211,13 +1211,13 @@
                     Community <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
                 </button>
                 <div class="nav-group-items" id="group-community-items">
-                <a class="nav-link {% if request.endpoint == 'main.users_page' %}active{% endif %}" href="{{ url_for('main.users_page') }}"><i class="fas fa-users"></i><span>Users</span></a>
-                <a class="nav-link {% if request.endpoint == 'main.chat_page' %}active{% endif %}" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments"></i><span>Chat <span id="chatUnreadBadge" class="badge bg-danger ms-1 initially-hidden badge-small">0</span></span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('assistant') %}active{% endif %}" href="{{ url_for('assistant.index') }}"><i class="fas fa-robot"></i><span>Assistant</span></a>
-                <a class="nav-link {% if request.endpoint == 'notifications.index' %}active{% endif %}" href="{{ url_for('notifications.index') }}"><i class="fas fa-bell"></i><span>Notifications</span></a>
-                <a class="nav-link {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}"><i class="fas fa-handshake"></i><span>Sponsors</span></a>
-                <a class="nav-link {% if request.endpoint == 'main.contact' %}active{% endif %}" href="{{ url_for('main.contact') }}"><i class="fas fa-envelope"></i><span>Contact</span></a>
-                <a class="nav-link {% if request.endpoint == 'graphs.scout_leaderboard' %}active{% endif %}" href="{{ url_for('graphs.scout_leaderboard') }}"><i class="fas fa-medal"></i><span>Scout Leaderboard</span></a>
+                {% if 'users' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.users_page' %}active{% endif %}" href="{{ url_for('main.users_page') }}"><i class="fas fa-users"></i><span>Users</span></a>{% endif %}
+                {% if 'chat' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.chat_page' %}active{% endif %}" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments"></i><span>Chat <span id="chatUnreadBadge" class="badge bg-danger ms-1 initially-hidden badge-small">0</span></span></a>{% endif %}
+                {% if 'assistant' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('assistant') %}active{% endif %}" href="{{ url_for('assistant.index') }}"><i class="fas fa-robot"></i><span>Assistant</span></a>{% endif %}
+                {% if 'notifications_nav' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'notifications.index' %}active{% endif %}" href="{{ url_for('notifications.index') }}"><i class="fas fa-bell"></i><span>Notifications</span></a>{% endif %}
+                {% if 'sponsors' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}"><i class="fas fa-handshake"></i><span>Sponsors</span></a>{% endif %}
+                {% if 'contact' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.contact' %}active{% endif %}" href="{{ url_for('main.contact') }}"><i class="fas fa-envelope"></i><span>Contact</span></a>{% endif %}
+                {% if 'scout_leaderboard' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'graphs.scout_leaderboard' %}active{% endif %}" href="{{ url_for('graphs.scout_leaderboard') }}"><i class="fas fa-medal"></i><span>Scout Leaderboard</span></a>{% endif %}
                 </div>
             </div>
             <div class="nav-group" id="group-help">
@@ -1225,8 +1225,8 @@
                     Help <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
                 </button>
                 <div class="nav-group-items" id="group-help-items">
-                <a class="nav-link {% if request.endpoint == 'main.help_page' %}active{% endif %}" href="{{ url_for('main.help_page') }}"><i class="fas fa-book"></i><span>Documentation</span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('setup') %}active{% endif %}" href="{{ url_for('setup.index') }}"><i class="fas fa-graduation-cap"></i><span>Setup & Tutorial</span></a>
+                {% if 'documentation' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.help_page' %}active{% endif %}" href="{{ url_for('main.help_page') }}"><i class="fas fa-book"></i><span>Documentation</span></a>{% endif %}
+                {% if 'setup_tutorial' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('setup') %}active{% endif %}" href="{{ url_for('setup.index') }}"><i class="fas fa-graduation-cap"></i><span>Setup & Tutorial</span></a>{% endif %}
                 </div>
             </div>
             {% endif %}

@@ -60,6 +60,9 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="tab-data" data-bs-toggle="tab" data-bs-target="#pane-data" type="button" role="tab" aria-controls="pane-data" aria-selected="false">Data &amp; maintenance</button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tab-navigation" data-bs-toggle="tab" data-bs-target="#pane-navigation" type="button" role="tab" aria-controls="pane-navigation" aria-selected="false">Navigation</button>
+                </li>
             </ul>
 
             <div class="tab-content mt-3" id="adminSettingsTabsContent">
@@ -162,6 +165,79 @@
                             </div>
                         </div>
                     </div>
+                </div>
+
+                {# ---- Navigation Visibility pane ---- #}
+                <div class="tab-pane fade" id="pane-navigation" role="tabpanel" aria-labelledby="tab-navigation">
+                    <p class="text-muted mb-3">
+                        <i class="fas fa-eye-slash me-1"></i>
+                        Check items to <strong>show</strong> them in the sidebar. Uncheck to hide them from all users on your team. The Admin Settings button and core auth links are always visible.
+                    </p>
+                    <form method="POST" action="{{ url_for('auth.save_nav_visibility') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        {% set hni = scouting_team_settings.get_hidden_nav_items() if scouting_team_settings else set() %}
+                        {% macro nav_toggle(key, label, icon) %}
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="visible_nav_items" value="{{ key }}" id="nav_{{ key }}"
+                                {% if key not in hni %}checked{% endif %}>
+                            <label class="form-check-label" for="nav_{{ key }}">
+                                <i class="{{ icon }} me-1 text-muted" style="width:1.1em;text-align:center;"></i>{{ label }}
+                            </label>
+                        </div>
+                        {% endmacro %}
+
+                        <div class="row">
+                            <div class="col-lg-3 col-md-6 mb-4">
+                                <h6 class="text-uppercase text-muted small fw-bold mb-3"><i class="fas fa-layer-group me-1"></i>Core</h6>
+                                {{ nav_toggle('dashboard', 'Dashboard', 'fas fa-home') }}
+                                {{ nav_toggle('scouting_dashboard', 'Scouting Dashboard', 'fas fa-clipboard') }}
+                                {{ nav_toggle('start_scouting', 'Start Scouting', 'fas fa-rocket') }}
+                                {{ nav_toggle('qualitative_scouting', 'Qualitative Scouting', 'fas fa-star') }}
+                                {{ nav_toggle('pit_scouting', 'Pit Scouting', 'fas fa-wrench') }}
+                                {{ nav_toggle('scouting_alliances_nav', 'Scouting Alliances', 'fas fa-users') }}
+                                {{ nav_toggle('all_data', 'All Data', 'fas fa-list') }}
+                                {{ nav_toggle('text_elements', 'Text Elements', 'fas fa-comment-alt') }}
+                            </div>
+                            <div class="col-lg-3 col-md-6 mb-4">
+                                <h6 class="text-uppercase text-muted small fw-bold mb-3"><i class="fas fa-chart-bar me-1"></i>Analytics</h6>
+                                {{ nav_toggle('teams', 'Teams', 'fas fa-users') }}
+                                {{ nav_toggle('team_rankings', 'Team Rankings', 'fas fa-list-ol') }}
+                                {{ nav_toggle('matches', 'Matches', 'fas fa-gamepad') }}
+                                {{ nav_toggle('alliance_selection', 'Alliance Selection', 'fas fa-handshake') }}
+                                {{ nav_toggle('graphs', 'Graphs', 'fas fa-chart-line') }}
+                                {{ nav_toggle('comparison', 'Comparison', 'fas fa-columns') }}
+                                {{ nav_toggle('config_averages', 'Config Averages', 'fas fa-calculator') }}
+                                {{ nav_toggle('custom_pages', 'Custom Pages', 'fas fa-file-alt') }}
+                                {{ nav_toggle('strategy', 'Strategy', 'fas fa-chess') }}
+                                {{ nav_toggle('strategy_all', 'Strategy — All Matches', 'fas fa-th-large') }}
+                                {{ nav_toggle('strategy_draw', 'Strategy Draw', 'fas fa-pen-ruler') }}
+                                {{ nav_toggle('strategy_live', 'Live Strategy', 'fas fa-broadcast-tower') }}
+                                {{ nav_toggle('my_graph_shares', 'My Graph Shares', 'fas fa-share-alt') }}
+                                {{ nav_toggle('my_ranking_shares', 'My Ranking Shares', 'fas fa-trophy') }}
+                                {{ nav_toggle('trends', 'Trends', 'fas fa-chart-line') }}
+                                {{ nav_toggle('data', 'Data', 'fas fa-database') }}
+                                {{ nav_toggle('simulations', 'Simulations', 'fas fa-dice') }}
+                            </div>
+                            <div class="col-lg-3 col-md-6 mb-4">
+                                <h6 class="text-uppercase text-muted small fw-bold mb-3"><i class="fas fa-globe me-1"></i>Community</h6>
+                                {{ nav_toggle('users', 'Users', 'fas fa-users') }}
+                                {{ nav_toggle('chat', 'Chat', 'fas fa-comments') }}
+                                {{ nav_toggle('assistant', 'Assistant', 'fas fa-robot') }}
+                                {{ nav_toggle('notifications_nav', 'Notifications', 'fas fa-bell') }}
+                                {{ nav_toggle('sponsors', 'Sponsors', 'fas fa-handshake') }}
+                                {{ nav_toggle('contact', 'Contact', 'fas fa-envelope') }}
+                                {{ nav_toggle('scout_leaderboard', 'Scout Leaderboard', 'fas fa-medal') }}
+                            </div>
+                            <div class="col-lg-3 col-md-6 mb-4">
+                                <h6 class="text-uppercase text-muted small fw-bold mb-3"><i class="fas fa-question-circle me-1"></i>Help</h6>
+                                {{ nav_toggle('documentation', 'Documentation', 'fas fa-book') }}
+                                {{ nav_toggle('setup_tutorial', 'Setup &amp; Tutorial', 'fas fa-graduation-cap') }}
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Save Navigation Settings</button>
+                        <a href="{{ url_for('auth.admin_settings') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+                    </form>
                 </div>
             </div>
         </div>
@@ -461,11 +537,21 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const storageKey = 'adminSettingsActiveTab';
-    // restore saved tab (if present)
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-        const btn = document.getElementById(saved);
-        if (btn && typeof btn.click === 'function') btn.click();
+    // Check URL fragment first (e.g. redirect after form save)
+    const hash = window.location.hash;  // e.g. '#tab-navigation'
+    let activated = false;
+    if (hash) {
+        const btn = document.querySelector('#adminSettingsTabs button[data-bs-target="' + hash.replace('#tab-', '#pane-') + '"]')
+                 || document.getElementById(hash.replace('#', ''));
+        if (btn && typeof btn.click === 'function') { btn.click(); activated = true; }
+    }
+    // Fall back to saved tab
+    if (!activated) {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+            const btn = document.getElementById(saved);
+            if (btn && typeof btn.click === 'function') btn.click();
+        }
     }
 
     // persist tab selection
