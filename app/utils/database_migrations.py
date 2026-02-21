@@ -40,6 +40,7 @@ MIGRATIONS = [
     # -------------------------------------------------------------------------
     ('event', 'timezone', 'VARCHAR(50)', None),
     ('event', 'schedule_offset', 'INTEGER', None),
+    ('event', 'offset_updated_at', 'DATETIME', None),
     ('event', 'code', 'VARCHAR(20)', None),
     ('event', 'scouting_team_number', 'INTEGER', None),
     
@@ -280,11 +281,37 @@ def get_table_columns(engine, table_name):
 
 
 def add_column(engine, table_name, column_name, column_sql):
-    """Add a column to a table if it doesn't exist."""
+    """Add a column to a table if it doesn't exist.
+
+    The MIGRATIONS list stores SQL fragments that are valid for SQLite (the
+    original target), but various other dialects have slightly different
+    syntax or type names.  PostgreSQL in particular does not understand the
+    ``DATETIME`` pseudo-type we frequently use, so attempts to add an
+    ``OFFSET_UPDATED_AT DATETIME`` column will fail with "type \"datetime\"
+    does not exist" and the migration will quietly be skipped.  That is what
+    caused the ``UndefinedColumn`` error seen when querying ``Event``.
+
+    To make migrations portable across engines we canonicalize the column_sql
+    based on ``engine.dialect.name`` before executing the ALTER statement.
+    """
+    # dialect-specific type tweaks
+    col_sql = column_sql
+    dialect = getattr(engine.dialect, 'name', '').lower()
+    if 'postgres' in dialect:
+        # PostgreSQL prefers TIMESTAMP instead of DATETIME
+        col_sql = col_sql.replace('DATETIME', 'TIMESTAMP')
+        # Boolean default values must use TRUE/FALSE
+        col_sql = col_sql.replace('BOOLEAN DEFAULT 0', 'BOOLEAN DEFAULT FALSE')
+        col_sql = col_sql.replace('BOOLEAN DEFAULT 1', 'BOOLEAN DEFAULT TRUE')
+    elif 'sqlite' in dialect:
+        # SQLite tolerates the original SQL verbatim
+        pass
+    # other dialects could be handled here in future
+
     try:
         with engine.connect() as conn:
-            # Use proper SQLite syntax for ALTER TABLE
-            sql = f'ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}'
+            # generic ALTER TABLE syntax works on SQLite, Postgres, MySQL, etc.
+            sql = f'ALTER TABLE {table_name} ADD COLUMN {column_name} {col_sql}'
             conn.execute(text(sql))
             conn.commit()
         return True
@@ -293,6 +320,9 @@ def add_column(engine, table_name, column_name, column_sql):
         error_msg = str(e).lower()
         if 'duplicate column' in error_msg or 'already exists' in error_msg:
             return True  # Column exists, that's fine
+        # If PostgreSQL complained about unknown type we already logged when
+        # the migration was attempted earlier; they will be retried once the
+        # SQL is corrected.
         print(f"  Warning: Could not add column {column_name} to {table_name}: {e}")
         return False
 

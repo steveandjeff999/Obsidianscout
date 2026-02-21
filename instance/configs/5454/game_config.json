@@ -1,10 +1,10 @@
 {
   "game_name": "REBUILT\u2122\u202fpresented by Haas",
-  "season": 2025,
+  "season": 2026,
   "version": "1.0.0",
   "alliance_size": 3,
   "scouting_stations": 6,
-  "current_event_code": "OKOK",
+  "current_event_code": "WEEK0",
   "match_types": [
     "Practice",
     "Qualification",

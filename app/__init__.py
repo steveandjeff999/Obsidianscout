@@ -1724,7 +1724,15 @@ def create_app(test_config=None, use_postgres=False):
         app.logger.info(" EPA refresh scheduler started")
     except Exception as e:
         app.logger.error(f" Failed to start EPA refresh scheduler: {e}")
-    
+
+    # Start schedule-offset refresh scheduler (updates every 15 min)
+    try:
+        from app.utils.schedule_offset_scheduler import start_schedule_offset_scheduler
+        start_schedule_offset_scheduler(app)
+        app.logger.info(" Schedule offset scheduler started")
+    except Exception as e:
+        app.logger.error(f" Failed to start schedule offset scheduler: {e}")
+
     # Initialize API key system
     try:
         from app.utils.api_init import init_api_system

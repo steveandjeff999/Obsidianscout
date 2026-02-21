@@ -488,6 +488,7 @@ class Event(db.Model):
     year = db.Column(db.Integer, nullable=False)
     scouting_team_number = db.Column(db.Integer, nullable=True)
     schedule_offset = db.Column(db.Integer, nullable=True)  # Current schedule offset in minutes (positive = behind, negative = ahead)
+    offset_updated_at = db.Column(db.DateTime, nullable=True)  # When schedule_offset was last computed
     matches = db.relationship('Match', backref='event', lazy=True, cascade='all, delete-orphan')
     
     def __repr__(self):
@@ -2080,12 +2081,34 @@ class TeamAllianceStatus(db.Model):
     
     @classmethod
     def get_active_alliance_for_team(cls, team_number):
-        """Get the currently active alliance for a team"""
-        status = cls.query.filter_by(
-            team_number=team_number, 
-            is_alliance_mode_active=True
-        ).first()
-        return status.active_alliance if status else None
+        """Get the currently active alliance for a team.
+
+        Queries are wrapped in a try/except because earlier bugs have left the
+        session in an "aborted" state.  When SQLAlchemy detects a failed
+        statement the transaction remains unusable until rolled back.  Without
+        handling this we propagate an `InternalError` up the stack and all
+        subsequent queries in the request will fail, raising the error seen in
+        the traceback above.
+        
+        The caller (`config_manager.get_effective_game_config`) is invoked while
+        rendering the strategy page, so a single bad query could render the
+        entire page unusable.  By catching, rolling back and returning ``None``
+        we allow the page to continue operating even if the database is
+        temporarily unhappy.
+        """
+        try:
+            status = cls.query.filter_by(
+                team_number=team_number,
+                is_alliance_mode_active=True
+            ).first()
+            return status.active_alliance if status else None
+        except Exception:
+            # ensure the session is reset so later queries can proceed
+            from flask import current_app
+            from app import db
+            current_app.logger.exception("DB error in get_active_alliance_for_team")
+            db.session.rollback()
+            return None
     
     @classmethod
     def is_alliance_mode_active_for_team(cls, team_number):
