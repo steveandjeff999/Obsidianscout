@@ -443,6 +443,8 @@ body.dark-mode .dropdown-user-header { background: linear-gradient(90deg, rgba(2
 
 /* Utility tweaks for icons and badges */
 .brand-icon { font-size: 1.25rem; }
+/* default size for SVG branding images (sidebar overrides below) */
+.brand-svg { width: 24px; height: 24px; }
 .badge { border-radius: 8px; }
 
 /* Accessibility: focus outlines */

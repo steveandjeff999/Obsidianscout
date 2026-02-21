@@ -1131,8 +1131,8 @@
         <div class="sidebar-header d-flex align-items-center justify-content-between">
             <a class="brand d-flex align-items-center text-decoration-none" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
                 <div class="brand-logo d-flex align-items-center justify-content-center me-2" role="img" aria-label="ObsidianScout logo" tabindex="0">
-                    <!-- Use the original FontAwesome clipboard icon inside the round tile -->
-                    <i class="fas fa-clipboard brand-icon" aria-hidden="true"></i>
+                    <!-- Use the same image that’s used for the favicon/tab icon -->
+                    <img src="{{ url_for('static', filename='obsidian-192.png') }}" class="brand-svg" aria-hidden="true" alt="">
                 </div>
                 <div class="brand-info d-flex flex-column">
                     <span class="brand-text fw-bold"><span class="obsidian-gradient">Obsidian</span>Scout</span>
@@ -1736,7 +1736,7 @@
                 {# If we're on the login page, center a single-brand label and hide the right column. #}
                 <div class="{% if request.endpoint == 'auth.login' %}col-12 text-center{% else %}col-md-6 text-center text-md-start{% endif %}">
                     <div class="d-flex align-items-center justify-content-center {% if request.endpoint != 'auth.login' %}justify-content-md-start{% endif %}">
-                        <i class="fas fa-clipboard brand-icon me-2 text-primary"></i>
+                        <img src="{{ url_for('static', filename='obsidian-192.png') }}" class="brand-svg me-2 text-primary" aria-hidden="true" alt="" style="width:24px;height:24px;">
                         <span class="fw-bold">ObsidianScout</span>
                         {# On normal pages show a subtle secondary label; hide it on the login page to avoid duplication. #}
                         {% if request.endpoint != 'auth.login' %}

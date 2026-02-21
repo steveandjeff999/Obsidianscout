@@ -316,7 +316,7 @@ body.sidebar-collapsed #appSidebar { width: 72px !important; min-width: 72px !im
 }
 
 #appSidebar .brand-logo .brand-icon { font-size: 18px; color: white !important; }
-#appSidebar .brand-logo .brand-svg { width: 26px; height: 26px; color: white; stroke: rgba(255,255,255,0.95); fill: none; }
+#appSidebar .brand-logo .brand-svg { width: 32px; height: 32px; color: white; stroke: rgba(255,255,255,0.95); fill: none; }
 #appSidebar .brand-info { line-height: 1; }
 #appSidebar .brand-sub { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
 
