@@ -152,7 +152,10 @@
 let pollInterval = 30000; // 30s poll for schedule updates
 let pollTimer = null;
 let autoAdvanceTimer = null;
+let autoAdvanceCountdownTimer = null; // interval for updating countdown text
 let matchesCache = [];
+let scheduleOffsetMs = 0;      // milliseconds event is running late (updated every 15 min from server)
+let _advancedPastIds = new Set(); // IDs of matches we deliberately advanced past (survives polls)
 let selectedTeam = null;
 let selectedEventId = null;
 let currentMatch = null;
@@ -239,6 +242,7 @@ async function fetchSchedule() {
         const j = await resp.json();
         if (j && j.success) {
             matchesCache = j.matches || [];
+            scheduleOffsetMs = ((j.current_event && j.current_event.schedule_offset_minutes) || 0) * 60000;
             // If we were reconnecting, stop the reconnect loop
             if (isReconnecting) stopReconnectLoop();
             return j;
@@ -270,6 +274,7 @@ function startReconnectLoop() {
             const j = await resp.json();
             if (j && j.success) {
                 matchesCache = j.matches || [];
+                scheduleOffsetMs = ((j.current_event && j.current_event.schedule_offset_minutes) || 0) * 60000;
                 setStatus('Reconnected — schedule updated');
                 stopReconnectLoop();
                 // resume polling
@@ -329,7 +334,9 @@ function pickNextMatchForTeam(teamNumber) {
     // Consider only unplayed/uncompleted matches
     const unplayed = teamMatches.filter(m => m.status !== 'played' && m.status !== 'completed');
     // If none unplayed, fall back to all matches
-    const candidates = unplayed.length ? unplayed : teamMatches.slice();
+    // Also exclude matches we have deliberately advanced past (prevents rewinding on polls)
+    const baseSet = unplayed.length ? unplayed : teamMatches.slice();
+    const candidates = baseSet.filter(m => !_advancedPastIds.has(m.id)) || baseSet.slice();
 
     // Split into upcoming (including small allowed past) and past
     const upcoming = candidates.filter(m => (m._pred_ts && m._pred_ts >= (now - ALLOWED_PAST_MS)) || !m._pred_ts);
@@ -378,6 +385,10 @@ function clearAutoAdvance() {
     if (autoAdvanceTimer) {
         clearTimeout(autoAdvanceTimer);
         autoAdvanceTimer = null;
+    }
+    if (autoAdvanceCountdownTimer) {
+        clearInterval(autoAdvanceCountdownTimer);
+        autoAdvanceCountdownTimer = null;
     }
 }
 
@@ -433,8 +444,21 @@ function scheduleAutoAdvanceForMatch(match) {
         document.getElementById('auto_advance_info').textContent = 'Invalid scheduled time — auto-advance disabled.';
         return;
     }
-    const target = predTs + (2 * 60 * 1000); // +2 minutes
+    const target = predTs + scheduleOffsetMs + (2 * 60 * 1000); // +2 min after offset-adjusted predicted start
     const ms = target - Date.now();
+
+    // helper to update the countdown display
+    function updateCountdown(remaining) {
+        if (remaining <= 0) {
+            document.getElementById('auto_advance_info').textContent = 'Scheduled start + 2 minutes already passed — will advance shortly.';
+            return;
+        }
+        const sec = Math.floor(remaining / 1000) % 60;
+        const min = Math.floor(remaining / 60000);
+        document.getElementById('auto_advance_info').textContent =
+            'Auto-advance in ' + min + 'm ' + sec + 's (at ' + new Date(target).toLocaleTimeString() + ')';
+    }
+
     if (ms <= 0) {
         // Already past the threshold - schedule a short delay then advance, but avoid repeated advances
         document.getElementById('auto_advance_info').textContent = 'Scheduled start + 2 minutes already passed — will advance shortly.';
@@ -448,37 +472,47 @@ function scheduleAutoAdvanceForMatch(match) {
             advanceToNextMatch();
         }, 5000);
     } else {
-        document.getElementById('auto_advance_info').textContent = 'Will auto-advance at ' + new Date(target).toLocaleTimeString() + ' (2 minutes after scheduled start).';
+        // show initial countdown and start updating every second
+        updateCountdown(ms);
         autoAdvanceTimer = setTimeout(() => {
             try { match._autoAdvancedAt = Date.now(); } catch (e) { /* ignore */ }
             advanceToNextMatch();
         }, ms);
+        autoAdvanceCountdownTimer = setInterval(() => {
+            const rem = target - Date.now();
+            if (rem <= 0) {
+                clearInterval(autoAdvanceCountdownTimer);
+                return;
+            }
+            updateCountdown(rem);
+        }, 1000);
     }
 }
 
 function advanceToNextMatch() {
     if (!selectedTeam) return;
     if (manualOverrideActive) return; // do not auto-advance while manual override is active
-    // Find current index in team matches and move to the next unplayed match after it
+
     const teamMatches = matchesCache.filter(m => teamInMatch(selectedTeam, m));
     if (!teamMatches || teamMatches.length === 0) return;
-    // sort using proper match ordering (handles X-Y playoff format), but prefer timestamps when available
+
+    // Sort by timestamp first, then by match ordering
     teamMatches.forEach(m => { const t = getMatchTime(m); m._pred_ts = t ? Date.parse(t) : null; });
-    teamMatches.sort((a,b) => {
-        // If both have timestamps, sort by timestamp first
+    teamMatches.sort((a, b) => {
         if (a._pred_ts && b._pred_ts) return a._pred_ts - b._pred_ts;
         if (a._pred_ts && !b._pred_ts) return -1;
         if (!a._pred_ts && b._pred_ts) return 1;
-        // Fallback to proper match ordering (handles X-Y playoff format)
         return compareMatches(a, b);
     });
 
-    // Find index of currentMatch in this sorted array
-    let idx = teamMatches.findIndex(m => m.id === currentMatch.id);
+    // Find index of currentMatch in this sorted array (null-safe)
+    const idx = currentMatch ? teamMatches.findIndex(m => m.id === currentMatch.id) : -1;
+
     // Debounce rapid auto-advances globally (3s)
     if (Date.now() - lastAutoAdvanceAt < 3000) return;
     lastAutoAdvanceAt = Date.now();
-    // Advance one forward; if not found, pick first unplayed
+
+    // Look for the next unplayed match AFTER the current position
     let next = null;
     if (idx >= 0) {
         for (let i = idx + 1; i < teamMatches.length; i++) {
@@ -488,11 +522,30 @@ function advanceToNextMatch() {
             }
         }
     }
+
+    // Fallback: pick the first match that is not played, not the current match, and not already
+    // in _advancedPastIds.  This avoids the old bug where we fell back to match 1 because
+    // teamMatches.find() started from index 0 without any guard.
     if (!next) {
-        // fallback - pick first unplayed
-        next = teamMatches.find(m => m.status !== 'played' && m.status !== 'completed') || teamMatches[0];
+        next = teamMatches.find(m =>
+            m.status !== 'played' &&
+            m.status !== 'completed' &&
+            !_advancedPastIds.has(m.id) &&
+            (!currentMatch || m.id !== currentMatch.id)
+        ) || null;
     }
+
     if (next) {
+        // Mark ALL matches up to and including the current position as advanced-past.
+        // If we only marked currentMatch, earlier matches could slip back in via the
+        // 2-minute "allowed past" window inside pickNextMatchForTeam.
+        if (idx >= 0) {
+            for (let i = 0; i <= idx; i++) {
+                _advancedPastIds.add(teamMatches[i].id);
+            }
+        } else if (currentMatch) {
+            _advancedPastIds.add(currentMatch.id);
+        }
         loadMatch(next);
     }
 }
@@ -511,10 +564,13 @@ async function loadMatch(match) {
     try { loadStrategyForCurrentMatch(); } catch (e) { console.warn('Auto-load strategy failed to initiate', e); }
 }
 
-// Helper to read the best available time field from a match object
+// Helper to read the best available *scheduling* time field from a match object.
+// We intentionally exclude m.played_time because that field is set to actual_time OR
+// scheduled_time — when a match has been completed, played_time reflects an actual past
+// play time that would incorrectly trigger the "already passed" auto-advance logic.
 function getMatchTime(m) {
     if (!m) return null;
-    return m.predicted_time || m.scheduled_time || m.time || m.played_time || m.start_time || null;
+    return m.predicted_time || m.scheduled_time || m.start_time || null;
 }
 
 async function loadStrategyForCurrentMatch() {
@@ -947,18 +1003,19 @@ async function refreshAndUpdate() {
         setStatus('Manual mode active — schedule refreshed but current match will not change until manual mode ends.');
         return;
     }
-    // If the currently displayed match is more than 2 minutes past its scheduled time, advance immediately
-    try {
-        if (currentMatch) {
-            const curTs = Date.parse( getMatchTime(currentMatch) );
-            if (!isNaN(curTs) && Date.now() > (curTs + (2 * 60 * 1000))) {
+    // If the currently displayed match is more than 2 minutes past its scheduled time (offset-adjusted),
+    // advance immediately.  Only do this if no advance timer is pending so we don't double-fire.
+    if (currentMatch && !autoAdvanceTimer) {
+        try {
+            const curTs = Date.parse(getMatchTime(currentMatch));
+            if (!isNaN(curTs) && Date.now() > (curTs + scheduleOffsetMs + (2 * 60 * 1000))) {
                 // Force immediate advance
                 setStatus('Current match is >2 minutes past scheduled start — advancing to next match.');
                 advanceToNextMatch();
                 return;
             }
-        }
-    } catch (e) { /* ignore parsing errors */ }
+        } catch (e) { /* ignore parsing errors */ }
+    }
     // Find next match again
     const next = pickNextMatchForTeam(selectedTeam);
     if (!next) {
@@ -970,9 +1027,15 @@ async function refreshAndUpdate() {
     if (!currentMatch || currentMatch.id !== next.id) {
         loadMatch(next);
     } else {
-        // Update info and reschedule auto-advance in case times changed
+        // Update info only - don't reschedule auto-advance if we already have a timer 
+        // running (prevents poll from resetting the countdown/advance logic)
         document.getElementById('match_info').innerHTML = renderMatchInfo(next);
-        scheduleAutoAdvanceForMatch(next);
+        // Only reschedule if no timer is active or match time changed
+        const nextTime = getMatchTime(next);
+        const currentTime = getMatchTime(currentMatch);
+        if (!autoAdvanceTimer || nextTime !== currentTime) {
+            scheduleAutoAdvanceForMatch(next);
+        }
     }
 }
 

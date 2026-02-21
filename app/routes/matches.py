@@ -1195,12 +1195,39 @@ def strategy_live():
     event_id = request.args.get('event_id', type=int)
     event = None
     if event_id:
-        event = Event.query.get(event_id)
+        try:
+            event = Event.query.get(event_id)
+        except Exception as exc:  # catch missing-column errors, etc.
+            from sqlalchemy.exc import ProgrammingError
+            if isinstance(exc, ProgrammingError):
+                # Try to self-heal by running any outstanding migrations and
+                # retry once.  The column definitions in MIGRATIONS are now
+                # dialect-aware, so this should succeed on PostgreSQL.
+                from app.utils.database_migrations import run_all_migrations
+                from app import db
+                run_all_migrations(db)
+                try:
+                    event = Event.query.get(event_id)
+                except Exception:
+                    event = None
+            else:
+                event = None
     elif current_event_code:
         try:
             event = get_event_by_code(current_event_code)
-        except Exception:
-            event = None
+        except Exception as exc:
+            # if the failure was caused by a missing column, run migrations
+            from sqlalchemy.exc import ProgrammingError
+            if isinstance(exc, ProgrammingError):
+                from app.utils.database_migrations import run_all_migrations
+                from app import db
+                run_all_migrations(db)
+                try:
+                    event = get_event_by_code(current_event_code)
+                except Exception:
+                    event = None
+            else:
+                event = None
 
     # Get ALL teams at the event (regardless of scouting_team_number)
     teams = []
@@ -2073,15 +2100,28 @@ def matches_data():
             _scheduled_dt = getattr(match, 'scheduled_time', None)
             _played_dt = _actual_dt or _scheduled_dt
 
+            def _iso_utc(dt):
+                """Serialize a datetime to ISO-8601 with UTC offset (+00:00).
+                Datetimes are stored as naive UTC in SQLite; without the tz suffix
+                browsers treat the string as local time (ES2015+) causing timing bugs."""
+                if dt is None:
+                    return None
+                # If already timezone-aware, isoformat() includes the offset
+                if getattr(dt, 'tzinfo', None) is not None:
+                    return dt.isoformat()
+                # Naive datetime assumed UTC – append explicit UTC offset
+                return dt.isoformat() + '+00:00'
+
             match_data = {
                 'id': match.id,
                 'event_id': match.event_id,
                 'match_number': match.match_number,
                 'comp_level': getattr(match, 'comp_level', None) or getattr(match, 'match_type', None),
                 'set_number': getattr(match, 'set_number', None),
-                'predicted_time': _predicted_dt.isoformat() if _predicted_dt else None,
-                'actual_time': _actual_dt.isoformat() if _actual_dt else None,
-                'played_time': (_played_dt.isoformat() if _played_dt else None),
+                'predicted_time': _iso_utc(_predicted_dt),
+                'scheduled_time': _iso_utc(_scheduled_dt),
+                'actual_time': _iso_utc(_actual_dt),
+                'played_time': _iso_utc(_played_dt),
                 'alliances': {
                     'red': {
                         'teams': _extract_alliance_teams(match, True),
@@ -2108,7 +2148,9 @@ def matches_data():
                 'name': current_event.name,
                 'code': current_event.code,
                 'start_date': current_event.start_date.isoformat() if current_event.start_date else None,
-                'end_date': current_event.end_date.isoformat() if current_event.end_date else None
+                'end_date': current_event.end_date.isoformat() if current_event.end_date else None,
+                'schedule_offset_minutes': getattr(current_event, 'schedule_offset', None) or 0,
+                'offset_updated_at': _iso_utc(getattr(current_event, 'offset_updated_at', None)),
             },
             'matches': matches_data,
             'teams': teams_data,
