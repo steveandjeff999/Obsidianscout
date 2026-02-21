@@ -1376,11 +1376,7 @@ def view_text_elements():
     
     # Get all text elements from configuration
     text_elements = game_config.get('post_match', {}).get('text_elements', [])
-    
-    if not text_elements:
-        flash('No text elements are configured in the game configuration.', 'info')
-        return redirect(url_for('scouting.index'))
-    
+
     # Check for alliance mode
     alliance_id = get_active_alliance_id()
     is_alliance_mode = alliance_id is not None
@@ -1478,12 +1474,38 @@ def view_text_elements():
             events.append(ev)
             continue
     
+    # Collect qualitative scouting notes
+    qual_query = QualitativeScoutingData.query.filter_by(
+        scouting_team_number=current_user.scouting_team_number
+    ).join(Match).join(Event).order_by(QualitativeScoutingData.timestamp.desc())
+    if current_event and getattr(current_event, 'code', None):
+        from sqlalchemy import func as _sqf
+        qual_query = qual_query.filter(_sqf.upper(Event.code) == current_event.code.upper())
+    qualitative_with_notes = []
+    for qentry in qual_query.all():
+        qdata = qentry.data
+        notes_list = []
+        for alliance_key in ['red', 'blue', 'individual']:
+            alliance_data = qdata.get(alliance_key, {})
+            if not isinstance(alliance_data, dict):
+                continue
+            for team_key, team_data in alliance_data.items():
+                if isinstance(team_data, dict) and (team_data.get('notes') or '').strip():
+                    notes_list.append({
+                        'team_num': team_key.replace('team_', ''),
+                        'alliance': alliance_key,
+                        'notes': team_data['notes'].strip()
+                    })
+        if notes_list:
+            qualitative_with_notes.append({'entry': qentry, 'notes_list': notes_list})
+
     return render_template('scouting/text_elements.html',
                          scouting_entries=scouting_entries_with_text,
                          text_elements=text_elements,
                          events=events,
                          current_event=current_event,
                          game_config=game_config,
+                         qualitative_with_notes=qualitative_with_notes,
                          **get_theme_context())
 
 
@@ -1580,6 +1602,9 @@ def save_qualitative_scouting():
             team_number = data.get('team_number')
             match_id = data.get('match_id')
             team_data = data.get('team_data', {})
+            show_auto = data.get('show_auto_climb', False)
+            show_endgame = data.get('show_endgame_climb', False)
+            match_summary = data.get('match_summary') or {}
             
             if not team_number or not match_id:
                 return jsonify({'success': False, 'message': 'Missing team number or match'}), 400
@@ -1590,7 +1615,21 @@ def save_qualitative_scouting():
             indiv_entry = individual_block.get(team_key)
             if not indiv_entry or indiv_entry.get('ranking') is None:
                 return jsonify({'success': False, 'message': 'Ranking required for individual team entries'}), 400
+
+            # If Auto/Endgame fields are visible in the UI, require them here
+            if show_auto and not (indiv_entry and indiv_entry.get('auto_climb_result')):
+                return jsonify({'success': False, 'message': 'Auto climb required when Auto Climb is visible'}), 400
+            if show_endgame and not (indiv_entry and indiv_entry.get('endgame_climb_result')):
+                return jsonify({'success': False, 'message': 'Endgame climb result required when Endgame Climb is visible'}), 400
             
+            # Prepare stored data (include match_summary if present)
+            store_obj = {
+                'individual': team_data.get('individual', {}),
+                'team_number': team_number
+            }
+            if match_summary:
+                store_obj['_match_summary'] = match_summary
+
             # Individual team entries are always new (one per team per match)
             qualitative_data = QualitativeScoutingData(
                 match_id=match_id,
@@ -1598,10 +1637,7 @@ def save_qualitative_scouting():
                 scout_name=current_user.username,
                 scout_id=current_user.id,
                 alliance_scouted=team_key,
-                data_json=json.dumps({
-                    'individual': team_data.get('individual', {}),
-                    'team_number': team_number
-                })
+                data_json=json.dumps(store_obj)
             )
             db.session.add(qualitative_data)
             db.session.commit()
@@ -1620,16 +1656,33 @@ def save_qualitative_scouting():
             if not match_id or not alliance_scouted:
                 return jsonify({'success': False, 'message': 'Missing required fields'}), 400
 
+            # Respect UI visibility flags: require Auto/Endgame only when visible
+            show_auto = data.get('show_auto_climb', False)
+            show_endgame = data.get('show_endgame_climb', False)
+            match_summary = data.get('match_summary') or {}
+
             # Server-side validation: require rankings for all teams in the selected alliance(s)
             if alliance_scouted in ('red', 'both'):
                 for k, v in (team_data.get('red') or {}).items():
                     if v.get('ranking') is None:
                         return jsonify({'success': False, 'message': 'All teams in the selected alliance must be ranked'}), 400
+                    if show_auto and not v.get('auto_climb_result'):
+                        return jsonify({'success': False, 'message': 'Auto climb required for all teams in the selected alliance(s) when Auto Climb is visible'}), 400
+                    if show_endgame and not v.get('endgame_climb_result'):
+                        return jsonify({'success': False, 'message': 'Endgame climb result required for all teams in the selected alliance(s) when Endgame Climb is visible'}), 400
             if alliance_scouted in ('blue', 'both'):
                 for k, v in (team_data.get('blue') or {}).items():
                     if v.get('ranking') is None:
                         return jsonify({'success': False, 'message': 'All teams in the selected alliance must be ranked'}), 400
+                    if show_auto and not v.get('auto_climb_result'):
+                        return jsonify({'success': False, 'message': 'Auto climb required for all teams in the selected alliance(s) when Auto Climb is visible'}), 400
+                    if show_endgame and not v.get('endgame_climb_result'):
+                        return jsonify({'success': False, 'message': 'Endgame climb result required for all teams in the selected alliance(s) when Endgame Climb is visible'}), 400
             
+            # Attach match_summary into stored data so view/leaderboard can surface it
+            if match_summary:
+                team_data['_match_summary'] = match_summary
+
             # Check if entry already exists
             existing = QualitativeScoutingData.query.filter_by(
                 match_id=match_id,
@@ -1686,6 +1739,7 @@ def view_qualitative_data(entry_id):
     
     return render_template('scouting/qualitative_view.html',
                          entry=entry,
+                         data=entry.data,
                          **get_theme_context())
 
 
@@ -1743,23 +1797,47 @@ def list_qualitative_data():
 def qualitative_leaderboard():
     """Display a leaderboard of teams ranked by qualitative scouting rankings"""
     from collections import defaultdict
-    
-    # Get all Qualitative scouting data for the current team
-    all_entries = QualitativeScoutingData.query.filter_by(
+
+    # Get events that have qualitative scouting data for this team
+    events_with_data = (
+        Event.query
+        .join(Match, Match.event_id == Event.id)
+        .join(QualitativeScoutingData, QualitativeScoutingData.match_id == Match.id)
+        .filter(QualitativeScoutingData.scouting_team_number == current_user.scouting_team_number)
+        .distinct()
+        .order_by(Event.start_date.desc())
+        .all()
+    )
+
+    # Optional event filter from query param
+    selected_event_id = request.args.get('event_id', type=int)
+
+    # Build base query
+    base_query = QualitativeScoutingData.query.filter_by(
         scouting_team_number=current_user.scouting_team_number
-    ).all()
-    
+    )
+    if selected_event_id:
+        base_query = base_query.join(Match, QualitativeScoutingData.match_id == Match.id).filter(
+            Match.event_id == selected_event_id
+        )
+    all_entries = base_query.all()
+
     # Aggregate rankings by team
     team_rankings = defaultdict(lambda: {
-        'rankings': [], 
-        'notes': [], 
+        'rankings': [],
+        'notes': [],
         'appearances': 0,
-        'roles': {'passer': 0, 'cleanup': 0, 'played_defense': 0, 'cycler': 0}
+        'roles': {'cycling': 0, 'stealing': 0, 'scoring': 0, 'feeding': 0, 'defending': 0, 'did_not_contribute': 0},
+        'auto_success': 0,
+        'auto_fail': 0,
+        'endgame_success': 0,
+        'endgame_fail': 0,
+        'feeder': {'continuous': 0, 'stop_to_shoot': 0, 'dump': 0}
     })
-    
+
     for entry in all_entries:
         data = entry.data
-        
+
         # Handle individual team entries (check first since they also have match_id now)
         if entry.alliance_scouted and entry.alliance_scouted.startswith('team_'):
             team_num = entry.alliance_scouted.replace('team_', '')
@@ -1771,15 +1849,10 @@ def qualitative_leaderboard():
                     team_rankings[team_num]['appearances'] += 1
                     if team_data.get('notes'):
                         team_rankings[team_num]['notes'].append(team_data['notes'])
-                    # Track roles
-                    if team_data.get('passer'):
-                        team_rankings[team_num]['roles']['passer'] += 1
-                    if team_data.get('cleanup'):
-                        team_rankings[team_num]['roles']['cleanup'] += 1
-                    if team_data.get('played_defense'):
-                        team_rankings[team_num]['roles']['played_defense'] += 1
-                    if team_data.get('cycler'):
-                        team_rankings[team_num]['roles']['cycler'] += 1
+                    # Roles are stored as flat keys directly on team_data
+                    for role in ['cycling', 'stealing', 'scoring', 'feeding', 'defending', 'did_not_contribute']:
+                        if team_data.get(role):
+                            team_rankings[team_num]['roles'][role] += 1
         # Handle match-based entries (full alliance scouting)
         elif entry.match_id:
             for alliance in ['red', 'blue']:
@@ -1792,16 +1865,27 @@ def qualitative_leaderboard():
                             team_rankings[team_num]['appearances'] += 1
                             if team_data.get('notes'):
                                 team_rankings[team_num]['notes'].append(team_data['notes'])
-                            # Track roles
-                            if team_data.get('passer'):
-                                team_rankings[team_num]['roles']['passer'] += 1
-                            if team_data.get('cleanup'):
-                                team_rankings[team_num]['roles']['cleanup'] += 1
-                            if team_data.get('played_defense'):
-                                team_rankings[team_num]['roles']['played_defense'] += 1
-                            if team_data.get('cycler'):
-                                team_rankings[team_num]['roles']['cycler'] += 1
-    
+                            # Roles are stored as flat keys directly on team_data
+                            for role in ['cycling', 'stealing', 'scoring', 'feeding', 'defending', 'did_not_contribute']:
+                                if team_data.get(role):
+                                    team_rankings[team_num]['roles'][role] += 1
+                            # Track auto climb
+                            if team_data.get('auto_climb_result') == 'success':
+                                team_rankings[team_num]['auto_success'] += 1
+                            elif team_data.get('auto_climb_result') == 'fail':
+                                team_rankings[team_num]['auto_fail'] += 1
+                            # Track endgame climb
+                            if team_data.get('endgame_climb_result') == 'success':
+                                team_rankings[team_num]['endgame_success'] += 1
+                            elif team_data.get('endgame_climb_result') == 'fail':
+                                team_rankings[team_num]['endgame_fail'] += 1
+                            # Track feeder types
+                            for f in (team_data.get('feeder_type') or []):
+                                if f in team_rankings[team_num]['feeder']:
+                                    team_rankings[team_num]['feeder'][f] += 1
+                                else:
+                                    team_rankings[team_num]['feeder'][f] = team_rankings[team_num]['feeder'].get(f, 0) + 1
+
     # Calculate average rankings and prepare leaderboard data
     leaderboard = []
     for team_num, data in team_rankings.items():
@@ -1813,15 +1897,22 @@ def qualitative_leaderboard():
                 'total_appearances': data['appearances'],
                 'rankings': data['rankings'],
                 'notes': data['notes'],
-                'roles': data['roles']
+                'roles': data['roles'],
+                'auto_success': data.get('auto_success', 0),
+                'auto_fail': data.get('auto_fail', 0),
+                'endgame_success': data.get('endgame_success', 0),
+                'endgame_fail': data.get('endgame_fail', 0),
+                'feeder': data.get('feeder', {})
             })
-    
+
     # Sort by average overall rating (5 is best), highest first
     leaderboard.sort(key=lambda x: x['average_ranking'], reverse=True)
-    
+
     return render_template('scouting/qualitative_leaderboard.html',
                          leaderboard=leaderboard,
                          total_teams=len(leaderboard),
+                         events=events_with_data,
+                         selected_event_id=selected_event_id,
                          **get_theme_context())
 
 

@@ -370,7 +370,7 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"Warning: Could not perform startup failed login cleanup: {e}")
         
-        # Auto-create superadmin if it doesn't exist.
+        # Auto-create superadmin if it doesn't exist
         try:
             superadmin_user = User.query.filter_by(username='superadmin').first()
             if not superadmin_user:
