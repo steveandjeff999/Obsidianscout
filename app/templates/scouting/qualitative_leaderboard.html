@@ -13,7 +13,11 @@
                 <i class="fas fa-trophy me-2"></i>Qualitative Scouting Leaderboard
                 {{ help.help_icon('Teams ranked by their average overall rating (1-5 scale, higher is better)', 'Leaderboard') }}
             </h2>
-            <p class="text-muted mb-0">{{ total_teams }} teams ranked</p>
+            <p class="text-muted mb-0">{{ total_teams }} teams ranked
+                {% if selected_event_id %}
+                {% for event in events %}{% if event.id == selected_event_id %}&mdash; {{ event.name }}{% if event.year %} ({{ event.year }}){% endif %}{% endif %}{% endfor %}
+                {% endif %}
+            </p>
         </div>
         <div>
             <a href="{{ url_for('scouting.qualitative_scouting') }}" class="btn btn-primary">
@@ -29,31 +33,58 @@
     <!-- Filter Controls -->
     <div class="card mb-3">
         <div class="card-body">
+            {% if events and events|length > 1 %}
+            <div class="mb-3">
+                <h6 class="mb-2"><i class="fas fa-calendar-alt me-2"></i>Filter by Event</h6>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <a href="{{ url_for('scouting.qualitative_leaderboard') }}"
+                       class="btn btn-sm {% if not selected_event_id %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                        All Events
+                    </a>
+                    {% for event in events %}
+                    <a href="{{ url_for('scouting.qualitative_leaderboard', event_id=event.id) }}"
+                       class="btn btn-sm {% if selected_event_id == event.id %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        {{ event.name }}{% if event.year %} ({{ event.year }}){% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
             <h6 class="mb-3"><i class="fas fa-filter me-2"></i>Filter by Robot Role</h6>
             <div class="btn-group flex-wrap" role="group">
                 <input type="checkbox" class="btn-check" id="filter-all" autocomplete="off" checked>
                 <label class="btn btn-outline-secondary" for="filter-all">
                     <i class="fas fa-list me-1"></i>All Teams
                 </label>
-                
-                <input type="checkbox" class="btn-check role-filter" id="filter-passer" data-role="passer" autocomplete="off">
-                <label class="btn btn-outline-primary" for="filter-passer">
-                    <i class="fas fa-hand-holding me-1"></i>Passer
+
+                <input type="checkbox" class="btn-check role-filter" id="filter-cycling" data-role="cycling" autocomplete="off">
+                <label class="btn btn-outline-primary" for="filter-cycling">
+                    <i class="fas fa-sync me-1"></i>Cycling
                 </label>
-                
-                <input type="checkbox" class="btn-check role-filter" id="filter-cleanup" data-role="cleanup" autocomplete="off">
-                <label class="btn btn-outline-success" for="filter-cleanup">
-                    <i class="fas fa-broom me-1"></i>Cleanup
+
+                <input type="checkbox" class="btn-check role-filter" id="filter-stealing" data-role="stealing" autocomplete="off">
+                <label class="btn btn-outline-warning" for="filter-stealing">
+                    <i class="fas fa-hand-scissors me-1"></i>Stealing
                 </label>
-                
-                <input type="checkbox" class="btn-check role-filter" id="filter-defense" data-role="played_defense" autocomplete="off">
-                <label class="btn btn-outline-danger" for="filter-defense">
-                    <i class="fas fa-shield-alt me-1"></i>Defense
+
+                <input type="checkbox" class="btn-check role-filter" id="filter-scoring" data-role="scoring" autocomplete="off">
+                <label class="btn btn-outline-success" for="filter-scoring">
+                    <i class="fas fa-bullseye me-1"></i>Scoring
                 </label>
-                
-                <input type="checkbox" class="btn-check role-filter" id="filter-cycler" data-role="cycler" autocomplete="off">
-                <label class="btn btn-outline-info" for="filter-cycler">
-                    <i class="fas fa-sync me-1"></i>Cycler
+
+                <input type="checkbox" class="btn-check role-filter" id="filter-feeding" data-role="feeding" autocomplete="off">
+                <label class="btn btn-outline-info" for="filter-feeding">
+                    <i class="fas fa-hand-holding me-1"></i>Feeding
+                </label>
+
+                <input type="checkbox" class="btn-check role-filter" id="filter-defending" data-role="defending" autocomplete="off">
+                <label class="btn btn-outline-danger" for="filter-defending">
+                    <i class="fas fa-shield-alt me-1"></i>Defending
+                </label>
+
+                <input type="checkbox" class="btn-check role-filter" id="filter-dnc" data-role="did_not_contribute" autocomplete="off">
+                <label class="btn btn-outline-secondary" for="filter-dnc">
+                    <i class="fas fa-minus-circle me-1"></i>N/C
                 </label>
             </div>
             <p class="text-muted small mb-0 mt-2">
@@ -85,11 +116,13 @@
                     </thead>
                     <tbody>
                         {% for team in leaderboard %}
-                        <tr class="team-row" 
-                            data-passer="{{ team.roles.passer }}"
-                            data-cleanup="{{ team.roles.cleanup }}"
-                            data-defense="{{ team.roles.played_defense }}"
-                            data-cycler="{{ team.roles.cycler }}">
+                        <tr class="team-row"
+                            data-cycling="{{ team.roles.cycling }}"
+                            data-stealing="{{ team.roles.stealing }}"
+                            data-scoring="{{ team.roles.scoring }}"
+                            data-feeding="{{ team.roles.feeding }}"
+                            data-defending="{{ team.roles.defending }}"
+                            data-did_not_contribute="{{ team.roles.did_not_contribute }}">
                             <td class="text-center">
                                 {% if loop.index <= 3 %}
                                 <span class="badge {% if loop.index == 1 %}bg-warning text-dark{% elif loop.index == 2 %}bg-secondary{% else %}bg-danger{% endif %} fs-5">
@@ -125,28 +158,64 @@
                                 <span class="badge bg-info">{{ team.total_appearances }} times</span>
                             </td>
                             <td>
-                                {% if team.roles.passer > 0 %}
-                                <span class="badge bg-primary me-1" title="Passer ({{ team.roles.passer }} times)">
-                                    <i class="fas fa-hand-holding me-1"></i>Passer
+                                {% if team.roles.cycling > 0 %}
+                                <span class="badge bg-primary me-1" title="Cycling ({{ team.roles.cycling }}x)">
+                                    <i class="fas fa-sync me-1"></i>Cycling
                                 </span>
                                 {% endif %}
-                                {% if team.roles.cleanup > 0 %}
-                                <span class="badge bg-success me-1" title="Cleanup ({{ team.roles.cleanup }} times)">
-                                    <i class="fas fa-broom me-1"></i>Cleanup
+                                {% if team.roles.stealing > 0 %}
+                                <span class="badge bg-warning text-dark me-1" title="Stealing ({{ team.roles.stealing }}x)">
+                                    <i class="fas fa-hand-scissors me-1"></i>Stealing
                                 </span>
                                 {% endif %}
-                                {% if team.roles.played_defense > 0 %}
-                                <span class="badge bg-danger me-1" title="Defense ({{ team.roles.played_defense }} times)">
-                                    <i class="fas fa-shield-alt me-1"></i>Defense
+                                {% if team.roles.scoring > 0 %}
+                                <span class="badge bg-success me-1" title="Scoring ({{ team.roles.scoring }}x)">
+                                    <i class="fas fa-bullseye me-1"></i>Scoring
                                 </span>
                                 {% endif %}
-                                {% if team.roles.cycler > 0 %}
-                                <span class="badge bg-info me-1" title="Cycler ({{ team.roles.cycler }} times)">
-                                    <i class="fas fa-sync me-1"></i>Cycler
+                                {% if team.roles.feeding > 0 %}
+                                <span class="badge bg-info me-1" title="Feeding ({{ team.roles.feeding }}x)">
+                                    <i class="fas fa-hand-holding me-1"></i>Feeding
                                 </span>
                                 {% endif %}
-                                {% if team.roles.passer == 0 and team.roles.cleanup == 0 and team.roles.played_defense == 0 and team.roles.cycler == 0 %}
+                                {% if team.roles.defending > 0 %}
+                                <span class="badge bg-danger me-1" title="Defending ({{ team.roles.defending }}x)">
+                                    <i class="fas fa-shield-alt me-1"></i>Defending
+                                </span>
+                                {% endif %}
+                                {% if team.roles.did_not_contribute > 0 %}
+                                <span class="badge bg-secondary me-1" title="Did Not Contribute ({{ team.roles.did_not_contribute }}x)">
+                                    <i class="fas fa-minus-circle me-1"></i>N/C
+                                </span>
+                                {% endif %}
+                                {% if team.roles.cycling == 0 and team.roles.stealing == 0 and team.roles.scoring == 0 and team.roles.feeding == 0 and team.roles.defending == 0 and team.roles.did_not_contribute == 0 %}
                                 <span class="text-muted small">No roles assigned</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if team.auto_success or team.auto_fail %}
+                                    <div class="mb-1">
+                                        <strong class="small me-1">Auto:</strong>
+                                        <span class="badge bg-success me-1">S: {{ team.auto_success }}</span>
+                                        <span class="badge bg-danger me-1">F: {{ team.auto_fail }}</span>
+                                    </div>
+                                {% endif %}
+                                {% if team.endgame_success or team.endgame_fail %}
+                                    <div class="mb-1">
+                                        <strong class="small me-1">Endgame:</strong>
+                                        <span class="badge bg-success me-1">S: {{ team.endgame_success }}</span>
+                                        <span class="badge bg-danger me-1">F: {{ team.endgame_fail }}</span>
+                                    </div>
+                                {% endif %}
+                                {% if team.feeder and (team.feeder.continuous or team.feeder.stop_to_shoot or team.feeder.dump) %}
+                                    <div>
+                                        <strong class="small me-1">Feeder:</strong>
+                                        {% if team.feeder.continuous %}<span class="badge bg-info me-1">Cont: {{ team.feeder.continuous }}</span>{% endif %}
+                                        {% if team.feeder.stop_to_shoot %}<span class="badge bg-secondary me-1">Stop: {{ team.feeder.stop_to_shoot }}</span>{% endif %}
+                                        {% if team.feeder.dump %}<span class="badge bg-dark me-1">Dump: {{ team.feeder.dump }}</span>{% endif %}
+                                    </div>
+                                {% else %}
+                                    <div class="text-muted small">No climb/feeder data</div>
                                 {% endif %}
                             </td>
                             <td>
@@ -332,7 +401,8 @@ document.addEventListener('DOMContentLoaded', function() {
             let hasRole = false;
             
             selectedRoles.forEach(function(role) {
-                const roleValue = parseInt(row.dataset[role === 'played_defense' ? 'defense' : role]) || 0;
+                const attrKey = role; // data attrs now match role names directly
+                const roleValue = parseInt(row.getAttribute('data-' + attrKey)) || 0;
                 if (roleValue > 0) {
                     hasRole = true;
                 }

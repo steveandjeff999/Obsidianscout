@@ -227,6 +227,67 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- Qualitative Scouting Notes Section -->
+    {% if qualitative_with_notes %}
+    <div class="card mt-4">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-star me-2"></i>Qualitative Scouting Notes
+                {% if current_event %}
+                <span class="badge bg-light text-success ms-2">{{ current_event.code }}</span>
+                {% endif %}
+                <span class="badge bg-light text-success ms-2">{{ qualitative_with_notes|length }} entries</span>
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="130">Match</th>
+                            <th width="110">Scout</th>
+                            <th width="140">Timestamp</th>
+                            <th>Notes by Team</th>
+                            <th width="80">View</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in qualitative_with_notes %}
+                        {% set qentry = item.entry %}
+                        <tr>
+                            <td>
+                                <span class="badge bg-secondary small">{{ qentry.match.event.code if qentry.match and qentry.match.event else '' }}</span><br>
+                                <span class="badge {% if qentry.match.match_type == 'Qualification' %}bg-primary{% elif qentry.match.match_type == 'Playoff' %}bg-danger{% else %}bg-secondary{% endif %} small">
+                                    {{ qentry.match.match_type }}
+                                </span>
+                                <span class="text-muted small">{{ qentry.match.match_number }}</span>
+                            </td>
+                            <td class="small">{{ qentry.scout_name or 'Unknown' }}</td>
+                            <td class="small text-muted">{{ qentry.timestamp.strftime('%m/%d/%Y %H:%M') if qentry.timestamp else '' }}</td>
+                            <td>
+                                {% for note in item.notes_list %}
+                                <div class="mb-2" style="border-left:3px solid var(--bs-success);padding-left:0.5rem;">
+                                    <div class="d-flex align-items-start gap-2">
+                                        <span class="badge {% if note.alliance == 'red' %}bg-danger{% elif note.alliance == 'blue' %}bg-primary{% else %}bg-success{% endif %} flex-shrink-0">Team {{ note.team_num }}</span>
+                                        <div class="small">{{ note.notes }}</div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('scouting.view_qualitative_data', entry_id=qentry.id) }}" class="btn btn-outline-success btn-sm" title="View Entry">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
