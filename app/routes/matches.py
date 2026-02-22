@@ -6,7 +6,7 @@ from app import db
 from app.utils.api_utils import get_matches, ApiError, api_to_db_match_conversion, get_matches_dual_api
 from app.utils.score_utils import norm_db_score, match_sort_key, parse_match_number, MATCH_TYPE_ORDER
 from datetime import datetime, timezone
-from app.utils.timezone_utils import convert_local_to_utc
+from app.utils.timezone_utils import convert_local_to_utc, utc_now_iso
 from app.utils.prediction_offsets import compute_event_dynamic_offset_minutes
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_effective_game_config
@@ -1115,8 +1115,11 @@ def delete(match_id):
     """Delete a match"""
     match = Match.query.get_or_404(match_id)
     
-    # Delete associated scouting data
+    # Delete associated scouting data (including qualitative entries)
     ScoutingData.query.filter_by(match_id=match.id, scouting_team_number=current_user.scouting_team_number).delete()
+    # qualitative observations are scoped to the match too
+    from app.models import QualitativeScoutingData
+    QualitativeScoutingData.query.filter_by(match_id=match.id, scouting_team_number=current_user.scouting_team_number).delete()
     
     db.session.delete(match)
     db.session.commit()
@@ -1238,10 +1241,12 @@ def strategy_live():
 
     # Get ALL teams at the event (regardless of scouting_team_number)
     teams = []
+    event_timezone = None
     if event:
         teams = get_all_teams_at_event(event_id=event.id)
+        event_timezone = getattr(event, 'timezone', None)
 
-    return render_template('matches/strategy_live.html', events=events, selected_event=event, teams=teams, game_config=game_config, **get_theme_context())
+    return render_template('matches/strategy_live.html', events=events, selected_event=event, teams=teams, game_config=game_config, event_timezone=event_timezone, **get_theme_context())
 
 
 @bp.route('/strategy/live/current-match')
@@ -1327,8 +1332,13 @@ def strategy_live_current_match():
         now = datetime.now(timezone.utc)
         now_ms = int(now.timestamp() * 1000)
 
+        # Get event timezone for proper conversion (match times stored as naive UTC)
+        event_tz = getattr(event, 'timezone', None)
+
         def _get_match_time_ms(m):
-            """Get the best scheduling timestamp as epoch milliseconds."""
+            """Get the best scheduling timestamp as UTC epoch milliseconds.
+            Naive datetimes are treated as UTC (consistent with how
+            match_time_fetcher stores them)."""
             for attr in ('predicted_time', 'scheduled_time'):
                 dt = getattr(m, attr, None)
                 if dt is not None:
@@ -1344,12 +1354,19 @@ def strategy_live_current_match():
             b = norm_db_score(m.blue_score)
             return bool(actual or winner or r is not None or b is not None)
 
+        # Build list of unplayed, non-skipped match indices for "has next match" logic
+        viable_indices = []
+        for i, m in enumerate(team_matches):
+            if m.id not in skip_ids and not _is_completed(m):
+                viable_indices.append(i)
+
         # Walk through team matches in order and find the right one to show
         selected = None
+        selected_idx = None
         selected_advance_at_ms = None
         all_info = []
 
-        for m in team_matches:
+        for i, m in enumerate(team_matches):
             is_done = _is_completed(m)
             ts = _get_match_time_ms(m)
             adjusted_ts = (ts + schedule_offset_ms) if ts is not None else None
@@ -1379,24 +1396,38 @@ def strategy_live_current_match():
                         continue
                 # Either no time, or time is in the future / within 2-min window
                 selected = m
+                selected_idx = i
                 if adjusted_ts is not None:
                     selected_advance_at_ms = adjusted_ts + ADVANCE_DELAY_MS
                 continue
 
         # If nothing was selected (all past advance threshold or completed),
-        # pick the last unplayed match that isn't skipped
+        # pick the last unplayed match that isn't skipped (fallback)
         if selected is None:
             for m in reversed(team_matches):
                 if m.id not in skip_ids and not _is_completed(m):
                     selected = m
-                    ts = _get_match_time_ms(m)
-                    if ts is not None:
-                        selected_advance_at_ms = ts + schedule_offset_ms + ADVANCE_DELAY_MS
+                    selected_idx = team_matches.index(m)
+                    # Don't set advance_at for fallback — there's nothing after this
+                    selected_advance_at_ms = None
                     break
 
         # If still nothing, everything is completed — show the last match
         if selected is None:
             selected = team_matches[-1]
+            selected_idx = len(team_matches) - 1
+
+        # Determine if there IS a next viable match after the selected one
+        has_next_match = False
+        if selected_idx is not None:
+            for vi in viable_indices:
+                if vi > selected_idx and team_matches[vi].id != selected.id:
+                    has_next_match = True
+                    break
+
+        # If there's no next match to advance to, clear the advance timer
+        if not has_next_match:
+            selected_advance_at_ms = None
 
         # Build response for the selected match
         def _iso_utc(dt):
@@ -1422,6 +1453,15 @@ def strategy_live_current_match():
                     teams_out = [x.strip() for x in str(s).split(',') if x.strip()]
             return teams_out
 
+        # Format the display time the SAME way the matches index page does
+        # (using format_time_with_timezone with event timezone → consistent display)
+        from app.utils.timezone_utils import format_time_with_timezone
+        event_tz = getattr(event, 'timezone', None)
+        best_time_dt = getattr(selected, 'predicted_time', None) or getattr(selected, 'scheduled_time', None)
+        display_time = ''
+        if best_time_dt:
+            display_time = format_time_with_timezone(best_time_dt, event_tz, '%I:%M %p')
+
         match_data = {
             'id': selected.id,
             'event_id': selected.event_id,
@@ -1430,6 +1470,7 @@ def strategy_live_current_match():
             'predicted_time': _iso_utc(getattr(selected, 'predicted_time', None)),
             'scheduled_time': _iso_utc(getattr(selected, 'scheduled_time', None)),
             'actual_time': _iso_utc(getattr(selected, 'actual_time', None)),
+            'display_time': display_time,  # pre-formatted like the matches page
             'status': 'completed' if _is_completed(selected) else 'upcoming',
             'alliances': {
                 'red': {'teams': _extract_teams(selected, True), 'score': norm_db_score(selected.red_score)},
@@ -1441,8 +1482,10 @@ def strategy_live_current_match():
             'success': True,
             'current_match': match_data,
             'advance_at_ms': selected_advance_at_ms,
+            'has_next_match': has_next_match,
             'server_time_ms': now_ms,
             'schedule_offset_ms': schedule_offset_ms,
+            'event_timezone': event_tz,
             'total_team_matches': len(team_matches),
             'team_schedule': all_info,
         })
@@ -2234,7 +2277,7 @@ def matches_data():
                 'matches': [],
                 'current_event': None,
                 'message': 'No event selected in configuration',
-                'timestamp': datetime.now().isoformat()
+                'timestamp': utc_now_iso()
             })
         
         # Determine which event to return: prefer explicit event_id param if provided
@@ -2248,7 +2291,7 @@ def matches_data():
                     'matches': [],
                     'current_event': None,
                     'message': f'Event id {event_id_param} not found or not accessible',
-                    'timestamp': datetime.now().isoformat()
+                    'timestamp': utc_now_iso()
                 })
         else:
             current_event = get_event_by_code(current_event_code)
@@ -2258,7 +2301,7 @@ def matches_data():
                 'matches': [],
                 'current_event': None,
                 'message': f'Event {current_event_code} not found',
-                'timestamp': datetime.now().isoformat()
+                'timestamp': utc_now_iso()
             })
         
         # Get matches for this event using event code matching for cross-team scenarios
@@ -2287,6 +2330,17 @@ def matches_data():
         else:
             teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).all()
         
+        # Helper: format a datetime the same way the matches index page does
+        # (server-side conversion so client never needs to guess timezone)
+        from app.utils.timezone_utils import format_time_with_timezone as _fmt_tz
+        _evt_tz = getattr(current_event, 'timezone', None) if current_event else None
+
+        def _format_display_time(dt, evt_obj):
+            if dt is None:
+                return ''
+            etz = getattr(evt_obj, 'timezone', None) if evt_obj else _evt_tz
+            return _fmt_tz(dt, etz, '%I:%M %p')
+
         # Prepare matches data for JSON
         matches_data = []
         for match in matches:
@@ -2353,6 +2407,20 @@ def matches_data():
                 # Naive datetime assumed UTC – append explicit UTC offset
                 return dt.isoformat() + '+00:00'
 
+            def _to_utc_epoch_ms(dt):
+                """Convert a datetime to UTC epoch milliseconds.
+                Naive datetimes are treated as UTC (not local time).
+                Returns None if dt is None."""
+                if dt is None:
+                    return None
+                if getattr(dt, 'tzinfo', None) is not None:
+                    return int(dt.timestamp() * 1000)
+                # Naive → force UTC interpretation
+                return int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
+
+            # Best time for scheduling purposes
+            _best_dt = _predicted_dt or _scheduled_dt
+
             match_data = {
                 'id': match.id,
                 'event_id': match.event_id,
@@ -2363,6 +2431,8 @@ def matches_data():
                 'scheduled_time': _iso_utc(_scheduled_dt),
                 'actual_time': _iso_utc(_actual_dt),
                 'played_time': _iso_utc(_played_dt),
+                'scheduled_time_ms': _to_utc_epoch_ms(_best_dt),
+                'display_time': _format_display_time(_best_dt, current_event),
                 'alliances': {
                     'red': {
                         'teams': _extract_alliance_teams(match, True),
@@ -2392,6 +2462,7 @@ def matches_data():
                 'end_date': current_event.end_date.isoformat() if current_event.end_date else None,
                 'schedule_offset_minutes': getattr(current_event, 'schedule_offset', None) or 0,
                 'offset_updated_at': _iso_utc(getattr(current_event, 'offset_updated_at', None)),
+                'timezone': getattr(current_event, 'timezone', None),
             },
             'matches': matches_data,
             'teams': teams_data,
@@ -2400,7 +2471,8 @@ def matches_data():
                 'completed_matches': len([m for m in matches_data if m['status'] == 'completed']),
                 'upcoming_matches': len([m for m in matches_data if m['status'] == 'upcoming'])
             },
-            'timestamp': datetime.now().isoformat()
+            'timestamp': utc_now_iso(),
+            'server_time_ms': int(datetime.now(timezone.utc).timestamp() * 1000)
         })
     except Exception as e:
         import traceback as _tb

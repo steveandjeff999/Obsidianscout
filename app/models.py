@@ -1247,7 +1247,8 @@ class AllianceSelection(db.Model):
     first_pick = db.Column(db.Integer, db.ForeignKey('team.id'))  # First pick
     second_pick = db.Column(db.Integer, db.ForeignKey('team.id'))  # Second pick
     third_pick = db.Column(db.Integer, db.ForeignKey('team.id'))  # Third pick (backup)
-    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
+    # event reference; when the parent event is removed we want selections gone too
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id', ondelete='CASCADE'), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     scouting_team_number = db.Column(db.Integer, nullable=True)
     
@@ -1256,7 +1257,8 @@ class AllianceSelection(db.Model):
     first_pick_team = db.relationship('Team', foreign_keys=[first_pick])
     second_pick_team = db.relationship('Team', foreign_keys=[second_pick])
     third_pick_team = db.relationship('Team', foreign_keys=[third_pick])
-    event = db.relationship('Event', backref='alliances')
+    # cascade deletes via ORM and rely on DB ondelete for raw SQL paths
+    event = db.relationship('Event', backref=db.backref('alliances', lazy=True, cascade='all, delete-orphan'), passive_deletes=True)
     
     def __repr__(self):
         return f"Alliance {self.alliance_number} - Event {self.event_id}"
@@ -1411,7 +1413,8 @@ class QualitativeScoutingData(db.Model):
     __tablename__ = 'qualitative_scouting_data'
     
     id = db.Column(db.Integer, primary_key=True)
-    match_id = db.Column(db.Integer, db.ForeignKey('match.id'), nullable=False)
+    # use ON DELETE CASCADE at the database level so raw SQL deletes don't fail
+    match_id = db.Column(db.Integer, db.ForeignKey('match.id', ondelete='CASCADE'), nullable=False)
     scouting_team_number = db.Column(db.Integer, nullable=True)
     scout_name = db.Column(db.String(50), nullable=False)
     scout_id = db.Column(db.Integer, nullable=True)
@@ -1435,7 +1438,8 @@ class QualitativeScoutingData(db.Model):
     data_json = db.Column(db.Text, nullable=False)
     
     # Relationships
-    match = db.relationship('Match', backref=db.backref('qualitative_scouting_data', lazy=True))
+    # configure cascade on the backref so ORM deletions also remove children
+    match = db.relationship('Match', backref=db.backref('qualitative_scouting_data', lazy=True, cascade='all, delete-orphan'))
     
     @property
     def scout(self):

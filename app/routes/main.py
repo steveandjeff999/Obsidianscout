@@ -17,6 +17,7 @@ from flask import request, jsonify
 from app import load_chat_history
 from app.models import User
 from datetime import datetime, timezone
+from app.utils.timezone_utils import iso_utc
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
     filter_events_by_scouting_team, get_event_by_code, validate_user_in_same_team
@@ -2458,7 +2459,7 @@ def api_brief_data():
                     'id': match.id,
                     'match_type': match.match_type.title(),
                     'match_number': match.match_number,
-                    'scheduled_time': match.scheduled_time.isoformat() if hasattr(match, 'scheduled_time') and match.scheduled_time else None,
+                    'scheduled_time': iso_utc(match.scheduled_time) if hasattr(match, 'scheduled_time') and match.scheduled_time else None,
                     'red_teams': match.red_teams,
                     'blue_teams': match.blue_teams,
                     'scout_coverage': {
@@ -2670,7 +2671,7 @@ def api_live_matches():
                     'id': match.id,
                     'match_type': match.match_type.title(),
                     'match_number': match.match_number,
-                    'scheduled_time': match.scheduled_time.isoformat() if hasattr(match, 'scheduled_time') and match.scheduled_time else None,
+                    'scheduled_time': iso_utc(match.scheduled_time) if hasattr(match, 'scheduled_time') and match.scheduled_time else None,
                     'red_teams': match.red_teams,
                     'blue_teams': match.blue_teams,
                     'result': {

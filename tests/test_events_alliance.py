@@ -118,6 +118,8 @@ def test_year_prefixed_event_code_matches_alliance():
         assert getattr(found[0], 'is_alliance', False) is True
 
 
+
+
 def test_events_page_uses_two_click_delete():
     """Verify /events page uses the inline two-click delete (no modal) for deletable events."""
     app = create_app()
@@ -137,5 +139,43 @@ def test_events_page_uses_two_click_delete():
         assert 'delete-confirm-btn' in html
         # Should not render the modal for this event id
         assert f'deleteModal{evt.id}' not in html
+
+
+def test_delete_event_cascades_alliance_selections():
+    """Deleting an event should remove any alliance selections owned by that scouting team."""
+    app = create_app()
+    with app.app_context():
+        # ensure clean schema
+        try:
+            db.create_all()
+        except Exception:
+            pass
+
+        # create user and login so current_user has a scouting_team_number
+        from flask_login import login_user
+        u = User(username='deleter', scouting_team_number=1234)
+        u.set_password('pass')
+        db.session.add(u)
+        # create event and an associated alliance selection
+        evt = Event(name='Delete Test', code='DEL', year=2026, scouting_team_number=1234)
+        db.session.add(evt)
+        db.session.commit()
+
+        ally = AllianceSelection(alliance_number=1, event_id=evt.id, scouting_team_number=1234)
+        db.session.add(ally)
+        db.session.commit()
+
+        assert AllianceSelection.query.filter_by(event_id=evt.id).count() == 1
+
+        client = app.test_client()
+        with client:
+            # log the user in so scoping works
+            login_user(u)
+            resp = client.post(f'/events/{evt.id}/delete', follow_redirects=True)
+            assert resp.status_code == 200
+
+        # post-delete assertions
+        assert Event.query.get(evt.id) is None
+        assert AllianceSelection.query.filter_by(event_id=evt.id).count() == 0
 
 

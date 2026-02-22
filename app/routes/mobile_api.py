@@ -5,6 +5,7 @@ Comprehensive REST API for mobile applications with authentication, data access,
 from flask import Blueprint, request, jsonify, current_app, g, url_for, send_file, get_flashed_messages
 from flask_login import login_user, logout_user, current_user
 from datetime import datetime, timezone, timedelta
+from app.utils.timezone_utils import utc_now_iso, iso_utc
 import os
 from functools import wraps
 import traceback
@@ -666,7 +667,7 @@ def mobile_toggle_alliance(alliance_id):
             'effective_pit_config': effective_pit_config,
             'alliance_status': alliance_status,
             'alliance_info': alliance_info,
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': utc_now_iso(),
             'message': message
         })
 
@@ -2750,9 +2751,9 @@ def get_matches():
             'blue_score': match.blue_score,
             'winner': match.winner
             ,
-            'scheduled_time': match.scheduled_time.isoformat() if hasattr(match, 'scheduled_time') and match.scheduled_time else None,
-            'predicted_time': match.predicted_time.isoformat() if hasattr(match, 'predicted_time') and match.predicted_time else None,
-            'actual_time': getattr(match, 'actual_time', None).isoformat() if getattr(match, 'actual_time', None) else None
+            'scheduled_time': iso_utc(match.scheduled_time) if hasattr(match, 'scheduled_time') and match.scheduled_time else None,
+            'predicted_time': iso_utc(match.predicted_time) if hasattr(match, 'predicted_time') and match.predicted_time else None,
+            'actual_time': iso_utc(getattr(match, 'actual_time', None)) if getattr(match, 'actual_time', None) else None
         } for match in matches]
         
         return jsonify({
@@ -2890,9 +2891,9 @@ def get_matches_current():
             'red_score': match.red_score,
             'blue_score': match.blue_score,
             'winner': match.winner,
-            'scheduled_time': match.scheduled_time.isoformat() if hasattr(match, 'scheduled_time') and match.scheduled_time else None,
-            'predicted_time': match.predicted_time.isoformat() if hasattr(match, 'predicted_time') and match.predicted_time else None,
-            'actual_time': getattr(match, 'actual_time', None).isoformat() if getattr(match, 'actual_time', None) else None
+            'scheduled_time': iso_utc(match.scheduled_time) if hasattr(match, 'scheduled_time') and match.scheduled_time else None,
+            'predicted_time': iso_utc(match.predicted_time) if hasattr(match, 'predicted_time') and match.predicted_time else None,
+            'actual_time': iso_utc(getattr(match, 'actual_time', None)) if getattr(match, 'actual_time', None) else None
         } for match in matches]
         
         return jsonify({

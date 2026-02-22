@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
-from app.models import Event, Match, ScoutingData, Team, ScoutingAllianceEvent, StrategyShare, StrategyDrawing, AllianceSharedScoutingData
+from flask_login import current_user  # needed for deletion scoping
+from app.models import Event, Match, ScoutingData, Team, ScoutingAllianceEvent, StrategyShare, StrategyDrawing, AllianceSharedScoutingData, AllianceSelection
 from sqlalchemy import func
 from app import db
 from datetime import datetime, date
@@ -281,6 +282,9 @@ def delete(event_id):
             match_ids = [match.id for match in event.matches]
             if match_ids:
                 ScoutingData.query.filter(ScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
+                # qualitative scouting observations
+                from app.models import QualitativeScoutingData
+                QualitativeScoutingData.query.filter(QualitativeScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
                 # Strategy shares for these matches
                 StrategyShare.query.filter(StrategyShare.match_id.in_(match_ids)).delete(synchronize_session=False)
                 # Strategy drawings for these matches
@@ -291,6 +295,9 @@ def delete(event_id):
             # Remove event associations from teams
             for team in event.teams:
                 team.events.remove(event)
+            
+            # Delete any alliance selections the current scouting team created for this event
+            AllianceSelection.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).delete()
             
             # Delete all matches associated with this event (filtered by scouting team)
             filter_matches_by_scouting_team().filter_by(event_id=event_id).delete()

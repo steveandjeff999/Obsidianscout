@@ -127,70 +127,62 @@
 
 <script>
 /* ======================================================================
-   LIVE STRATEGY MONITOR — Complete rewrite (Feb 2026)
+   LIVE STRATEGY MONITOR — Rewrite v3 (Feb 2026)
    ---------------------------------------------------------------
-   Key improvements over the previous version:
-     1. Server-side match selection via /strategy/live/current-match
-        → eliminates client-side clock-skew and complex timestamp logic
-     2. Single 15-second poll loop (no more separate reconnect loop,
-        auto-advance timers, or debounce hacks)
-     3. Deterministic: given the same server state, always picks the
-        same match — no mutable _advancedPastIds set that grew forever
-     4. Force-advance sends skip IDs to the server so the server picks
-        the NEXT match correctly
-     5. Clean countdown display driven by server-provided advance_at_ms
+   Architecture (per user spec):
+     1. Fetch full schedule from /matches/data every 15 minutes
+     2. Cache the schedule client-side
+     3. Client picks the next match for the selected team from the cache
+     4. 2 minutes after a match's scheduled start → advance to next match
+     5. Re-fetch schedule every 15 min to pick up time changes from API sync
    ====================================================================== */
 (function () {
 'use strict';
 
 // ── Constants ──────────────────────────────────────────────────────────
-var POLL_MS          = 15000;       // poll server every 15 seconds
-var COUNTDOWN_MS     = 1000;        // update countdown every 1 second
-var MANUAL_TIMEOUT   = 5 * 60000;   // manual override lasts 5 minutes
-var STRATEGY_RETRIES = 2;           // retry strategy fetch up to 2 extra times
+var SCHEDULE_REFRESH_MS = 15 * 60 * 1000;  // re-fetch schedule every 15 minutes
+var TICK_MS             = 1000;             // advance check every 1 second
+var ADVANCE_DELAY_MS    = 2 * 60 * 1000;   // advance 2 min after scheduled start
+var MANUAL_TIMEOUT_MS   = 5 * 60 * 1000;   // manual override lasts 5 minutes
+var STRATEGY_RETRIES    = 2;
 
 // ── State ──────────────────────────────────────────────────────────────
 var S = {
-    eventId:         null,
-    teamNumber:      null,
-    isRunning:       false,
-    currentMatchId:  null,       // ID of currently displayed match
-    currentMatch:    null,       // full match object currently displayed
-    advanceAtMs:     null,       // server-provided epoch ms when we should advance
-    serverTimeDelta: 0,          // (server_time - client_time) in ms for clock sync
-    skipIds:         [],         // match IDs the user manually advanced past (array for easy serialization)
-    manualUntil:     0,          // epoch ms when manual override expires (0 = not active)
-    matchesCache:    [],         // all matches from /matches/data (for manual select & strategy)
-    scheduleOffsetMs: 0,
-    pollTimer:       null,
-    countdownTimer:  null,
-    strategyData:    null        // last loaded strategy data
+    eventId:           null,
+    teamNumber:        null,
+    isRunning:         false,
+
+    // Schedule cache (from /matches/data)
+    allMatches:        [],      // ALL event matches from server
+    teamMatches:       [],      // filtered + sorted for selected team
+    lastScheduleFetch: 0,       // epoch ms when schedule was last fetched
+    serverDelta:       0,       // (server_time - client_time) ms, for clock sync
+    eventTimezone:     {{ (event_timezone | tojson) if event_timezone else 'null' }},    // IANA timezone string from event (e.g. 'America/Chicago')
+
+    // Current display
+    currentMatchId:    null,
+    currentMatch:      null,
+    currentIdx:        -1,      // index into teamMatches
+
+    // Manual overrides
+    skipIds:           [],      // match IDs manually advanced past
+    manualUntil:       0,       // epoch ms when manual override expires
+
+    // Timers
+    scheduleTimer:     null,    // 15-min schedule refresh
+    tickTimer:         null,    // 1-sec advance check
+
+    // Strategy
+    strategyData:      null
 };
 
 // ── DOM helpers ────────────────────────────────────────────────────────
 function $(id) { return document.getElementById(id); }
-
-function setStatus(msg) {
-    var el = $('status_box');
-    if (el) el.textContent = msg;
-}
-
-function setAdvanceInfo(msg) {
-    var el = $('auto_advance_info');
-    if (el) el.textContent = msg;
-}
-
-function setScheduleSummary(msg) {
-    var el = $('schedule_summary');
-    if (el) el.textContent = msg;
-}
+function setStatus(msg)   { var el = $('status_box');       if (el) el.textContent = msg; }
+function setAdvanceInfo(msg) { var el = $('auto_advance_info'); if (el) el.textContent = msg; }
+function setScheduleSummary(msg) { var el = $('schedule_summary'); if (el) el.textContent = msg; }
 
 // ── Match utilities ────────────────────────────────────────────────────
-function getMatchTime(m) {
-    if (!m) return null;
-    return m.predicted_time || m.scheduled_time || m.start_time || null;
-}
-
 var MATCH_TYPE_ORDER = {
     practice:1, qualification:2, qualifier:2, quarterfinal:3, quarterfinals:3, qf:3,
     semifinal:4, semifinals:4, sf:4, playoff:5, elimination:5, final:6, finals:6, f:6
@@ -203,9 +195,7 @@ function matchSortKey(m) {
     return order * 100000 + num;
 }
 
-function compareMatches(a, b) {
-    return matchSortKey(a) - matchSortKey(b);
-}
+function compareMatches(a, b) { return matchSortKey(a) - matchSortKey(b); }
 
 function teamInMatch(tn, m) {
     var t = String(tn);
@@ -216,86 +206,228 @@ function teamInMatch(tn, m) {
     } catch (e) { return false; }
 }
 
-// ── Server Communication ───────────────────────────────────────────────
-
-/** Fetch the current match from the dedicated server-side endpoint */
-function fetchCurrentMatch() {
-    if (!S.eventId || !S.teamNumber) return Promise.resolve(null);
-    var skipParam = S.skipIds.join(',');
-    var url = '/matches/strategy/live/current-match?event_id=' + encodeURIComponent(S.eventId)
-            + '&team_number=' + encodeURIComponent(S.teamNumber)
-            + '&skip_ids=' + encodeURIComponent(skipParam);
-
-    return fetch(url, { credentials: 'same-origin' })
-        .then(function (resp) {
-            if (!resp.ok) throw new Error('Server error ' + resp.status);
-            return resp.json();
-        })
-        .then(function (data) {
-            if (!data.success) throw new Error(data.error || 'Unknown error');
-
-            // Sync clocks
-            if (data.server_time_ms) {
-                S.serverTimeDelta = data.server_time_ms - Date.now();
-            }
-            S.advanceAtMs      = data.advance_at_ms || null;
-            S.scheduleOffsetMs = data.schedule_offset_ms || 0;
-
-            // Update schedule summary
-            if (data.team_schedule) {
-                var total    = data.total_team_matches || 0;
-                var done     = data.team_schedule.filter(function(m){ return m.completed; }).length;
-                var upcoming = total - done;
-                setScheduleSummary(total + ' matches total \u00b7 ' + done + ' completed \u00b7 ' + upcoming + ' upcoming');
-            }
-
-            return data.current_match || null;
-        })
-        .catch(function (e) {
-            console.warn('fetchCurrentMatch failed:', e);
-            setStatus('Failed to fetch current match: ' + e.message);
-            return null;
-        });
+/** Get match scheduled time as UTC epoch ms.
+ *  Uses the server-computed scheduled_time_ms (UTC epoch) directly
+ *  to avoid any browser timezone parsing issues with ISO strings. */
+function getMatchEpochMs(m) {
+    if (!m) return null;
+    // Prefer the server-computed UTC epoch (no parsing ambiguity)
+    if (m.scheduled_time_ms != null) return m.scheduled_time_ms;
+    // Fallback: parse ISO string (should have +00:00 suffix)
+    var raw = m.predicted_time || m.scheduled_time || null;
+    if (!raw) return null;
+    var d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d.getTime();
 }
 
-/** Fetch full schedule for populating manual match selector */
-function fetchFullSchedule() {
+/** Format a match time for display in the EVENT's timezone
+ *  (matching how the /matches page displays times).
+ *  Uses the server-provided `display_time` which is pre-formatted
+ *  in the event timezone by `format_time_with_timezone`.
+ *  Falls back to browser-local time if display_time is unavailable. */
+function formatLocalTime(m) {
+    if (!m) return 'Time TBD';
+    // Prefer server-provided display_time (formatted in event timezone, like /matches)
+    if (m.display_time) return m.display_time;
+    // Fallback: convert UTC epoch to event timezone on client if possible
+    var epoch = getMatchEpochMs(m);
+    if (epoch == null) return 'Time TBD';
+    var d = new Date(epoch);
+    // If we know the event timezone, format in that timezone
+    if (S.eventTimezone) {
+        try {
+            return d.toLocaleTimeString([], {
+                hour: '2-digit', minute: '2-digit',
+                timeZone: S.eventTimezone
+            });
+        } catch (e) {
+            // Fallback if browser doesn't support the timeZone option
+        }
+    }
+    // Last resort: browser local time
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function isMatchCompleted(m) {
+    if (!m) return false;
+    if (m.status === 'completed') return true;
+    if (m.actual_time) return true;
+    var r = m.alliances && m.alliances.red  ? m.alliances.red.score  : null;
+    var b = m.alliances && m.alliances.blue ? m.alliances.blue.score : null;
+    return (r !== null && r !== undefined) || (b !== null && b !== undefined);
+}
+
+// ── Schedule Fetching ──────────────────────────────────────────────────
+
+function fetchSchedule() {
     var url = '/matches/data';
     if (S.eventId) url += '?event_id=' + encodeURIComponent(S.eventId);
 
+    setStatus('Fetching schedule from server\u2026');
+
     return fetch(url, { credentials: 'same-origin' })
         .then(function (resp) {
-            if (!resp.ok) return;
+            if (!resp.ok) throw new Error('Server returned ' + resp.status);
             return resp.json();
         })
         .then(function (data) {
-            if (data && data.success) {
-                S.matchesCache = data.matches || [];
+            if (!data || !data.success) throw new Error(data ? data.error || 'Unknown' : 'Empty response');
+
+            S.allMatches = (data.matches || []).slice();
+            S.lastScheduleFetch = Date.now();
+
+            // Sync clock: compute delta between server UTC and client clock
+            if (data.server_time_ms) {
+                S.serverDelta = data.server_time_ms - Date.now();
+                console.log('[LiveStrategy] Clock delta:', S.serverDelta, 'ms (' + (S.serverDelta/1000).toFixed(1) + 's)');
             }
+
+            // Capture event timezone from server (used for display, matching /matches page)
+            if (data.current_event && data.current_event.timezone) {
+                S.eventTimezone = data.current_event.timezone;
+                console.log('[LiveStrategy] Event timezone:', S.eventTimezone);
+            }
+
+            // Filter to team's matches and sort
+            rebuildTeamMatches();
+
+            console.log('[LiveStrategy] Schedule fetched:', S.allMatches.length,
+                        'total,', S.teamMatches.length, 'for team', S.teamNumber);
         })
         .catch(function (e) {
-            console.warn('fetchFullSchedule failed:', e);
+            console.warn('fetchSchedule failed:', e);
+            setStatus('Failed to fetch schedule: ' + e.message);
         });
 }
 
-// ── Match Display ──────────────────────────────────────────────────────
+/** Get the server-synced "now" (UTC epoch ms adjusted by clock delta) */
+function serverNow() {
+    return Date.now() + S.serverDelta;
+}
+
+function rebuildTeamMatches() {
+    if (!S.teamNumber) { S.teamMatches = []; return; }
+    S.teamMatches = S.allMatches
+        .filter(function (m) { return teamInMatch(S.teamNumber, m); })
+        .sort(compareMatches);
+
+    // Update summary — count matches whose time+2min has passed vs upcoming
+    var now = serverNow();
+    var total = S.teamMatches.length;
+    var passed = 0;
+    for (var i = 0; i < S.teamMatches.length; i++) {
+        var t = getMatchEpochMs(S.teamMatches[i]);
+        if (t !== null && now >= t + ADVANCE_DELAY_MS) passed++;
+    }
+    setScheduleSummary(total + ' matches total \u00b7 ' + passed + ' past \u00b7 ' + (total - passed) + ' upcoming');
+}
+
+// ── Match Selection (client-side, purely time-based) ───────────────────
+
+/**
+ * Find the match closest to the current time whose scheduled_time + 2 min
+ * has NOT yet passed.  "Completed" status is ignored — only the clock matters.
+ *
+ * Walk the sorted team schedule:
+ *   1. Skip any match in the skip list.
+ *   2. Skip any match whose time + 2 min is already past.
+ *   3. First remaining match is the one to show.
+ *
+ * Fallback: if every match is past the 2-min threshold, show the last
+ * non-skipped match (the one furthest in the schedule).
+ */
+function pickCurrentMatch() {
+    var now = serverNow();
+    var matches = S.teamMatches;
+    if (!matches.length) return { match: null, idx: -1, advanceAt: null, hasNext: false };
+
+    var selectedIdx = -1;
+
+    // Pass 1: first match whose time + 2 min hasn't passed yet
+    for (var i = 0; i < matches.length; i++) {
+        if (S.skipIds.indexOf(matches[i].id) >= 0) continue;
+
+        var epochMs = getMatchEpochMs(matches[i]);
+        if (epochMs === null) {
+            // No scheduled time — treat as viable (show it)
+            selectedIdx = i;
+            break;
+        }
+        if (now < epochMs + ADVANCE_DELAY_MS) {
+            // This match's window is still open
+            selectedIdx = i;
+            break;
+        }
+        // time + 2 min passed → skip to next
+    }
+
+    // Pass 2: all matches are past 2-min → show the last non-skipped match
+    if (selectedIdx < 0) {
+        for (var j = matches.length - 1; j >= 0; j--) {
+            if (S.skipIds.indexOf(matches[j].id) < 0) {
+                selectedIdx = j;
+                break;
+            }
+        }
+    }
+
+    // Pass 3: everything is skipped — just show the last match
+    if (selectedIdx < 0) {
+        selectedIdx = matches.length - 1;
+    }
+
+    var selected = matches[selectedIdx];
+    var selectedEpoch = getMatchEpochMs(selected);
+    var advanceAtMs = selectedEpoch ? (selectedEpoch + ADVANCE_DELAY_MS) : null;
+
+    // Is there a next non-skipped match after this one?
+    var hasNext = false;
+    for (var k = selectedIdx + 1; k < matches.length; k++) {
+        if (S.skipIds.indexOf(matches[k].id) < 0) {
+            hasNext = true;
+            break;
+        }
+    }
+
+    // No next match → no advance timer
+    if (!hasNext) advanceAtMs = null;
+
+    // Debug logging
+    console.log('[LiveStrategy] pickCurrentMatch: serverNow=' + new Date(now).toISOString()
+        + ' selected=#' + selected.match_number
+        + ' time=' + (getMatchEpochMs(selected) ? new Date(getMatchEpochMs(selected)).toISOString() : 'none')
+        + ' advanceAt=' + (advanceAtMs ? new Date(advanceAtMs).toISOString() : 'none')
+        + ' hasNext=' + hasNext
+        + ' delta=' + S.serverDelta + 'ms');
+
+    return { match: selected, idx: selectedIdx, advanceAt: advanceAtMs, hasNext: hasNext };
+}
+
+// ── Display ────────────────────────────────────────────────────────────
 
 function renderMatchInfo(m) {
     if (!m) return '<div class="text-muted">No upcoming match found for this team.</div>';
-    var time = getMatchTime(m);
-    var timeStr = time ? new Date(time).toLocaleTimeString() : 'Time TBD';
+    // Display time in the EVENT timezone (matching /matches page behavior)
+    var timeStr = formatLocalTime(m);
+    // Show timezone label if available
+    var tzLabel = '';
+    if (S.eventTimezone) {
+        // Extract short name like "Chicago" from "America/Chicago"
+        var parts = S.eventTimezone.split('/');
+        tzLabel = '<br><small class="text-muted">' + parts[parts.length - 1].replace(/_/g, ' ') + '</small>';
+    }
     var teamsRed  = (m.alliances && m.alliances.red  && m.alliances.red.teams)  ? m.alliances.red.teams.join(', ')  : '\u2014';
     var teamsBlue = (m.alliances && m.alliances.blue && m.alliances.blue.teams) ? m.alliances.blue.teams.join(', ') : '\u2014';
     var level = m.comp_level || '';
     return '<div class="row text-center">'
         + '<div class="col-md-3"><strong>Match</strong><div class="fs-5">' + (m.match_number || '--') + '</div><small class="text-muted">' + level + '</small></div>'
-        + '<div class="col-md-3"><strong>Scheduled</strong><div>' + timeStr + '</div></div>'
+        + '<div class="col-md-3"><strong>Scheduled</strong><div>' + timeStr + '</div>' + tzLabel + '</div>'
         + '<div class="col-md-3"><strong class="text-danger">Red Alliance</strong><div>' + teamsRed + '</div></div>'
         + '<div class="col-md-3"><strong class="text-primary">Blue Alliance</strong><div>' + teamsBlue + '</div></div>'
         + '</div>';
 }
 
-function showMatch(match) {
+function showMatch(match, advanceAt, hasNext) {
     if (!match) {
         $('match_info').innerHTML = renderMatchInfo(null);
         $('current_match_card').classList.add('d-none');
@@ -304,121 +436,150 @@ function showMatch(match) {
         return;
     }
 
+    var changed = (match.id !== S.currentMatchId);
     S.currentMatchId = match.id;
     S.currentMatch   = match;
+    S.currentIdx     = -1; // will be set by caller or findIdx
+    // Store advance info for the tick timer
+    S._advanceAt = advanceAt;
+    S._hasNext   = hasNext;
 
     $('current_match_card').classList.remove('d-none');
     $('display_team').textContent = S.teamNumber || '';
     $('match_info').innerHTML = renderMatchInfo(match);
 
-    // Hide old strategy until new one loads
-    $('strategyResults').classList.add('d-none');
-    $('strategy_json').classList.add('d-none');
+    var matchNum = match.match_number || '';
+    var level    = match.comp_level || '';
+    setStatus('Showing match ' + matchNum + (level ? ' (' + level + ')' : ''));
 
-    setStatus('Showing match ' + (match.match_number || '') + ' (' + (match.comp_level || '') + ')');
-
-    // Start countdown
-    startCountdown();
-
-    // Auto-load strategy analysis
-    loadStrategy(match.id);
-}
-
-// ── Countdown & Auto-Advance ───────────────────────────────────────────
-
-function stopCountdown() {
-    if (S.countdownTimer) {
-        clearInterval(S.countdownTimer);
-        S.countdownTimer = null;
+    if (changed) {
+        // Hide old strategy until new one loads
+        $('strategyResults').classList.add('d-none');
+        $('strategy_json').classList.add('d-none');
+        loadStrategy(match.id);
     }
 }
 
-function startCountdown() {
-    stopCountdown();
+// ── Tick Timer (1-second) — advance check + countdown display ──────────
 
-    function tick() {
-        // If manual override is active, show that
-        if (S.manualUntil > Date.now()) {
-            var remain = S.manualUntil - Date.now();
-            var sec = Math.floor(remain / 1000) % 60;
-            var min = Math.floor(remain / 60000);
-            setAdvanceInfo('Manual mode \u2014 auto-advance resumes in ' + min + 'm ' + sec + 's');
-            return;
-        }
+function stopTick() {
+    if (S.tickTimer) { clearInterval(S.tickTimer); S.tickTimer = null; }
+}
 
-        if (!S.advanceAtMs) {
-            setAdvanceInfo('No scheduled time for this match \u2014 will check on next poll.');
-            return;
-        }
+function startTick() {
+    stopTick();
+    S.tickTimer = setInterval(tick, TICK_MS);
+    tick(); // immediate first tick
+}
 
-        // Adjust for clock difference: approximate what the server thinks "now" is
-        var serverNow = Date.now() + S.serverTimeDelta;
-        var remain2 = S.advanceAtMs - serverNow;
+function tick() {
+    if (!S.isRunning) return;
+    var now = serverNow();
 
-        if (remain2 <= 0) {
-            setAdvanceInfo('Match start + 2 min passed \u2014 advancing on next poll\u2026');
+    // Manual override active?
+    if (S.manualUntil > now) {
+        var rem = S.manualUntil - now;
+        var sec = Math.floor(rem / 1000) % 60;
+        var min = Math.floor(rem / 60000);
+        setAdvanceInfo('Manual mode \u2014 auto-advance resumes in ' + min + 'm ' + sec + 's');
+        return;
+    }
+
+    // Re-pick the current match from cache (handles advance automatically)
+    var pick = pickCurrentMatch();
+    if (!pick.match) {
+        setAdvanceInfo('No matches found for this team.');
+        return;
+    }
+
+    // Did the match change? (auto-advance happened)
+    if (pick.match.id !== S.currentMatchId) {
+        console.log('[LiveStrategy] Auto-advancing to match', pick.match.match_number);
+        showMatch(pick.match, pick.advanceAt, pick.hasNext);
+        return;
+    }
+
+    // Update countdown display
+    if (!pick.advanceAt) {
+        if (!pick.hasNext) {
+            setAdvanceInfo('This is the last upcoming match for this team. No auto-advance needed.');
         } else {
-            var s2 = Math.floor(remain2 / 1000) % 60;
-            var m2 = Math.floor(remain2 / 60000);
-            setAdvanceInfo('Auto-advance in ' + m2 + 'm ' + s2 + 's');
+            setAdvanceInfo('No scheduled time — will advance when schedule updates.');
         }
+        return;
     }
 
-    tick();
-    S.countdownTimer = setInterval(tick, COUNTDOWN_MS);
-}
-
-// ── Polling Loop ───────────────────────────────────────────────────────
-
-function stopPolling() {
-    if (S.pollTimer) {
-        clearInterval(S.pollTimer);
-        S.pollTimer = null;
-    }
-    stopCountdown();
-}
-
-function poll() {
-    if (!S.isRunning || !S.teamNumber || !S.eventId) return Promise.resolve();
-
-    // If manual override is still active, just refresh schedule but don't switch matches
-    if (S.manualUntil > Date.now()) {
-        return fetchFullSchedule().then(function () {
-            populateManualSelect();
-        });
-    }
-
-    // Fetch the server's opinion on which match to show
-    return fetchCurrentMatch().then(function (match) {
-        // Also refresh full schedule for manual selector
-        return fetchFullSchedule().then(function () {
-            populateManualSelect();
-            return match;
-        });
-    }).then(function (match) {
-        if (!match) {
-            setStatus('No upcoming match found for team ' + S.teamNumber);
-            setAdvanceInfo('');
-            return;
-        }
-
-        // Did the match change?
-        if (match.id !== S.currentMatchId) {
-            showMatch(match);
+    var remain = pick.advanceAt - now;
+    if (remain <= 0) {
+        if (pick.hasNext) {
+            setAdvanceInfo('Scheduled start + 2 min passed \u2014 advancing\u2026');
         } else {
-            // Same match — just update countdown info (advanceAtMs may have changed)
-            startCountdown();
+            setAdvanceInfo('Scheduled time passed. Last upcoming match for this team.');
         }
-    });
+    } else {
+        var s2 = Math.floor(remain / 1000) % 60;
+        var m2 = Math.floor(remain / 60000);
+        setAdvanceInfo('Auto-advance in ' + m2 + 'm ' + (s2 < 10 ? '0' : '') + s2 + 's');
+    }
 }
 
-function startPolling() {
+// ── Schedule Refresh Timer (15-min) ────────────────────────────────────
+
+function stopScheduleRefresh() {
+    if (S.scheduleTimer) { clearInterval(S.scheduleTimer); S.scheduleTimer = null; }
+}
+
+function startScheduleRefresh() {
+    stopScheduleRefresh();
+    S.scheduleTimer = setInterval(function () {
+        console.log('[LiveStrategy] 15-min schedule refresh');
+        fetchSchedule().then(function () {
+            populateManualSelect();
+            // Re-evaluate current match with fresh schedule
+            if (S.manualUntil <= Date.now()) {
+                var pick = pickCurrentMatch();
+                if (pick.match && pick.match.id !== S.currentMatchId) {
+                    showMatch(pick.match, pick.advanceAt, pick.hasNext);
+                }
+            }
+        });
+    }, SCHEDULE_REFRESH_MS);
+}
+
+// ── Main Start / Stop ──────────────────────────────────────────────────
+
+function stopAll() {
+    S.isRunning = false;
+    stopTick();
+    stopScheduleRefresh();
+}
+
+function startLive() {
     S.isRunning = true;
-    stopPolling();
-    // Immediate first poll
-    poll();
-    // Then every POLL_MS
-    S.pollTimer = setInterval(function () { poll(); }, POLL_MS);
+    S.skipIds = [];
+    S.manualUntil = 0;
+    stopAll();
+    S.isRunning = true;
+
+    setStatus('Fetching schedule for team ' + S.teamNumber + '\u2026');
+
+    fetchSchedule().then(function () {
+        populateManualSelect();
+
+        // Pick initial match
+        var pick = pickCurrentMatch();
+        if (pick.match) {
+            showMatch(pick.match, pick.advanceAt, pick.hasNext);
+        } else {
+            setStatus('No matches found for team ' + S.teamNumber + ' at this event.');
+            setAdvanceInfo('');
+        }
+
+        // Start the 1-second tick for advance checks
+        startTick();
+        // Start the 15-minute schedule refresh
+        startScheduleRefresh();
+    });
 }
 
 // ── Strategy Loading ───────────────────────────────────────────────────
@@ -460,7 +621,7 @@ function loadStrategy(matchId) {
                 }
             })
             .catch(function (e) {
-                if (e && e.done) return; // auth error, already handled
+                if (e && e.done) return;
                 console.warn('Strategy fetch error (attempt ' + attempt + '):', e);
                 if (attempt <= STRATEGY_RETRIES) {
                     setTimeout(doAttempt, 2000 * attempt);
@@ -487,18 +648,13 @@ function populateManualSelect() {
     var prev = sel.value;
     sel.innerHTML = '<option value="">-- Select match manually --</option>';
 
-    var list = S.matchesCache.slice();
-    if (S.teamNumber) {
-        var teamOnly = list.filter(function (m) { return teamInMatch(S.teamNumber, m); });
-        if (teamOnly.length) list = teamOnly;
-    }
-
-    list.sort(compareMatches);
+    var list = S.teamMatches.length ? S.teamMatches : S.allMatches.slice().sort(compareMatches);
 
     list.forEach(function (m) {
         var red  = (m.alliances && m.alliances.red  && m.alliances.red.teams)  ? m.alliances.red.teams.join(',') : '';
         var blue = (m.alliances && m.alliances.blue && m.alliances.blue.teams) ? m.alliances.blue.teams.join(',') : '';
-        var lbl = (m.comp_level || '') + ' ' + (m.match_number || '--') + ' \u2014 Red: ' + red + ' vs Blue: ' + blue;
+        var timeLabel = ' @ ' + formatLocalTime(m);
+        var lbl = (m.comp_level || '') + ' ' + (m.match_number || '--') + timeLabel + ' \u2014 Red: ' + red + ' vs Blue: ' + blue;
         var opt = document.createElement('option');
         opt.value = m.id;
         opt.textContent = lbl;
@@ -511,13 +667,18 @@ function populateManualSelect() {
 
 function forceNextMatch() {
     if (!S.currentMatchId) return;
-    // Add current match to skip list so server won't pick it again
     if (S.skipIds.indexOf(S.currentMatchId) < 0) {
         S.skipIds.push(S.currentMatchId);
     }
-    setStatus('Force advancing past match ' + (S.currentMatch ? S.currentMatch.match_number : S.currentMatchId) + '\u2026');
-    // Immediately poll to find the next match
-    poll();
+    S.manualUntil = 0; // clear manual override
+
+    var pick = pickCurrentMatch();
+    if (pick.match) {
+        showMatch(pick.match, pick.advanceAt, pick.hasNext);
+        setStatus('Force-advanced to match ' + (pick.match.match_number || pick.match.id));
+    } else {
+        setStatus('No more matches to advance to.');
+    }
 }
 
 // ── Manual Override ────────────────────────────────────────────────────
@@ -531,18 +692,17 @@ function manualSelectMatch() {
     }
 
     var match = null;
-    for (var i = 0; i < S.matchesCache.length; i++) {
-        if (S.matchesCache[i].id === matchId) { match = S.matchesCache[i]; break; }
+    var allSrc = S.allMatches.length ? S.allMatches : S.teamMatches;
+    for (var i = 0; i < allSrc.length; i++) {
+        if (allSrc[i].id === matchId) { match = allSrc[i]; break; }
     }
     if (!match) {
         alert('Match not found in cache. Try refreshing the page.');
         return;
     }
 
-    // Activate manual override
-    S.manualUntil = Date.now() + MANUAL_TIMEOUT;
-    S.advanceAtMs = null;
-    showMatch(match);
+    S.manualUntil = Date.now() + MANUAL_TIMEOUT_MS;
+    showMatch(match, null, false);
     setStatus('Manual mode \u2014 showing match ' + (match.match_number || matchId) + '. Auto-advance paused for 5 minutes.');
 }
 
@@ -810,12 +970,15 @@ function createPerformanceRadarChart(data) {
 // INITIALIZATION
 // ───────────────────────────────────────────────────────────────────────
 
+// ───────────────────────────────────────────────────────────────────────
+// INITIALIZATION
+// ───────────────────────────────────────────────────────────────────────
+
 document.addEventListener('DOMContentLoaded', function () {
     var eventSel = $('event_select');
     var teamSel  = $('team_select');
     var startBtn = $('start_btn');
 
-    // Initialize event ID from current selection
     S.eventId = eventSel.value || null;
 
     // ── Event change: reload page so server populates teams for new event ──
@@ -829,21 +992,20 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // ── Team change: enable start button and auto-start ──
+    // ── Team change: enable start button ──
     teamSel.addEventListener('change', function () {
         var v = teamSel.value;
         try { localStorage.setItem('strategy_live_selected_team', v || ''); } catch (_) {}
         startBtn.disabled = !v;
         if (v) {
             S.teamNumber = v;
-            // Auto-start after a short delay
             setTimeout(function () { startBtn.click(); }, 150);
         } else {
             S.teamNumber = null;
         }
     });
 
-    // ── Start button: begin live tracking ──
+    // ── Start button ──
     startBtn.addEventListener('click', function () {
         S.teamNumber = teamSel.value;
         S.eventId    = eventSel.value || null;
@@ -854,23 +1016,14 @@ document.addEventListener('DOMContentLoaded', function () {
             localStorage.setItem('strategy_live_selected_event', S.eventId || '');
         } catch (_) {}
 
-        // Reset skip IDs on fresh start
-        S.skipIds = [];
-        S.manualUntil = 0;
-
-        setStatus('Starting live strategy for team ' + S.teamNumber + '\u2026');
-        startPolling();
+        startLive();
     });
 
-    // ── Load strategy button ──
+    // ── Buttons ──
     $('load_strategy_btn').addEventListener('click', function () {
         if (S.currentMatchId) loadStrategy(S.currentMatchId);
     });
-
-    // ── Force next button ──
     $('force_next_btn').addEventListener('click', forceNextMatch);
-
-    // ── Manual match select ──
     $('manual_select_btn').addEventListener('click', manualSelectMatch);
 
     // ── Restore cached selections ──
@@ -878,17 +1031,15 @@ document.addEventListener('DOMContentLoaded', function () {
         var cachedEvent = localStorage.getItem('strategy_live_selected_event');
         var cachedTeam  = localStorage.getItem('strategy_live_selected_team');
 
-        // If cached event differs from current, navigate to it
         if (cachedEvent && String(cachedEvent) !== String(eventSel.value)) {
             if (window.location.search.indexOf('event_id=' + cachedEvent) < 0) {
                 var url = new URL(window.location.href);
                 url.searchParams.set('event_id', cachedEvent);
                 window.location.href = url.toString();
-                return; // page will reload
+                return;
             }
         }
 
-        // Restore team selection
         if (cachedTeam && teamSel) {
             var opts = teamSel.options;
             for (var i = 0; i < opts.length; i++) {
@@ -902,14 +1053,11 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     } catch (_) {}
 
-    // ── Initial schedule fetch for manual selector, then auto-start if team selected ──
-    fetchFullSchedule().then(function () {
-        populateManualSelect();
-        if (teamSel.value) {
-            startBtn.disabled = false;
-            setTimeout(function () { startBtn.click(); }, 300);
-        }
-    });
+    // ── Auto-start if team was already selected ──
+    if (teamSel.value) {
+        startBtn.disabled = false;
+        setTimeout(function () { startBtn.click(); }, 300);
+    }
 });
 
 })();

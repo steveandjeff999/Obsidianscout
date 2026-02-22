@@ -303,18 +303,12 @@ if __name__ == '__main__':
             except Exception as pages_error:
                 print(f"Warning: Could not create pages database tables: {pages_error}")
             
-            # Create tables for APIs database
-            # NOTE: The APIs database is managed by ApiDatabase (app/api_models.py) with its own
-            # standalone SQLAlchemy engine – it is NOT a Flask-SQLAlchemy bind.
-            # Tables are already created when init_api_system() calls api_db.init_app(app)
-            # inside create_app(), so we only need to call it here if it wasn't done yet.
+            # Create tables for APIs database if using separate bind
             try:
-                from app.api_models import api_db
-                if api_db.engine is None:
-                    api_db.init_app(app)
+                db.create_all(bind_key='apis')
                 print("APIs database tables verified/created")
             except Exception as apis_error:
-                print(f"Warning: Could not initialize APIs database: {apis_error}")
+                print(f"Warning: Could not create APIs database tables: {apis_error}")
             
             print("Database table verification complete!")
 
@@ -376,14 +370,6 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"Warning: Could not perform startup failed login cleanup: {e}")
         
-        # Auto-heal orphaned user_roles using raw sqlite3
-        # (Flask-SQLAlchemy bind routing doesn't reliably route Table DML to 'users' bind)
-        try:
-            from app.utils.database_init import _heal_user_roles_sqlite
-            _heal_user_roles_sqlite()
-        except Exception as _heal_err:
-            print(f"Warning: user_roles auto-heal failed ({_heal_err})")
-
         # Auto-create superadmin if it doesn't exist
         try:
             superadmin_user = User.query.filter_by(username='superadmin').first()
@@ -395,8 +381,6 @@ if __name__ == '__main__':
                 if not superadmin_role:
                     superadmin_role = Role(name='superadmin', description='Super Administrator with database access')
                     db.session.add(superadmin_role)
-                    db.session.commit()
-                    superadmin_role = Role.query.filter_by(name='superadmin').first()
                 
                 # Create superadmin user
                 superadmin_user = User(
@@ -405,7 +389,7 @@ if __name__ == '__main__':
                     must_change_password=False,
                     is_active=True
                 )
-                superadmin_user.set_password('password')
+                superadmin_user.set_password('password') 
                 superadmin_user.roles.append(superadmin_role)
                 db.session.add(superadmin_user)
                 db.session.commit()
@@ -418,33 +402,8 @@ if __name__ == '__main__':
             else:
                 print("SuperAdmin account already exists.")
         except Exception as e:
+            print(f"Error creating superadmin account: {e}")
             db.session.rollback()
-            # If the failure is a user_roles duplicate, heal and retry once
-            if 'user_roles' in str(e):
-                print(f"Detected stale user_roles for superadmin, healing and retrying...")
-                try:
-                    _heal_user_roles_sqlite()
-                    superadmin_role = Role.query.filter_by(name='superadmin').first()
-                    superadmin_user = User(
-                        username='superadmin',
-                        scouting_team_number=0,
-                        must_change_password=False,
-                        is_active=True
-                    )
-                    superadmin_user.set_password('password')
-                    if superadmin_role:
-                        superadmin_user.roles.append(superadmin_role)
-                    db.session.add(superadmin_user)
-                    db.session.commit()
-                    print("SuperAdmin account created successfully after cleanup!")
-                except Exception as retry_err:
-                    print(f"Error creating superadmin after retry: {retry_err}")
-                    try:
-                        db.session.rollback()
-                    except Exception:
-                        pass
-            else:
-                print(f"Error creating superadmin account: {e}")
         
     
     # Start periodic alliance sync thread

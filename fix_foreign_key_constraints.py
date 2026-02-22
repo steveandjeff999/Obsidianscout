@@ -146,10 +146,12 @@ def fix_foreign_key_constraints(scouting_team_number, force=False):
             # 1. Delete team_event associations
             db.session.execute(text('DELETE FROM team_event WHERE event_id IN ({})'.format(','.join(map(str, event_ids)))))
             
-            # 2. Delete scouting data for matches in these events
+            # 2. Delete scouting data for matches in these events (including qualitative observations)
             match_ids = [m.id for m in Match.query.filter(Match.event_id.in_(event_ids)).all()]
             if match_ids:
                 ScoutingData.query.filter(ScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
+                # qualitative data also references match
+                QualitativeScoutingData.query.filter(QualitativeScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
                 AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
             
             # 3. Delete matches

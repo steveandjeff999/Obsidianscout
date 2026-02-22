@@ -144,18 +144,18 @@
                                         </span>
                                     </td>
                                     <td>
-                                        {% for team in match.red_alliance.split(',') if team %}
+                                        {% for team in match.red_teams %}
                                         <span class="badge bg-danger me-1">{{ team }}</span>
                                         {% endfor %}
                                     </td>
                                     <td>
-                                        {% for team in match.blue_alliance.split(',') if team %}
+                                        {% for team in match.blue_teams %}
                                         <span class="badge bg-primary me-1">{{ team }}</span>
                                         {% endfor %}
                                     </td>
                                     <td>
                                         {% if match.scheduled_time %}
-                                            {{ match.scheduled_time.strftime('%m/%d %I:%M %p') }}
+                                            {{ match.scheduled_time | format_time_tz(selected_event.timezone if selected_event else None, '%m/%d %I:%M %p') }}
                                         {% else %}
                                             <span class="text-muted">TBD</span>
                                         {% endif %}

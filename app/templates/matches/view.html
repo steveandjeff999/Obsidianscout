@@ -54,7 +54,7 @@
                 </div>
                 <div class="card-body">
                     <ul class="list-group mb-3">
-                        {% for team_number in match.red_alliance.split(',') if team_number %}
+                        {% for team_number in match.red_teams %}
                         {% set evcode = (match.event.code if match.event and match.event.code else (game_config.get('current_event_code') if game_config else '')) %}
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             Team <span class="team-number" data-team-num="{{ team_number }}" data-event-key="{{ evcode }}">{{ team_number }}</span>
@@ -90,7 +90,7 @@
                 </div>
                 <div class="card-body">
                     <ul class="list-group mb-3">
-                        {% for team_number in match.blue_alliance.split(',') if team_number %}
+                        {% for team_number in match.blue_teams %}
                         {% set evcode = (match.event.code if match.event and match.event.code else (game_config.get('current_event_code') if game_config else '')) %}
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             Team <span class="team-number" data-team-num="{{ team_number }}" data-event-key="{{ evcode }}">{{ team_number }}</span>

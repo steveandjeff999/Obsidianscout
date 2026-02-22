@@ -18,6 +18,7 @@ import base64
 import zipfile
 import tempfile
 from datetime import datetime, timezone, date
+from app.utils.timezone_utils import utc_now_iso
 from sqlalchemy.exc import IntegrityError
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_effective_game_config
@@ -3513,6 +3514,9 @@ def wipe_database():
                 # 2) Delete objects that reference matches for these events (scoped by match.event_id)
                 StrategyShare.query.filter(StrategyShare.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
                 ScoutingData.query.filter(ScoutingData.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
+                # qualitative entries for those matches
+                from app.models import QualitativeScoutingData
+                QualitativeScoutingData.query.filter(QualitativeScoutingData.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
                 StrategyDrawing.query.filter(StrategyDrawing.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
                 # AllianceSharedScoutingData references matches and must be deleted first to avoid FK errors
                 AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
@@ -4088,7 +4092,7 @@ def data_stats():
                 'events': events_count
             },
             'event_stats': event_stats,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': utc_now_iso()
         })
         
     except Exception as e:

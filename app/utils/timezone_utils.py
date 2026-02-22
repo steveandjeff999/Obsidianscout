@@ -361,3 +361,41 @@ def get_current_time_in_timezone(event_timezone_str):
     """
     now_utc = datetime.now(timezone.utc)
     return convert_utc_to_local(now_utc, event_timezone_str)
+
+
+def iso_utc(dt):
+    """Serialize a datetime to ISO-8601 with an explicit UTC offset.
+
+    All datetimes stored in the database are naive UTC.  Without the
+    ``+00:00`` suffix browsers parse the string as **local** time
+    (per ES2015+), which silently shifts every displayed time by the
+    user's UTC offset.
+
+    Use this helper whenever a datetime leaves the server in a JSON
+    response so that every client — web browser **and** mobile app —
+    receives an unambiguous UTC timestamp it can convert to the user's
+    local timezone.
+
+    Args:
+        dt: A :class:`datetime.datetime` or ``None``.
+
+    Returns:
+        An ISO-8601 string with offset (e.g. ``2026-03-15T14:30:00+00:00``)
+        or ``None`` if *dt* is ``None``.
+    """
+    if dt is None:
+        return None
+    # Already timezone-aware → isoformat() includes the offset automatically
+    if getattr(dt, 'tzinfo', None) is not None:
+        return dt.isoformat()
+    # Naive datetime assumed UTC → append explicit UTC offset
+    return dt.isoformat() + '+00:00'
+
+
+def utc_now_iso():
+    """Return the current UTC time as an ISO-8601 string with ``+00:00``.
+
+    Drop-in replacement for the widespread ``datetime.now().isoformat()``
+    anti-pattern that emits server-local time without an offset.
+    """
+    return datetime.now(timezone.utc).isoformat()
