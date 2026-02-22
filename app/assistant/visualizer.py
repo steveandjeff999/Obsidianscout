@@ -7,20 +7,53 @@ import json
 import io
 import base64
 from typing import Dict, List, Any, Tuple, Optional
-import matplotlib
-matplotlib.use('Agg')  # Use Agg backend to avoid requiring a display
-import matplotlib.pyplot as plt
-# Optional heavy plotting/data libs - import lazily and handle missing packages gracefully
+
+# ---------------------------------------------------------------------------
+# Heavy optional plotting libraries
+# ---------------------------------------------------------------------------
+# matplotlib + seaborn must be imported lazily because:
+#   a) seaborn 0.13.x has a regex that triggers infinite recursion in
+#      Python 3.13's re module causing startup to hang / crash with
+#      KeyboardInterrupt (not an Exception subclass, so a bare
+#      `except Exception` will NOT save you).
+#   b) Some headless servers don't have a display; the Agg backend avoids
+#      that, but the import must still succeed first.
+# We use `except BaseException` so even KeyboardInterrupt/SystemExit from a
+# broken import are caught and the visualizer degrades gracefully.
+# ---------------------------------------------------------------------------
+plt = None
+sns = None
+pd  = None
+np  = None
+HAS_MATPLOTLIB = False
+HAS_SEABORN    = False
+
 try:
-    import seaborn as sns
-    import pandas as pd
-    import numpy as np
-    HAS_SEABORN = True
-except Exception:
-    sns = None
-    pd = None
-    np = None
-    HAS_SEABORN = False
+    import matplotlib as _mpl
+    _mpl.use('Agg')  # must be set before importing pyplot
+    import matplotlib.pyplot as _plt
+    plt = _plt
+    HAS_MATPLOTLIB = True
+except BaseException as _e:
+    import logging as _log
+    _log.getLogger(__name__).warning(
+        "matplotlib unavailable – visualisations will be disabled: %s", _e
+    )
+
+if HAS_MATPLOTLIB:
+    try:
+        import seaborn as _sns
+        import pandas as _pd
+        import numpy as _np
+        sns = _sns
+        pd  = _pd
+        np  = _np
+        HAS_SEABORN = True
+    except BaseException as _e:
+        import logging as _log
+        _log.getLogger(__name__).warning(
+            "seaborn/pandas/numpy unavailable – advanced visualisations disabled: %s", _e
+        )
 from app.models import Team, ScoutingData, Match, Event
 from app.utils.analysis import calculate_team_metrics
 import logging
@@ -38,16 +71,16 @@ class Visualizer:
     
     def setup_plot_style(self):
         """Set up the default styling for all plots"""
+        if HAS_MATPLOTLIB and plt is not None:
+            plt.rcParams['figure.figsize'] = (10, 6)
+            plt.rcParams['font.size'] = 12
+
         # If seaborn isn't available, fall back to matplotlib defaults and warn
         if HAS_SEABORN and sns is not None:
             try:
                 sns.set_theme(style="whitegrid")
             except Exception:
-                # Non-fatal - continue with matplotlib defaults
                 pass
-
-        plt.rcParams['figure.figsize'] = (10, 6)
-        plt.rcParams['font.size'] = 12
         
         # Use team 5454 colors
         self.colors = {
@@ -103,7 +136,13 @@ class Visualizer:
                 "error": True,
                 "message": f"Unsupported visualization type: {vis_type}"
             }
-        
+
+        if not HAS_MATPLOTLIB or plt is None:
+            return {
+                "error": True,
+                "message": "Visualization unavailable: matplotlib could not be loaded on this server."
+            }
+
         # Note: some visualizations (like trend_chart) can be generated with
         # plain matplotlib only. Avoid blocking all visualizations if optional
         # dependencies (seaborn/pandas/numpy) are missing. Individual plot
@@ -112,13 +151,16 @@ class Visualizer:
         try:
             # Call the appropriate visualization method
             figure = visualization_methods[vis_type](data)
-            
+
             # Convert plot to base64-encoded image
             img_data = self.figure_to_base64(figure)
-            
+
             # Close the figure to free memory
-            plt.close(figure)
-            
+            try:
+                plt.close(figure)
+            except Exception:
+                pass
+
             return {
                 "image": img_data,
                 "type": vis_type

@@ -151,21 +151,29 @@ class ApiDatabase:
             self.init_app(app)
     
     def init_app(self, app):
-        """Initialize the API database with the Flask app"""
-        # Create the apis.db path
+        """Initialize the API database with the Flask app.
+
+        API keys are always kept in a dedicated ``instance/apis.db`` SQLite
+        file, even when the rest of the app is running against PostgreSQL.
+        This keeps API key management self-contained and avoids the need to
+        provision an extra PostgreSQL database just for keys.
+
+        The old run.py code tried ``db.create_all(bind_key='apis')`` via
+        Flask-SQLAlchemy, which always fails because ``ApiDatabase`` has its
+        own standalone SQLAlchemy engine and is not registered as a
+        Flask-SQLAlchemy bind.  Tables are created here via
+        ``Base.metadata.create_all(self.engine)`` instead.
+        """
         apis_db_path = os.path.join(app.instance_path, 'apis.db')
-        
-        # Ensure the instance directory exists
         os.makedirs(app.instance_path, exist_ok=True)
-        
-        # Create SQLAlchemy engine for the APIs database
+
         self.engine = create_engine(f'sqlite:///{apis_db_path}', echo=False)
         self.Session = sessionmaker(bind=self.engine)
-        
-        # Create all tables
+
+        # Create all tables defined on Base (ApiKey, ApiUsage, ApiRateLimit)
         Base.metadata.create_all(self.engine)
-        
-        # Store the database instance on the app
+
+        # Store the database instance on the app for easy access
         app.api_db = self
     
     def get_session(self):
