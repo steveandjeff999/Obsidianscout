@@ -175,7 +175,7 @@
                     </p>
                     <form method="POST" action="{{ url_for('auth.save_nav_visibility') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        {% set hni = scouting_team_settings.get_hidden_nav_items() if scouting_team_settings else set() %}
+                        {% set hni = scouting_team_settings.get_hidden_nav_items() if scouting_team_settings else [] %}
                         {% macro nav_toggle(key, label, icon) %}
                         <div class="form-check form-switch mb-2">
                             <input class="form-check-input" type="checkbox" name="visible_nav_items" value="{{ key }}" id="nav_{{ key }}"

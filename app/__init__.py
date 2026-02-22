@@ -620,6 +620,26 @@ def handle_ws_login(data):
     cookie via a normal HTTP response — keeping credentials off the URL bar.
     """
     from flask_socketio import emit as _emit
+    try:
+        _handle_ws_login_inner(data, _emit)
+    except Exception as exc:
+        # Ensure the client ALWAYS gets a response – prevents infinite spinner
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
+            _emit('ws_login_result', {
+                'success': False,
+                'error': 'Server error during login. Please try again.'
+            })
+        except Exception:
+            pass
+        print(f"[ws_login] unhandled error: {exc}")
+
+
+def _handle_ws_login_inner(data, _emit):
+    """Core logic extracted so the outer handler can catch any exception."""
     from app.models import User
     from app.utils.api_utils import safe_int_team_number
     from flask import url_for

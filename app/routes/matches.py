@@ -334,6 +334,7 @@ def index():
 
         # Track which team_numbers already got scouting points
         scored_team_numbers = set()
+        has_scout_data = False  # True only when real scouting entries contributed
 
         for e in latest_by_team.values():
             try:
@@ -350,12 +351,16 @@ def index():
                 red_sum += pts
                 any_points = any_points or pts > 0
                 scored_team_numbers.add(tn)
+                has_scout_data = True
             elif tn in blue_team_numbers:
                 blue_sum += pts
                 any_points = any_points or pts > 0
                 scored_team_numbers.add(tn)
+                has_scout_data = True
 
         # EPA fallback for teams without scouting data
+        # Note: EPA scores are predictions only and must NOT mark a match as played
+        epa_contributed = False
         if use_epa:
             all_match_teams = red_team_numbers | blue_team_numbers
             for tn in all_match_teams:
@@ -369,14 +374,16 @@ def index():
                         pass
                     if tn in red_team_numbers:
                         red_sum += int(epa_total)
-                        any_points = True
+                        epa_contributed = True
                     elif tn in blue_team_numbers:
                         blue_sum += int(epa_total)
-                        any_points = True
+                        epa_contributed = True
 
-        if not any_points:
-            return (None, None)
-        return (red_sum, blue_sum)
+        if not any_points and not epa_contributed:
+            return (None, None, None)
+        # Return source: 'local' if real scouting data present, 'epa' if only EPA/OPR data
+        score_source = 'local' if has_scout_data else 'epa'
+        return (red_sum, blue_sum, score_source)
 
 
     # Build display scores for each match (normalize DB scores and fall back to local scouting data)
@@ -393,12 +400,12 @@ def index():
                 'source': 'api'
             }
         else:
-            r, b = _compute_local_scores_for_match(match)
+            r, b, score_src = _compute_local_scores_for_match(match)
             if r is not None or b is not None:
                 display_scores[match.id] = {
                     'red_score': r,
                     'blue_score': b,
-                    'source': 'local'
+                    'source': score_src  # 'local' = real scouting, 'epa' = EPA/OPR prediction only
                 }
             else:
                 display_scores[match.id] = {'red_score': None, 'blue_score': None, 'source': None}
@@ -1237,6 +1244,215 @@ def strategy_live():
     return render_template('matches/strategy_live.html', events=events, selected_event=event, teams=teams, game_config=game_config, **get_theme_context())
 
 
+@bp.route('/strategy/live/current-match')
+@analytics_required
+def strategy_live_current_match():
+    """Server-side match selection for live strategy.
+    Accepts: event_id, team_number, skip_ids (comma-separated match IDs to skip past).
+    Returns the match the live strategy page should currently display and timing info.
+    The server determines the correct match using server time, eliminating client clock issues.
+    """
+    try:
+        event_id = request.args.get('event_id', type=int)
+        team_number = request.args.get('team_number', type=str)
+        skip_ids_raw = request.args.get('skip_ids', '', type=str)
+        skip_ids = set()
+        if skip_ids_raw:
+            for s in skip_ids_raw.split(','):
+                s = s.strip()
+                if s.isdigit():
+                    skip_ids.add(int(s))
+
+        if not event_id or not team_number:
+            return jsonify({'success': False, 'error': 'event_id and team_number are required'}), 400
+
+        team_number = team_number.strip()
+
+        # Determine event (respect scouting team isolation)
+        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+        if not event:
+            return jsonify({'success': False, 'error': 'Event not found'}), 404
+
+        # Fetch all matches for the event
+        from sqlalchemy import func as _func
+        event_code = getattr(event, 'code', None)
+        if event_code:
+            matches_q = filter_matches_by_scouting_team().join(Event, Match.event_id == Event.id).filter(
+                _func.upper(Event.code) == event_code.upper()
+            )
+        else:
+            matches_q = filter_matches_by_scouting_team().filter_by(event_id=event.id)
+
+        from app.utils.team_isolation import get_current_scouting_team_number
+        scouting_team = get_current_scouting_team_number()
+        if scouting_team is not None:
+            matches_q = matches_q.filter(Match.scouting_team_number == scouting_team)
+        else:
+            matches_q = matches_q.filter(Match.scouting_team_number.is_(None))
+
+        all_matches = matches_q.all()
+        all_matches = sorted(all_matches, key=match_sort_key)
+
+        # Filter to matches that include this team
+        def _team_in_match(tn, m):
+            """Check whether team number tn appears in match m's alliances."""
+            teams_in = set()
+            for attr in ('red_1', 'red_2', 'red_3', 'blue_1', 'blue_2', 'blue_3'):
+                v = getattr(m, attr, None)
+                if v is not None:
+                    teams_in.add(str(v).strip())
+            for attr in ('red_alliance', 'blue_alliance'):
+                v = getattr(m, attr, None)
+                if v:
+                    for part in str(v).split(','):
+                        part = part.strip()
+                        if part:
+                            teams_in.add(part)
+            return str(tn) in teams_in
+
+        team_matches = [m for m in all_matches if _team_in_match(team_number, m)]
+        if not team_matches:
+            return jsonify({
+                'success': True,
+                'current_match': None,
+                'total_team_matches': 0,
+                'message': f'No matches found for team {team_number} at this event'
+            })
+
+        # Get schedule offset
+        schedule_offset_min = getattr(event, 'schedule_offset', None) or 0
+        schedule_offset_ms = schedule_offset_min * 60 * 1000
+        ADVANCE_DELAY_MS = 2 * 60 * 1000  # 2 minutes after match start
+
+        now = datetime.now(timezone.utc)
+        now_ms = int(now.timestamp() * 1000)
+
+        def _get_match_time_ms(m):
+            """Get the best scheduling timestamp as epoch milliseconds."""
+            for attr in ('predicted_time', 'scheduled_time'):
+                dt = getattr(m, attr, None)
+                if dt is not None:
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    return int(dt.timestamp() * 1000)
+            return None
+
+        def _is_completed(m):
+            actual = getattr(m, 'actual_time', None)
+            winner = getattr(m, 'winner', None)
+            r = norm_db_score(m.red_score)
+            b = norm_db_score(m.blue_score)
+            return bool(actual or winner or r is not None or b is not None)
+
+        # Walk through team matches in order and find the right one to show
+        selected = None
+        selected_advance_at_ms = None
+        all_info = []
+
+        for m in team_matches:
+            is_done = _is_completed(m)
+            ts = _get_match_time_ms(m)
+            adjusted_ts = (ts + schedule_offset_ms) if ts is not None else None
+
+            info = {
+                'id': m.id,
+                'match_number': m.match_number,
+                'comp_level': getattr(m, 'comp_level', None) or getattr(m, 'match_type', None),
+                'completed': is_done,
+                'time_ms': ts,
+                'skipped': m.id in skip_ids,
+            }
+            all_info.append(info)
+
+            if m.id in skip_ids:
+                continue
+            if is_done:
+                continue
+
+            # This match is unplayed and not skipped
+            if selected is None:
+                # First viable candidate
+                if adjusted_ts is not None:
+                    advance_at = adjusted_ts + ADVANCE_DELAY_MS
+                    if now_ms >= advance_at:
+                        # Already past the advance point — skip unless it's the last viable match
+                        continue
+                # Either no time, or time is in the future / within 2-min window
+                selected = m
+                if adjusted_ts is not None:
+                    selected_advance_at_ms = adjusted_ts + ADVANCE_DELAY_MS
+                continue
+
+        # If nothing was selected (all past advance threshold or completed),
+        # pick the last unplayed match that isn't skipped
+        if selected is None:
+            for m in reversed(team_matches):
+                if m.id not in skip_ids and not _is_completed(m):
+                    selected = m
+                    ts = _get_match_time_ms(m)
+                    if ts is not None:
+                        selected_advance_at_ms = ts + schedule_offset_ms + ADVANCE_DELAY_MS
+                    break
+
+        # If still nothing, everything is completed — show the last match
+        if selected is None:
+            selected = team_matches[-1]
+
+        # Build response for the selected match
+        def _iso_utc(dt):
+            if dt is None:
+                return None
+            if getattr(dt, 'tzinfo', None) is not None:
+                return dt.isoformat()
+            return dt.isoformat() + '+00:00'
+
+        def _extract_teams(m, prefix_red=True):
+            teams_out = []
+            if prefix_red:
+                attrs = ('red_1', 'red_2', 'red_3')
+            else:
+                attrs = ('blue_1', 'blue_2', 'blue_3')
+            for attr in attrs:
+                v = getattr(m, attr, None)
+                if v is not None:
+                    teams_out.append(str(v))
+            if not teams_out:
+                s = getattr(m, 'red_alliance' if prefix_red else 'blue_alliance', None)
+                if s:
+                    teams_out = [x.strip() for x in str(s).split(',') if x.strip()]
+            return teams_out
+
+        match_data = {
+            'id': selected.id,
+            'event_id': selected.event_id,
+            'match_number': selected.match_number,
+            'comp_level': getattr(selected, 'comp_level', None) or getattr(selected, 'match_type', None),
+            'predicted_time': _iso_utc(getattr(selected, 'predicted_time', None)),
+            'scheduled_time': _iso_utc(getattr(selected, 'scheduled_time', None)),
+            'actual_time': _iso_utc(getattr(selected, 'actual_time', None)),
+            'status': 'completed' if _is_completed(selected) else 'upcoming',
+            'alliances': {
+                'red': {'teams': _extract_teams(selected, True), 'score': norm_db_score(selected.red_score)},
+                'blue': {'teams': _extract_teams(selected, False), 'score': norm_db_score(selected.blue_score)},
+            },
+        }
+
+        return jsonify({
+            'success': True,
+            'current_match': match_data,
+            'advance_at_ms': selected_advance_at_ms,
+            'server_time_ms': now_ms,
+            'schedule_offset_ms': schedule_offset_ms,
+            'total_team_matches': len(team_matches),
+            'team_schedule': all_info,
+        })
+
+    except Exception as e:
+        import traceback as _tb
+        current_app.logger.error(f"strategy_live_current_match error: {e}\n{_tb.format_exc()}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/strategy/all')
 @analytics_required
 def strategy_all():
@@ -1340,6 +1556,7 @@ def strategy_all():
             red_team_numbers = set([t.strip() for t in str(m.red_alliance or '').split(',') if t.strip()])
             blue_team_numbers = set([t.strip() for t in str(m.blue_alliance or '').split(',') if t.strip()])
             scored_team_numbers = set()
+            has_scout_data = False  # True only when real scouting entries contributed
 
             for e in latest_by_team.values():
                 try:
@@ -1356,12 +1573,16 @@ def strategy_all():
                     red_sum += pts
                     any_points = any_points or pts > 0
                     scored_team_numbers.add(tn)
+                    has_scout_data = True
                 elif tn in blue_team_numbers:
                     blue_sum += pts
                     any_points = any_points or pts > 0
                     scored_team_numbers.add(tn)
+                    has_scout_data = True
 
             # EPA fallback for teams without scouting data
+            # Note: EPA scores are predictions only and must NOT be stored as actual match outcomes
+            epa_contributed = False
             if use_epa:
                 all_match_teams = red_team_numbers | blue_team_numbers
                 for tn in all_match_teams:
@@ -1372,14 +1593,16 @@ def strategy_all():
                     if epa_total and epa_total > 0:
                         if tn in red_team_numbers:
                             red_sum += int(epa_total)
-                            any_points = True
+                            epa_contributed = True
                         elif tn in blue_team_numbers:
                             blue_sum += int(epa_total)
-                            any_points = True
+                            epa_contributed = True
 
-            if not any_points:
-                return (None, None)
-            return (red_sum, blue_sum)
+            if not any_points and not epa_contributed:
+                return (None, None, None)
+            # 'local' = real scouting data present; 'epa' = EPA/OPR prediction only
+            score_source = 'local' if has_scout_data else 'epa'
+            return (red_sum, blue_sum, score_source)
         for m in matches:
             try:
                 data = generate_match_strategy_analysis(m.id)
@@ -1393,10 +1616,17 @@ def strategy_all():
                 # Determine display scores (prefer API-defined match scores)
                 red_score = norm_db_score(m.red_score)
                 blue_score = norm_db_score(m.blue_score)
+                _local_epa_red = None
+                _local_epa_blue = None
                 if red_score is None and blue_score is None:
-                    rloc, bloc = _compute_local_scores_for_match(m)
-                    red_score = rloc if rloc is not None else None
-                    blue_score = bloc if bloc is not None else None
+                    rloc, bloc, score_src = _compute_local_scores_for_match(m)
+                    if score_src == 'epa':
+                        # EPA/OPR data is a prediction — do NOT treat as actual match outcome
+                        _local_epa_red = rloc
+                        _local_epa_blue = bloc
+                    else:
+                        red_score = rloc if rloc is not None else None
+                        blue_score = bloc if bloc is not None else None
 
                 # Track whether we used predicted scores from analysis
                 predicted_scores_used = False
@@ -1419,7 +1649,8 @@ def strategy_all():
                     except Exception:
                         predicted_blue_score = p_blue if p_blue is not None else None
 
-                    # If we still don't have any actual/local scores, prefer predicted outcome scores from analysis
+                    # If we still don't have any actual/local scores, prefer predicted outcome scores
+                    # then EPA/OPR local predictions (clearly labelled as predictions, not outcomes)
                     if (red_score is None or blue_score is None):
                         try:
                             if red_score is None and predicted_red_score is not None:
@@ -1437,6 +1668,15 @@ def strategy_all():
                             if blue_score is None and predicted_blue_score is not None:
                                 blue_score = predicted_blue_score
                                 predicted_scores_used = True
+                        # Last fallback: EPA/OPR local estimates (only if no other prediction available)
+                        if red_score is None and _local_epa_red is not None:
+                            predicted_scores_used = True
+                            if predicted_red_score is None:
+                                predicted_red_score = _local_epa_red
+                        if blue_score is None and _local_epa_blue is not None:
+                            predicted_scores_used = True
+                            if predicted_blue_score is None:
+                                predicted_blue_score = _local_epa_blue
 
                 # Parse alliance team strings into structured lists with optional team lookup
                 def _parse_alliance(alliance_str):
@@ -1480,9 +1720,10 @@ def strategy_all():
                 r_score = norm_db_score(m.red_score)
                 b_score = norm_db_score(m.blue_score)
                 if r_score is None and b_score is None:
-                    rloc, bloc = _compute_local_scores_for_match(m)
-                    r_score = rloc if rloc is not None else None
-                    b_score = bloc if bloc is not None else None
+                    rloc, bloc, score_src = _compute_local_scores_for_match(m)
+                    if score_src != 'epa':  # EPA-only must not become an actual match score
+                        r_score = rloc if rloc is not None else None
+                        b_score = bloc if bloc is not None else None
 
                 def _parse_alliance_safe(alliance_str):
                     return [ {'team_number': t.strip(), 'team_id': None, 'team_name': None} for t in str(alliance_str or '').split(',') if t.strip() ]

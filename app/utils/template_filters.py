@@ -95,6 +95,12 @@ def init_app(app):
     except Exception:
         app.jinja_env.globals['is_starting_soon'] = is_starting_soon
 
+    # Make Python builtins available, like set() which may be used in templates
+    try:
+        app.add_template_global(set, name='set')
+    except Exception:
+        app.jinja_env.globals['set'] = set
+
     @app.template_filter('to_local_tz')
     def to_local_tz(dt_utc, event_timezone):
         """

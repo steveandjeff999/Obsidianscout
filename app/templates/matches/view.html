@@ -71,8 +71,12 @@
                     
                     {% set ds = display_score if display_score is defined else None %}
                     {% if ds and ds.red_score is not none and ds.red_score >= 0 %}
-                    <div class="alert alert-danger">
+                    <div class="alert {% if ds.source == 'epa' %}alert-secondary{% else %}alert-danger{% endif %}">
+                        {% if ds.source == 'epa' %}
+                        <strong>Predicted Score (EPA/OPR):</strong> {{ ds.red_score }} <small class="text-muted">(not yet played)</small>
+                        {% else %}
                         <strong>Final Score:</strong> {{ ds.red_score }} {% if ds.source == 'local' %}<small class="text-muted">(from local scouting)</small>{% endif %}
+                        {% endif %}
                     </div>
                     {% endif %}
                 </div>
@@ -103,8 +107,12 @@
                     
                     {% set ds = display_score if display_score is defined else None %}
                     {% if ds and ds.blue_score is not none and ds.blue_score >= 0 %}
-                    <div class="alert alert-primary">
+                    <div class="alert {% if ds.source == 'epa' %}alert-secondary{% else %}alert-primary{% endif %}">
+                        {% if ds.source == 'epa' %}
+                        <strong>Predicted Score (EPA/OPR):</strong> {{ ds.blue_score }} <small class="text-muted">(not yet played)</small>
+                        {% else %}
                         <strong>Final Score:</strong> {{ ds.blue_score }} {% if ds.source == 'local' %}<small class="text-muted">(from local scouting)</small>{% endif %}
+                        {% endif %}
                     </div>
                     {% endif %}
                 </div>
