@@ -97,10 +97,51 @@ def initialize_database():
     
     print("Database initialization complete!")
 
+def _heal_user_roles_sqlite():
+    """Directly open users.db with sqlite3 and remove orphaned user_roles rows.
+
+    Flask-SQLAlchemy's session.execute() does NOT reliably route core-level
+    DML (Table.delete()) to the correct bind engine.  By-passing the ORM
+    entirely guarantees the cleanup runs against the right file.
+    """
+    import sqlite3 as _sqlite3
+    from flask import current_app
+    _users_db = os.path.join(current_app.instance_path, 'users.db')
+    if not os.path.exists(_users_db):
+        return  # nothing to heal
+    try:
+        conn = _sqlite3.connect(_users_db)
+        cur = conn.cursor()
+        # Make sure the table exists before touching it
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_roles'")
+        if not cur.fetchone():
+            conn.close()
+            return
+        cur.execute("DELETE FROM user_roles WHERE user_id NOT IN (SELECT id FROM user)")
+        deleted = cur.rowcount
+        conn.commit()
+        conn.close()
+        if deleted > 0:
+            print(f"Auto-healed {deleted} orphaned user_roles row(s) in users.db")
+    except Exception as e:
+        print(f"Warning: raw user_roles heal failed ({e})")
+
+
 def init_auth_system():
     """Initialize the authentication system with roles and admin user"""
+    # Always start with a clean session so a previous failed transaction
+    # (e.g. a duplicate user_roles insert from an earlier startup attempt)
+    # doesn't leave us in PendingRollbackError state.
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+
+    # --- Auto-heal: remove orphaned user_roles rows ---
+    _heal_user_roles_sqlite()
+
     print("Setting up authentication system...")
-    
+
     # Create roles
     roles_data = [
         {
@@ -134,7 +175,14 @@ def init_auth_system():
         created_roles[role_data['name']] = role
     
     # Commit roles first
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as role_commit_err:
+        print(f"Warning: role commit failed ({role_commit_err}), rolling back and continuing")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     
     # Create admin user: admin with password password
     admin_username = 'admin'
@@ -167,14 +215,34 @@ def init_auth_system():
     if not admin_user:
         admin_user = User(username=admin_username)
         admin_user.set_password(admin_password)
-        
-        # Add admin role
         admin_role = Role.query.filter_by(name='admin').first()
         if admin_role:
             admin_user.roles.append(admin_role)
-        
         db.session.add(admin_user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as commit_err:
+            db.session.rollback()
+            # If the failure is a user_roles duplicate, heal and retry once
+            if 'user_roles' in str(commit_err):
+                print("Detected stale user_roles, healing and retrying...")
+                _heal_user_roles_sqlite()
+                admin_user = User(username=admin_username)
+                admin_user.set_password(admin_password)
+                admin_role = Role.query.filter_by(name='admin').first()
+                if admin_role:
+                    admin_user.roles.append(admin_role)
+                db.session.add(admin_user)
+                try:
+                    db.session.commit()
+                except Exception as retry_err:
+                    print(f"Warning: admin user retry failed ({retry_err})")
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+            else:
+                print(f"Warning: admin user commit failed ({commit_err})")
         
         print(f"Created admin user: {admin_username}")
         print(f"Admin password: {admin_password}")
