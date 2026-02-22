@@ -119,12 +119,23 @@
             submitBtn.innerHTML = 'Sign In';
         }
 
+        /* ---- Fallback: strip the WS handler and do a normal POST ---- */
+        function fallbackFormPost(reason) {
+            try { resetButton(); } catch (_) {}
+            if (reason) { try { showError(reason); } catch (_) {} }
+            if (wsSubmitHandler) {
+                try { form.removeEventListener('submit', wsSubmitHandler); } catch (_) {}
+            }
+            setTimeout(function () { try { form.submit(); } catch (_) {} }, 600);
+        }
+
         if (!form || !submitBtn || typeof io === 'undefined') {
             // No socket.io available – fall back silently to regular form POST
             return;
         }
 
-        form.addEventListener('submit', function (e) {
+        /* Named reference so we can remove it cleanly for fallback */
+        var wsSubmitHandler = function (e) {
             // Let browser HTML5 validation run first
             if (!form.checkValidity()) {
                 form.classList.add('was-validated');
@@ -144,32 +155,35 @@
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Signing in…';
 
-            // Create a dedicated socket for the login exchange so we don’t
-            // interfere with the existing window.socket (if any).
+            // Create a dedicated socket for the login exchange.
+            // Use polling only – avoids "Invalid transport" errors on servers
+            // that don't support WebSocket (e.g. Waitress).
             var loginSocket;
             try {
-                loginSocket = io({ transports: ['websocket', 'polling'], reconnection: false });
+                loginSocket = io({
+                    transports: ['polling'],
+                    reconnection: false,
+                    timeout: 5000
+                });
             } catch (err) {
-                resetButton();
-                showError('Could not connect to server. Please try again.');
+                fallbackFormPost('Could not connect to server – using standard login…');
                 return;
             }
 
             var done = false;
 
-            function finish(socket) {
+            function finish() {
                 done = true;
-                try { socket.disconnect(); } catch (ignored) {}
+                try { loginSocket.disconnect(); } catch (_) {}
             }
 
-            // Safety timeout – 30 s
+            // Safety timeout – 8 s (covers connect + round-trip)
             var timeoutId = setTimeout(function () {
                 if (!done) {
-                    finish(loginSocket);
-                    resetButton();
-                    showError('Login timed out. Please check your connection and try again.');
+                    finish();
+                    fallbackFormPost('Login timed out – using standard login…');
                 }
-            }, 30000);
+            }, 8000);
 
             loginSocket.on('connect', function () {
                 loginSocket.emit('ws_login', {
@@ -184,7 +198,7 @@
 
             loginSocket.on('ws_login_result', function (result) {
                 clearTimeout(timeoutId);
-                finish(loginSocket);
+                finish();
                 if (result && result.success) {
                     // Navigate to the HTTP endpoint that sets the session cookie
                     window.location.href = '/auth/ws-complete-login/' + result.nonce;
@@ -197,15 +211,13 @@
             loginSocket.on('connect_error', function () {
                 if (done) return;
                 clearTimeout(timeoutId);
-                finish(loginSocket);
-                // Graceful fallback: submit the form the traditional way
-                form.removeEventListener('submit', arguments.callee);
-                resetButton();
-                showError('WebSocket unavailable – falling back to standard login…');
-                setTimeout(function () { form.submit(); }, 800);
+                finish();
+                // Socket.io could not connect – fall back to normal form POST
+                fallbackFormPost('Real-time connection unavailable – using standard login…');
             });
+        };
 
-        }, false);
+        form.addEventListener('submit', wsSubmitHandler, false);
     })();
     </script>
 {% endblock %}

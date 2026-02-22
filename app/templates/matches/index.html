@@ -141,7 +141,8 @@
                                     {# Consider a match 'played' ONLY if it has valid scores (not None and >= 0) #}
                                     {# Check if scores are available from display_scores dictionary #}
                                     {% set ds = display_scores.get(match.id) if display_scores is defined else None %}
-                                    {% set has_played = (ds and ds.red_score is not none and ds.red_score >= 0 and ds.blue_score is not none and ds.blue_score >= 0) or (match.actual_time is not none) %}
+                                    {# EPA/OPR-only scores are predictions — they must NOT count as a played match #}
+                                    {% set has_played = (ds and ds.source != 'epa' and ds.red_score is not none and ds.red_score >= 0 and ds.blue_score is not none and ds.blue_score >= 0) or (match.actual_time is not none) %}
                                     {% if has_played %}
                                         {# Display both scheduled and actual (played) times where available #}
                                         {% set sched_dt = match.scheduled_time %}
@@ -254,8 +255,13 @@
                                     {% set ds = display_scores.get(match.id) if display_scores is defined else None %}
                                     {% if ds and ds.red_score is not none and ds.red_score >= 0 and ds.blue_score is not none and ds.blue_score >= 0 %}
                                     <div>
+                                        {% if ds.source == 'epa' %}
+                                        <span class="text-muted"><em>{{ ds.red_score }}</em> - <em>{{ ds.blue_score }}</em></span>
+                                        <small class="text-muted ms-2">(EPA/OPR prediction)</small>
+                                        {% else %}
                                         <span class="fw-bold text-danger">{{ ds.red_score }}</span> - <span class="fw-bold text-primary">{{ ds.blue_score }}</span>
                                         {% if ds.source == 'local' %}<small class="text-muted ms-2">(from local scouting)</small>{% endif %}
+                                        {% endif %}
                                     </div>
                                     {% else %}
                                     <span class="text-muted">Not scored</span>
