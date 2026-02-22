@@ -240,13 +240,14 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                        {% for team_number in match.red_alliance.split(',') if team_number %}
+                                        {# use property that handles None safely and returns list of ints #}
+                                        {% for team_number in match.red_teams %}
                                         {% set evcode = (match.event.event_code if match.event and match.event.event_code else (match.event.code if match.event and match.event.code else (game_config.get('current_event_code') if game_config else '')) ) %}
                                         <span class="badge bg-danger me-1"><span class="team-number" data-team-num="{{ team_number }}" data-event-key="{{ evcode }}">{{ team_number }}</span></span>
                                         {% endfor %}
                                 </td>
                                 <td>
-                                        {% for team_number in match.blue_alliance.split(',') if team_number %}
+                                        {% for team_number in match.blue_teams %}
                                         {% set evcode = (match.event.event_code if match.event and match.event.event_code else (match.event.code if match.event and match.event.code else (game_config.get('current_event_code') if game_config else '')) ) %}
                                         <span class="badge bg-primary me-1"><span class="team-number" data-team-num="{{ team_number }}" data-event-key="{{ evcode }}">{{ team_number }}</span></span>
                                         {% endfor %}

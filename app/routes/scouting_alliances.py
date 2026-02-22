@@ -18,6 +18,7 @@ from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import load_game_config, load_pit_config
 from app.utils.team_isolation import get_current_scouting_team_number
 from datetime import datetime, timezone, timedelta
+from app.utils.timezone_utils import utc_now_iso, iso_utc
 import json
 import uuid
 
@@ -299,7 +300,7 @@ def toggle_alliance_mode(alliance_id):
             'effective_pit_config': effective_pit_config,
             'alliance_status': alliance_status,
             'alliance_info': alliance_info,
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': utc_now_iso(),
             'message': message
         })  # Broadcast to ALL users across all pages
         
@@ -344,7 +345,7 @@ def get_current_config():
             'alliance_info': get_active_alliance_info(),
             'team_number': current_team
         },
-        'timestamp': datetime.now().isoformat()
+        'timestamp': utc_now_iso()
     }
     
     return jsonify(config_data)
@@ -375,7 +376,7 @@ def reload_global_config():
                 'alliance_info': get_active_alliance_info(),
                 'team_number': current_team
             },
-            'timestamp': datetime.now().isoformat()
+            'timestamp': utc_now_iso()
         }
         
         # Broadcast to ALL users
@@ -421,7 +422,7 @@ def broadcast_config_change():
                 'alliance_info': get_active_alliance_info(),
                 'team_number': current_team
             },
-            'timestamp': datetime.now().isoformat()
+            'timestamp': utc_now_iso()
         }
         
         # Broadcast to ALL users

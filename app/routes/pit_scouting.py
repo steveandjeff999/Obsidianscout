@@ -6,6 +6,7 @@ from app import db, socketio
 import json
 import uuid
 from datetime import datetime, timezone
+from app.utils.timezone_utils import utc_now_iso
 from app.utils.config_manager import get_id_to_perm_id_mapping, get_effective_game_config
 from app.utils.sync_manager import SyncManager
 import os
@@ -1850,7 +1851,7 @@ def pit_data():
                 'total_teams': total_teams,
                 'completion_percentage': round((scouted_teams / total_teams * 100) if total_teams > 0 else 0, 1)
             },
-            'timestamp': datetime.now().isoformat()
+            'timestamp': utc_now_iso()
         })
         
     except Exception as e:

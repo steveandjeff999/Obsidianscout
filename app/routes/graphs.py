@@ -10,6 +10,7 @@ import plotly
 import sys
 import numpy as np
 from datetime import datetime, timezone
+from app.utils.timezone_utils import utc_now_iso
 from app.models import Team, Match, ScoutingData, Event, SharedGraph
 from app.models import CustomPage
 from app import db
@@ -1106,7 +1107,7 @@ def graphs_data():
         'events': [{'id': e.id, 'name': e.name, 'code': e.code} for e in all_events],
         'current_event': {'id': current_event.id, 'name': current_event.name, 'code': current_event.code} if current_event else None,
         'team_metrics': team_metrics,
-        'config_timestamp': datetime.now().isoformat()
+        'config_timestamp': utc_now_iso()
     })
 
 @bp.route('/side-by-side')

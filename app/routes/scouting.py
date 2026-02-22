@@ -4,6 +4,7 @@ from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingD
 from app import db, socketio
 import json
 from datetime import datetime, timezone
+from app.utils.timezone_utils import utc_now_iso
 import qrcode
 from io import BytesIO
 import base64
@@ -1342,7 +1343,7 @@ def api_save():
             'match_number': match.match_number,
             'match_type': match.match_type,
             'action': action,
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            'timestamp': utc_now_iso()
         })
         
     except Exception as e:

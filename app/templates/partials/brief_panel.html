@@ -323,8 +323,12 @@ document.addEventListener('DOMContentLoaded', () => {
   function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
 
   function formatTimeAgo(ts) {
+    if (!ts) return '';
+    // Ensure naive ISO strings (no offset) are treated as UTC
+    const isoStr = String(ts).match(/[Z+\-]\d/) ? ts : ts + '+00:00';
     const now = Date.now();
-    const t = new Date(ts).getTime();
+    const t = new Date(isoStr).getTime();
+    if (isNaN(t)) return '';
     const diff = Math.floor((now - t) / 1000);
     if (diff < 60) return 'Just now';
     if (diff < 3600) return Math.floor(diff/60) + 'm ago';
@@ -332,7 +336,14 @@ document.addEventListener('DOMContentLoaded', () => {
     return Math.floor(diff/86400) + 'd ago';
   }
 
-  function formatMatchTime(ts) { const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+  // Convert UTC time from server to browser-local time for display
+  function formatMatchTime(ts) {
+    if (!ts) return '';
+    // Ensure naive ISO strings (no offset) are treated as UTC
+    const isoStr = String(ts).match(/[Z+\-]\d/) ? ts : ts + '+00:00';
+    const d = new Date(isoStr);
+    return isNaN(d) ? '' : d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  }
 
   function renderRecentActivity(activities) {
     const container = document.getElementById('briefRecentActivity');
