@@ -136,12 +136,39 @@ function redraw() {
     const rect = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw normal items first (strokes and text). Collect erasers to apply after.
-    const eraseItems = [];
+    // Walk items in order and render each. Erasers are drawn in-place so they only
+    // affect drawings that occurred earlier in the history, which allows new
+    // strokes to be placed on top of erased regions.
     for (const item of drawingData) {
         if (!item) continue;
-        if (item.type === 'erase') { eraseItems.push(item); continue; }
-        if (item && item.type === 'text') {
+
+        if (item.type === 'erase') {
+            // immediate application of erase stroke
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            const size = item.size || eraserSize || 20;
+            ctx.lineWidth = size;
+            if (item.points && item.points.length) {
+                ctx.beginPath();
+                ctx.moveTo(item.points[0].x * rect.width, item.points[0].y * rect.height);
+                for (let i = 1; i < item.points.length; i++) {
+                    ctx.lineTo(item.points[i].x * rect.width, item.points[i].y * rect.height);
+                }
+                ctx.stroke();
+                // draw circles to avoid gaps
+                for (const p of item.points) {
+                    ctx.beginPath();
+                    ctx.arc(p.x * rect.width, p.y * rect.height, size / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            ctx.restore();
+            continue;
+        }
+
+        if (item.type === 'text') {
             ctx.fillStyle = item.color || '#000';
             ctx.textBaseline = 'middle';
             const baseFont = item.fontSize || 24;
@@ -164,7 +191,7 @@ function redraw() {
 
             // Simple single-line text rendering for now
             ctx.fillText(item.text, item.x * rect.width, item.y * rect.height);
-        } else if (item && item.points && item.points.length) {
+        } else if (item.points && item.points.length) {
             ctx.strokeStyle = item.color;
             ctx.lineWidth = 3;
             ctx.beginPath();
@@ -174,31 +201,6 @@ function redraw() {
             }
             ctx.stroke();
         }
-    }
-
-    // Apply erase strokes using destination-out so they remove previously-drawn pixels
-    if (eraseItems.length) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        for (const eItem of eraseItems) {
-            if (!eItem.points || !eItem.points.length) continue;
-            ctx.lineWidth = eItem.size || 20;
-            ctx.beginPath();
-            ctx.moveTo(eItem.points[0].x * rect.width, eItem.points[0].y * rect.height);
-            for (let i = 1; i < eItem.points.length; i++) {
-                ctx.lineTo(eItem.points[i].x * rect.width, eItem.points[i].y * rect.height);
-            }
-            ctx.stroke();
-            // also draw small circles at points to ensure gaps are erased
-            for (const p of eItem.points) {
-                ctx.beginPath();
-                ctx.arc(p.x * rect.width, p.y * rect.height, (eItem.size || 20) / 2, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-        ctx.restore();
     }
 }
 

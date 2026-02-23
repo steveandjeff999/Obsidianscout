@@ -41,7 +41,7 @@
                 <p class="text-muted">Control whether numeric count-up animations run on this device. This preference is saved in your browser.</p>
                 <div class="form-check form-switch mb-3">
                     <input class="form-check-input" type="checkbox" id="countupEnabledToggle">
-                    <label class="form-check-label" for="countupEnabledToggle">Enable numeric count-up animations {{ help.help_icon('When enabled, numbers animate from 0 to their final values on certain dashboards for a visual effect. Disable for performance or accessibility.', 'Count-up animations') }}</label>
+                    <label class="form-check-label" for="countupEnabledToggle">Enable numeric count-up animations {{ help.help_icon('When enabled, numbers animate from 0 to their final values on certain dashboards for a visual effect. Disable for performance or accessibility. Note: this control is overridden when "Reduce motion" is enabled.', 'Count-up animations') }}</label>
                 </div>
 
                 <div class="form-check form-switch mb-3">
@@ -147,6 +147,20 @@
         var toggle = document.getElementById('countupEnabledToggle');
         try{ if(toggle) toggle.checked = readBool('countup_enabled', true); }catch(e){}
 
+        // we need to respect reduced-motion preference: if animations are disabled, countups should
+        // be turned off and the control disabled.  we'll wire this up further down when we read the
+        // reduced-motion toggle, but initialise now in case we are already in that state.
+        function updateCountupControlForReducedMotion(disabled){
+            if(!toggle) return;
+            if(disabled){
+                try{ toggle.checked = false; }catch(e){}
+                try{ toggle.disabled = true; }catch(e){}
+            } else {
+                try{ toggle.disabled = false; }catch(e){}
+                try{ toggle.checked = readBool('countup_enabled', true); }catch(e){}
+            }
+        }
+
         // Spinning counters toggle (client-level preference; server must also allow)
         var spinToggle = document.getElementById('spinningCountersToggle');
         try{ if(spinToggle) spinToggle.checked = readBool('spinning_counters_enabled', true); }catch(e){}
@@ -200,6 +214,8 @@
 
         var reducedToggle = document.getElementById('reducedMotionToggle');
         try{ if(reducedToggle) reducedToggle.checked = readBool('reduced_motion', false); }catch(e){}
+        // honour reduced-motion by disabling countups immediately
+        try{ if(reducedToggle && reducedToggle.checked) updateCountupControlForReducedMotion(true); }catch(e){}
         var navbarThemeSelect = document.getElementById('navbarThemeSelect');
         try{ if(navbarThemeSelect) navbarThemeSelect.value = localStorage.getItem('navbar_theme') || 'neutral'; }catch(e){}
 
@@ -301,7 +317,16 @@
                 writePref(v);
             }catch(e){}
 
-            try{ if (toggle) writeBool('countup_enabled', toggle.checked); } catch(e) {}
+            try{
+                if (toggle) {
+                    // if reduced motion is enabled, force countups off regardless of the checkbox
+                    if (reducedToggle && reducedToggle.checked) {
+                        writeBool('countup_enabled', false);
+                    } else {
+                        writeBool('countup_enabled', toggle.checked);
+                    }
+                }
+            } catch(e) {}
             try{ if (showHelpToggle) writeBool('show_help_icons', showHelpToggle.checked); } catch(e) {}
 
             // Appearance options
@@ -362,11 +387,23 @@
         try{ if (darkToggle) darkToggle.addEventListener('change', function(){ try{ writeBool('darkMode', darkToggle.checked); if(darkToggle.checked){ document.documentElement.classList.add('dark-mode'); document.body.classList.add('dark-mode'); } else { document.documentElement.classList.remove('dark-mode'); document.body.classList.remove('dark-mode'); } showStatus('Dark mode preference saved locally.','success'); }catch(e){} }); }catch(e){}
         try{ if (sidebarToggle) sidebarToggle.addEventListener('change', function(){ try{ localStorage.setItem('obsidian_sidebar_collapsed', sidebarToggle.checked ? '1' : '0'); if(typeof setSidebarCollapsed === 'function') setSidebarCollapsed(sidebarToggle.checked); showStatus('Sidebar collapse preference saved locally.','success'); }catch(e){} }); }catch(e){}
         try{ if (compactToggle) compactToggle.addEventListener('change', function(){ try{ writeBool('compact_density', compactToggle.checked); if(compactToggle.checked) document.body.classList.add('compact-density'); else document.body.classList.remove('compact-density'); showStatus('Layout density preference saved locally.','success'); }catch(e){} }); }catch(e){}
-        try{ if (reducedToggle) reducedToggle.addEventListener('change', function(){ try{ writeBool('reduced_motion', reducedToggle.checked); // apply immediately
-                var id='reducedMotionStyle'; var s=document.getElementById(id);
-                if(reducedToggle.checked){ if(!s){ s=document.createElement('style'); s.id=id; s.textContent='* { transition-duration: 0s !important; animation-duration: 0s !important; animation-delay: 0s !important; }'; document.head.appendChild(s); } document.documentElement.classList.add('reduced-motion'); }
-                else { if(s && s.parentNode) s.parentNode.removeChild(s); document.documentElement.classList.remove('reduced-motion'); }
-                showStatus('Reduced-motion preference saved locally.','success'); }catch(e){} }); }catch(e){}
+        try{ if (reducedToggle) reducedToggle.addEventListener('change', function(evt){
+                try{ writeBool('reduced_motion', reducedToggle.checked);
+                    // apply immediate styling changes
+                    var id='reducedMotionStyle'; var s=document.getElementById(id);
+                    if(reducedToggle.checked){
+                        if(!s){ s=document.createElement('style'); s.id=id; s.textContent='* { transition-duration: 0s !important; animation-duration: 0s !important; animation-delay: 0s !important; }'; document.head.appendChild(s); }
+                        document.documentElement.classList.add('reduced-motion');
+                    }
+                    else {
+                        if(s && s.parentNode) s.parentNode.removeChild(s);
+                        document.documentElement.classList.remove('reduced-motion');
+                    }
+                    // make sure the countup control reflects the new motion preference
+                    updateCountupControlForReducedMotion(reducedToggle.checked);
+                    showStatus('Reduced-motion preference saved locally.','success');
+                }catch(e){}
+            }); }catch(e){}
 
         // Live font-size slider handler: save and broadcast so applyUserPreferences picks it up
         try{ if (fontSlider) fontSlider.addEventListener('input', function(){ try{ var v = this.value; updateFontLabel(v); try{ localStorage.setItem('font_size', String(v)); }catch(e){} try{ window.dispatchEvent(new Event('storage')); }catch(e){} showStatus('Font size saved locally.','success'); }catch(e){} }); }catch(e){}
