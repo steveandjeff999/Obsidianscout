@@ -1,12 +1,13 @@
 {
-  "version": "5.2.5",
+  "version": "5.2.6",
+  "name": "Obsidianscout",
   "last_updated": "2025-07-25T18:47:00.516625",
   "repository_url": "https://github.com/steveandjeff999/Obsidianscout.git",
   "branch": "main",
   "backup_enabled": true,
-  "JWT_SECRET_KEY": "LOfoUTtMWU_4IL6gNKgkdq5wbrzjv5JTYAb4sJv_2ooc_5CV9P7w7lvsBDgHrhpp",
+  "JWT_SECRET_KEY": "2VoyryFqfpbk4wPLTaQ_AJ2MuasSzEBGQLmkwIAs-sXkT4P4V2otrlPdPAosT6K9",
   "JWT_GENERATE_NEW": false,
-  "VAPID_PRIVATE_KEY": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgeby-JrlPd5b_xS_G8LNGYdoDNxNB5X8FcnV7gzu-YBuhRANCAARMRalSXHsDL8CThcabbQbxx_CCxPNWl9FxWIQhx9GiXX-VtE46gjnAOlilDoJDOA_CHn6tzIcj1a_yI39zc66V",
-  "VAPID_PUBLIC_KEY": "BExFqVJcewMvwJOFxpttBvHH8ILE81aX0XFYhCHH0aJdf5W0TjqCOcA6WKUOgkM4D8Iefq3MhyPVr_Ijf3NzrpU",
+  "VAPID_PRIVATE_KEY": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgGq2BbRRBzi1mfhTp-2VefXNxHDgDpZVfOVF_Mh62to2hRANCAATxFnBeQ8bwt87Jxm3dMdJ9hX4ag5ttQ6UUaPsbbaWj9Y1YGnHwVSbtz0f-OCiJgO_yUpg0bDBgcfF3CZHcGZmp",
+  "VAPID_PUBLIC_KEY": "BPEWcF5DxvC3zsnGbd0x0n2FfhqDm21DpRRo-xttpaP1jVgacfBVJu3PR_44KImA7_JSmDRsMGBx8XcJkdwZmak",
   "VAPID_GENERATE_NEW": false
 }

@@ -42,6 +42,7 @@ Key features:
 - Switch to eraser mode to remove parts of drawing
 - Adjustable eraser size
 - Does NOT remove background field image
+- After erasing you can immediately draw again over that area; previously the eraser stroke would persist on top and wipe new content, but that has been corrected.
 
 #### Text Tool (if available)
 - Click to place text annotations

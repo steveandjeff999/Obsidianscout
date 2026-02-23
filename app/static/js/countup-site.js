@@ -10,8 +10,11 @@
 
     // Check user preference (localStorage) to see if countups are enabled.
     // Respect explicit 'false' string to disable. Default: enabled.
+    // Also honor the reduced-motion accessibility preference, which should suppress
+    // countups even if the countup_enabled flag were left true.
     function isCountupEnabled() {
         try {
+            if (localStorage.getItem('reduced_motion') === 'true') return false;
             var v = localStorage.getItem('countup_enabled');
             if (v === 'false') return false;
         } catch (e) {
