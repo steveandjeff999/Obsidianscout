@@ -1404,15 +1404,43 @@ def chat_page():
 def dm_history():
     from flask_login import current_user
     from app import load_user_chat_history
+
     username = current_user.username
     other_user = request.args.get('user')
-    
-    # Validate that the other user is in the same scouting team
+
+    # Validate that the other user is in the same scouting team.  If the
+    # relationship no longer exists we deliberately return an empty list
+    # rather than a 403; the client UI treats an empty array as "no history"
+    # which keeps the page from showing an error popup.  This mirrors the
+    # behaviour in the mobile API where out-of-scope users simply yield no
+    # messages.
     if not validate_user_in_same_team(other_user):
-        return jsonify({'history': []})  # Return empty history for users from different teams
-    
+        return jsonify({'history': []})
+
     team_number = getattr(current_user, 'scouting_team_number', 'no_team')
-    history = load_user_chat_history(username, other_user, team_number)
+
+    # Fetch the full history first, then apply optional limit/offset
+    history = load_user_chat_history(username, other_user, team_number) or []
+
+    # sort chronologically just in case stored order is inconsistent; oldest
+    # messages should appear first so the UI can simply append them.
+    try:
+        history = sorted(history, key=lambda m: (m.get('timestamp') or m.get('created_at') or ''))
+    except Exception:
+        pass
+
+    # support simple pagination parameters which are used by the web
+    # frontend when priming the conversation list (/chat/dm-history?limit=1)
+    limit = request.args.get('limit', type=int)
+    offset = request.args.get('offset', 0, type=int)
+    if limit is not None:
+        # clamp values to avoid accidental negative slicing
+        if offset < 0:
+            offset = 0
+        if limit < 0:
+            limit = 0
+        history = history[offset:offset + limit]
+
     return jsonify({'history': history})
 
 @bp.route('/chat/group-history')

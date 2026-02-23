@@ -1,5 +1,12 @@
 {
-  "unreadCount": 0,
-  "lastNotified": "2025-12-30T20:27:30.642909+00:00",
-  "joinedGroups": []
+  "lastDmUser": "admin",
+  "unreadCount": 31,
+  "lastSource": {
+    "type": "dm",
+    "id": "admin"
+  },
+  "lastNotified": "2026-02-23T21:55:36.865561+00:00",
+  "lastRead": {
+    "dm:admin": "aa2274a8-31cc-4924-b296-da76d08c03d1"
+  }
 }

@@ -45,6 +45,38 @@ Notes:
 - `weather` is returned as `null` by default. Server-side weather integration is optional; clients may fetch weather for scheduled times/locations if they need a forecast.
 - Results are scoped to the token's `team_number` (data isolation).
 
+## Combined “unread” view
+
+A convenience endpoint that returns both the mobile chat state (including
+`unreadCount` and optional `unreadMessages`) and the list of pending scheduled
+notifications. Clients can use this single call instead of fetching `/chat/state`
+and `/notifications/scheduled` separately.
+
+Endpoint: GET /api/mobile/notifications/unread
+
+Headers:
+```
+Authorization: Bearer <token>
+```
+
+Query parameters (optional):
+- limit (int) - max scheduled notifications to fetch (default 200, max 1000)
+- offset (int) - pagination offset for the scheduled list (default 0)
+
+Response (200):
+```json
+{
+  "success": true,
+  "chat_state": { /* same structure as /chat/state */ },
+  "scheduled": {
+      "count": 1,
+      "total": 12,
+      "notifications": [ /* as /notifications/scheduled */ ]
+  }
+}
+```
+
+
 Past notifications (sent history)
 --------------------------------
 

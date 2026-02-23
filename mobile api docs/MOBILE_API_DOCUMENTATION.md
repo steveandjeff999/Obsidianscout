@@ -702,6 +702,17 @@ Notes:
 - `lastSource` is an optional pointer (e.g. `{ type: 'dm', id: '<username>' }`) that helps clients deep-link into the appropriate conversation when the user opens the app.
 - This endpoint is read-only. To mark messages as read, use the existing web endpoints that reset unread state (the web UI calls `/chat/reset-unread`). Mobile clients may also call the equivalent mobile actions that modify per-user state via the chat send/edit endpoints when appropriate.
 
+
+### Combined notifications endpoint
+
+Clients wishing to fetch both chat unread state and pending scheduled
+notifications in a single network call can use the new
+`GET /api/mobile/notifications/unread` endpoint. It returns exactly the same
+`state` object described above under `chat_state` plus an additional
+`scheduled` block mirroring the data returned by `/notifications/scheduled`.
+This is primarily useful for driving global badges or inbox screens.
+
+
 Mobile clients can create and manage named group conversations (team-scoped). These endpoints are JWT-protected and operate on the same file-backed group storage used by the web UI and Socket.IO handlers (under `instance/chat/groups/<team_number>/`). Group names are sanitized (for example `/` is replaced with `_`) when stored.
 
 Common headers:
