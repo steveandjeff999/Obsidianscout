@@ -2117,7 +2117,7 @@ def export_excel():
 
         # 3) Matches (scoped to current scouting team / alliance membership)
         try:
-            matches = filter_matches_by_scouting_team().order_by(Match.match_type, Match.match_number).all()
+            matches = filter_matches_by_scouting_team().order_by(*Match.schedule_order()).all()
             match_rows = []
             for m in matches:
                 # parse alliances into individual team slots
@@ -2414,9 +2414,9 @@ def export_portable():
 
         # Matches
         if scouting_team_num:
-            matches = Match.query.filter_by(scouting_team_number=scouting_team_num).order_by(Match.match_type, Match.match_number).all()
+            matches = Match.query.filter_by(scouting_team_number=scouting_team_num).order_by(*Match.schedule_order()).all()
         else:
-            matches = Match.query.order_by(Match.match_type, Match.match_number).all()
+            matches = Match.query.order_by(*Match.schedule_order()).all()
 
         export_data['matches'] = []
         for m in matches:

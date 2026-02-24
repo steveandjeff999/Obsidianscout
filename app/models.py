@@ -518,12 +518,31 @@ class Match(ConcurrentModelMixin, db.Model):
     predicted_time = db.Column(db.DateTime, nullable=True)  # Predicted start time from TBA (stored in UTC)
     actual_time = db.Column(db.DateTime, nullable=True)  # When the match actually started (UTC)
     display_match_number = db.Column(db.String(20), nullable=True)  # Human-friendly display like '1-1' for playoffs
+    comp_level = db.Column(db.String(20), nullable=True)  # TBA comp_level: qm, ef, qf, sf, f
+    set_number = db.Column(db.Integer, nullable=True, default=0)  # Playoff set number (1-N)
     scouting_team_number = db.Column(db.Integer, nullable=True)
     scouting_data = db.relationship('ScoutingData', backref='match', lazy=True, cascade='all, delete-orphan')
     
     def __repr__(self):
         return f"Match {self.match_type} {self.match_number}"
-    
+
+    @staticmethod
+    def schedule_order():
+        """Return a tuple of SQLAlchemy ordering expressions for correct match schedule order.
+
+        Produces: match_type ASC, then within playoffs: ef→qf→sf→f, then set_number, match_number.
+        Usage:  Match.query.order_by(*Match.schedule_order())
+        """
+        from sqlalchemy import case as _case
+        comp_level_rank = _case(
+            (Match.comp_level == 'ef', 1),
+            (Match.comp_level == 'qf', 2),
+            (Match.comp_level == 'sf', 3),
+            (Match.comp_level == 'f', 4),
+            else_=0
+        )
+        return (Match.match_type, comp_level_rank, Match.set_number, Match.match_number)
+
     @property
     def red_teams(self):
         if not self.red_alliance:

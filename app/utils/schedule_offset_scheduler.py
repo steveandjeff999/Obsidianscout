@@ -202,7 +202,7 @@ class ScheduleOffsetScheduler:
         ).filter(
             Match.scheduled_time.isnot(None),
             Match.actual_time.isnot(None)
-        ).order_by(Match.match_type, Match.match_number).all()
+        ).order_by(*Match.schedule_order()).all()
 
         if len(matches) < 1:
             return None   # not enough local data

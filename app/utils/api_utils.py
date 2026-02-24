@@ -949,67 +949,213 @@ def get_teams_dual_api(event_code):
 def _merge_match_lists(primary_matches, fallback_matches):
     """Merge two lists of match dicts into a deduplicated list.
 
-    Prefers non-empty values from either source and uses comp_level/set_number/raw_match_number
-    to canonicalize playoff matches so TBA and FIRST formats map to a single logical match.
+    Handles the incompatibility between FIRST API (sequential flat matchNumber 1–N across
+    all playoff rounds) and TBA API (match_number within each bracket set, always 1 for
+    double-elimination sets). For playoff matches, merging is done by alliance composition
+    so that FIRST's sequential match_number is kept as the canonical DB key while TBA's
+    richer comp_level/set_number/display_match_number is used for display and sorting.
     """
-    merged_by_key = {}
 
-    def _key(m):
-        # Normalize match type
+    _TBA_COMP_LEVELS = {'ef', 'qf', 'sf', 'f'}
+
+    def _is_tba_playoff(m):
+        return (m.get('comp_level') or '').lower() in _TBA_COMP_LEVELS
+
+    def _alliance_frozenset(m):
+        """Return a symmetric frozenset({red_teams, blue_teams}) for alliance comparison.
+
+        Using a frozenset of frozensets makes the key symmetric — it doesn't matter
+        which side is 'red' vs 'blue', so FIRST/TBA side-assignment differences are
+        handled transparently.  Returns None when both alliances are empty (unscheduled).
+        """
+        red = frozenset(t.strip() for t in (m.get('red_alliance') or '').split(',') if t.strip())
+        blue = frozenset(t.strip() for t in (m.get('blue_alliance') or '').split(',') if t.strip())
+        if red or blue:
+            return frozenset([red, blue])
+        return None
+
+    def _qual_key(m):
         mt = (m.get('match_type') or '').lower()
-        comp = (m.get('comp_level') or '')
-        try:
-            setnum = int(m.get('set_number') or 0)
-        except Exception:
-            setnum = 0
         try:
             raw = int(m.get('raw_match_number') or m.get('match_number') or 0)
         except Exception:
             raw = 0
-
-        # If playoff-related, use comp_level/set/set_number to distinguish
-        if mt == 'playoff' or comp in ['ef', 'qf', 'sf', 'f', 'elimination', 'quarterfinal', 'semifinal', 'final']:
-            return ('playoff', comp or '', setnum, raw)
-        # Otherwise key by type and raw number
-        return (mt or '', raw)
+        return (mt, raw)
 
     def _merge(a, b):
-        # Merge two match dicts preferring truthy values in b over a where appropriate
+        """Merge two dicts preferring truthy values from a, filling gaps from b."""
         out = dict(a) if a else {}
         for k, v in (b or {}).items():
             if v is None or v == '' or v == []:
                 continue
-            # Prefer existing non-empty values in out unless out[k] is empty
             if not out.get(k):
                 out[k] = v
         return out
 
-    # Start with primary matches
-    for m in primary_matches or []:
-        k = _key(m)
-        merged_by_key[k] = dict(m)
+    # --------------------------------------------------------------------------
+    # 1. Separate matches by category
+    # --------------------------------------------------------------------------
+    all_in = list(primary_matches or []) + list(fallback_matches or [])
 
-    # Merge fallback matches
-    for m in fallback_matches or []:
-        k = _key(m)
+    non_playoff = [m for m in all_in if (m.get('match_type') or '').lower() != 'playoff']
+    tba_playoffs = [m for m in all_in if (m.get('match_type') or '').lower() == 'playoff' and _is_tba_playoff(m)]
+    other_playoffs = [m for m in all_in if (m.get('match_type') or '').lower() == 'playoff' and not _is_tba_playoff(m)]
+
+    merged_by_key = {}
+
+    # --------------------------------------------------------------------------
+    # 2. Non-playoff matches: merge by (match_type, match_number)
+    # --------------------------------------------------------------------------
+    for m in non_playoff:
+        k = _qual_key(m)
         if k in merged_by_key:
             merged_by_key[k] = _merge(merged_by_key[k], m)
         else:
             merged_by_key[k] = dict(m)
 
-    # Ensure match_number is set to an integer raw_match_number for DB insertion
+    # --------------------------------------------------------------------------
+    # 3. Playoff matches: alliance-based merge of FIRST (sequential flat match_number)
+    #    with TBA (comp_level/set_number structured match_number)
+    # --------------------------------------------------------------------------
+
+    # Pre-deduplicate each group within itself first (handles duplicates that arise
+    # when the same API is returned from both primary and fallback lists).
+    _tba_dedup: dict = {}
+    for m in tba_playoffs:
+        k = ((m.get('comp_level') or '').lower(),
+             int(m.get('set_number') or 0),
+             int(m.get('match_number') or 0))
+        _tba_dedup[k] = _merge(_tba_dedup[k], m) if k in _tba_dedup else dict(m)
+    tba_playoffs = list(_tba_dedup.values())
+
+    _first_dedup: dict = {}
+    for m in other_playoffs:
+        mn = int(m.get('raw_match_number') or m.get('match_number') or 0)
+        _first_dedup[mn] = _merge(_first_dedup[mn], m) if mn in _first_dedup else dict(m)
+    other_playoffs = list(_first_dedup.values())
+
+    # Build lookup: alliance → [list of TBA records], in TBA bracket order.
+    # A list is used because finals matches repeat the same two alliances 2–3 times.
+    _CL_ORDER_LOCAL = {'ef': 1, 'qf': 2, 'sf': 3, 'f': 4}
+    tba_by_alliance: dict = {}
+    for m in tba_playoffs:
+        ak = _alliance_frozenset(m)
+        if ak:
+            tba_by_alliance.setdefault(ak, []).append(m)
+    # Sort each alliance's candidates by bracket order (comp_level_rank, set_number, match_number)
+    for ak in tba_by_alliance:
+        tba_by_alliance[ak].sort(key=lambda m: (
+            _CL_ORDER_LOCAL.get((m.get('comp_level') or '').lower(), 0),
+            int(m.get('set_number') or 0),
+            int(m.get('match_number') or 0)
+        ))
+
+    matched_tba_ids = set()
+    playoff_results = []
+
+    # Process FIRST records in sequential order so finals F1→F2→F3 pair correctly
+    other_playoffs.sort(key=lambda m: int(m.get('raw_match_number') or m.get('match_number') or 0))
+
+    for unstruct in other_playoffs:
+        ak = _alliance_frozenset(unstruct)
+        struct = None
+        if ak and ak in tba_by_alliance:
+            # Pick the first not-yet-matched TBA record for this alliance pair
+            for candidate in tba_by_alliance[ak]:
+                if id(candidate) not in matched_tba_ids:
+                    struct = candidate
+                    break
+
+        if struct is not None:
+            # Merge: start from TBA (rich metadata), fill gaps from FIRST
+            merged = _merge(dict(struct), unstruct)
+            # Authoritative metadata: always from TBA
+            merged['comp_level'] = struct.get('comp_level')
+            merged['set_number'] = struct.get('set_number')
+            merged['display_match_number'] = struct.get('display_match_number')
+            # Canonical match_number: use FIRST's sequential number (unique 1–N)
+            first_seq = unstruct.get('raw_match_number') or unstruct.get('match_number')
+            if first_seq is not None:
+                try:
+                    merged['match_number'] = int(first_seq)
+                    merged['raw_match_number'] = int(first_seq)
+                except Exception:
+                    pass
+            matched_tba_ids.add(id(struct))
+            playoff_results.append(merged)
+        else:
+            # No TBA counterpart found (pre-event or FIRST-only): keep as-is
+            playoff_results.append(dict(unstruct))
+
+    # Collect TBA playoff records that had no FIRST counterpart
+    tba_unmatched_records = [m for m in tba_playoffs if id(m) not in matched_tba_ids]
+
+    if tba_unmatched_records:
+        # Assign synthetic sequential match numbers by sort order so they are
+        # unique and don't collide with each other in the DB.
+        _CL_ORDER = {'ef': 1, 'qf': 2, 'sf': 3, 'f': 4}
+        tba_unmatched_records.sort(
+            key=lambda m: (
+                _CL_ORDER.get((m.get('comp_level') or '').lower(), 0),
+                int(m.get('set_number') or 0),
+                int(m.get('match_number') or 0)
+            )
+        )
+        # Base offset: start after any other_playoff (FIRST-only) match numbers
+        other_max = max(
+            (int(m.get('raw_match_number') or m.get('match_number') or 0) for m in other_playoffs),
+            default=0
+        )
+        seq = other_max + 1
+        for m in tba_unmatched_records:
+            m = dict(m)
+            m['match_number'] = seq
+            m['raw_match_number'] = seq
+            seq += 1
+            playoff_results.append(m)
+
+    # Final dedup of playoff_results by (comp_level, set_number, raw_match_number)
+    # in case duplicates crept in from both primary and fallback lists
+    seen_playoff = {}
+    for m in playoff_results:
+        cl = (m.get('comp_level') or '').lower()
+        sn = int(m.get('set_number') or 0)
+        mn = int(m.get('raw_match_number') or m.get('match_number') or 0)
+        k = (cl, sn, mn)
+        if k not in seen_playoff:
+            seen_playoff[k] = m
+        else:
+            seen_playoff[k] = _merge(seen_playoff[k], m)
+
+    for m in seen_playoff.values():
+        merged_by_key[('_playoff_', id(m))] = m
+
+    # --------------------------------------------------------------------------
+    # 4. Finalise match_number for all records
+    # --------------------------------------------------------------------------
     results = []
     for m in merged_by_key.values():
-        # Prefer raw_match_number, but also handle legacy 'match_number' values
         try:
             m['match_number'] = int(m.get('raw_match_number') or m.get('match_number'))
         except Exception:
-            # Fallback: if we cannot parse, remove the entry (invalid match)
             continue
         results.append(m)
 
-    # Sort results by match_number to keep a consistent order
-    results.sort(key=lambda x: (x.get('match_type') or '', x.get('match_number') or 0))
+    # --------------------------------------------------------------------------
+    # 5. Sort: qual first, then playoffs in bracket order (ef→qf→sf→f, set, match)
+    # --------------------------------------------------------------------------
+    _COMP_LEVEL_ORDER = {'ef': 1, 'qf': 2, 'sf': 3, 'f': 4}
+
+    def _sort_key(m):
+        mt = (m.get('match_type') or '').lower()
+        cl = (m.get('comp_level') or '').lower()
+        sn = int(m.get('set_number') or 0)
+        mn = int(m.get('match_number') or 0)
+        if mt == 'playoff':
+            return ('playoff', _COMP_LEVEL_ORDER.get(cl, 0), sn, mn)
+        return (mt, 0, 0, mn)
+
+    results.sort(key=_sort_key)
     return results
 
 
@@ -1130,23 +1276,47 @@ def get_matches_dual_api(event_code):
 
                 tba_matches = get_tba_event_matches(tba_event_key)
 
-                matches_db_format = []
+                fallback_primary = []
                 for tba_match in tba_matches:
                     match_data = tba_match_to_db_format(tba_match, None, event_key=tba_event_key)
                     if match_data:
-                        matches_db_format.append(match_data)
+                        fallback_primary.append(match_data)
 
-                return matches_db_format
+                # Also try the original (failed) primary API one more time as a fallback
+                # source so the merge can assign proper sequential playoff numbers
+                fallback_secondary = []
+                try:
+                    for api_match in get_matches(raw_event_code):
+                        md = api_to_db_match_conversion(api_match, None)
+                        if md:
+                            fallback_secondary.append(md)
+                except Exception:
+                    pass
+
+                return _merge_match_lists(fallback_primary, fallback_secondary)
             else:
                 api_matches = get_matches(raw_event_code)
 
-                matches_db_format = []
+                fallback_primary = []
                 for api_match in api_matches:
                     match_data = api_to_db_match_conversion(api_match, None)
                     if match_data:
-                        matches_db_format.append(match_data)
+                        fallback_primary.append(match_data)
 
-                return matches_db_format
+                # Try TBA as secondary source to enrich playoff bracket data
+                fallback_secondary = []
+                try:
+                    game_config = get_current_game_config()
+                    season = game_config.get('season', 2026)
+                    tba_event_key = construct_tba_event_key(raw_event_code, season)
+                    for tba_match in get_tba_event_matches(tba_event_key):
+                        md = tba_match_to_db_format(tba_match, None, event_key=tba_event_key)
+                        if md:
+                            fallback_secondary.append(md)
+                except Exception:
+                    pass
+
+                return _merge_match_lists(fallback_primary, fallback_secondary)
         except (ApiError, TBAApiError) as fallback_error:
             print(f"Fallback API ({fallback_source}) also failed: {str(fallback_error)}")
             diag = inspect_api_key_locations()

@@ -4706,7 +4706,7 @@ def manage_alliance_matches(alliance_id):
     if selected_event:
         matches = Match.query.filter_by(
             event_id=selected_event.id
-        ).order_by(Match.match_type, Match.match_number).all()
+        ).order_by(*Match.schedule_order()).all()
     
     # Get effective game config for event code
     from app.utils.config_manager import get_effective_game_config
