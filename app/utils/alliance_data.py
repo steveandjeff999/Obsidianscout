@@ -491,7 +491,7 @@ def get_matches_with_scouting_data(event_id=None, event_code=None):
         if event_id:
             query = query.filter(Match.event_id == event_id)
         
-        matches = query.distinct().order_by(Match.match_type, Match.match_number).all()
+        matches = query.distinct().order_by(*Match.schedule_order()).all()
         return matches, False, None
 
 
@@ -630,7 +630,7 @@ def get_all_matches_for_alliance(event_id=None, event_code=None):
         query = filter_matches_by_scouting_team()
         if event_id and not (isinstance(event_id, str) and str(event_id).startswith('alliance_')):
             query = query.filter(Match.event_id == event_id)
-        return query.order_by(Match.match_type, Match.match_number).all(), False
+        return query.order_by(*Match.schedule_order()).all(), False
     
     # Alliance mode - get ALL matches for the event from any alliance member
     from app.utils.team_isolation import get_alliance_team_numbers
@@ -659,7 +659,7 @@ def get_all_matches_for_alliance(event_id=None, event_code=None):
             # Get all matches for these events
             all_matches = Match.query.filter(
                 Match.event_id.in_(event_ids)
-            ).order_by(Match.match_type, Match.match_number).all()
+            ).order_by(*Match.schedule_order()).all()
             
             # Deduplicate by (match_number, match_type) - prefer user's own data
             from flask_login import current_user
@@ -674,7 +674,9 @@ def get_all_matches_for_alliance(event_id=None, event_code=None):
                     # Prefer user's own match record
                     seen[key] = m
             
-            matches = sorted(seen.values(), key=lambda m: (m.match_type or '', m.match_number or 0))
+            matches = sorted(seen.values(), key=lambda m: (
+                m.match_type or '', {'ef': 1, 'qf': 2, 'sf': 3, 'f': 4}.get(m.comp_level or '', 0),
+                m.set_number or 0, m.match_number or 0))
             
             # Populate missing times for deduped matches using other alliance match records
             try:
@@ -703,7 +705,7 @@ def get_all_matches_for_alliance(event_id=None, event_code=None):
     # Fallback: Get all matches from any alliance member
     matches = Match.query.filter(
         Match.scouting_team_number.in_(alliance_team_nums)
-    ).order_by(Match.match_type, Match.match_number).all()
+    ).order_by(*Match.schedule_order()).all()
     
     # Deduplicate by (match_number, match_type, event_code)
     seen = {}
@@ -714,7 +716,9 @@ def get_all_matches_for_alliance(event_id=None, event_code=None):
         if key not in seen:
             seen[key] = m
     
-    matches = sorted(seen.values(), key=lambda m: (m.match_type or '', m.match_number or 0))
+    matches = sorted(seen.values(), key=lambda m: (
+        m.match_type or '', {'ef': 1, 'qf': 2, 'sf': 3, 'f': 4}.get(m.comp_level or '', 0),
+        m.set_number or 0, m.match_number or 0))
     
     # Ensure match times are populated where possible. If the deduped match has no
     # scheduled/predicted/actual times, look for any other match in the alliance

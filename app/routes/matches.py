@@ -634,6 +634,10 @@ def sync_from_config():
                         match.red_score = match_data.get('red_score', match.red_score)
                         match.blue_score = match_data.get('blue_score', match.blue_score)
                         match.display_match_number = match_data.get('display_match_number', match.display_match_number)
+                        if match_data.get('comp_level'):
+                            match.comp_level = match_data.get('comp_level')
+                        if match_data.get('set_number') is not None:
+                            match.set_number = match_data.get('set_number')
                         # Ensure scheduled times are updated
                         if match_data.get('scheduled_time'):
                             match.scheduled_time = match_data.get('scheduled_time')
@@ -650,7 +654,8 @@ def sync_from_config():
                         valid_fields = {
                             'match_number', 'match_type', 'event_id', 'red_alliance', 'blue_alliance',
                             'red_score', 'blue_score', 'winner', 'timestamp', 'scheduled_time',
-                            'predicted_time', 'actual_time', 'display_match_number', 'scouting_team_number'
+                            'predicted_time', 'actual_time', 'display_match_number', 'scouting_team_number',
+                            'comp_level', 'set_number'
                         }
                         # Filter match_data to only include valid fields
                         filtered_data = {k: v for k, v in match_data.items() if k in valid_fields}

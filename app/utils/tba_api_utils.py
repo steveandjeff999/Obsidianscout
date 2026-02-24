@@ -716,8 +716,15 @@ def construct_tba_event_key(event_code, year=None):
         except Exception:
             year = datetime.now(timezone.utc).year
 
+    # Strip any leading year prefix from event_code to avoid double-year keys
+    # e.g. '2026WEEK0' with year=2026 would produce '20262026week0' without this
+    code = event_code.lower()
+    year_prefix = str(year)
+    if code.startswith(year_prefix):
+        code = code[len(year_prefix):]
+
     # TBA event keys are lowercase
-    return f"{year}{event_code.lower()}"
+    return f"{year}{code}"
 
 def construct_tba_team_key(team_number):
     """Construct TBA team key from team number"""

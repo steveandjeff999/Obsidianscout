@@ -14,6 +14,73 @@ Each migration is defined with:
 from sqlalchemy import text, inspect
 
 # ==============================================================================
+# COLUMN TYPE ALTERATIONS
+# ==============================================================================
+# Each entry is (table_name, column_name, new_sql_type, bind_key)
+# These run ALTER TABLE … ALTER COLUMN to fix columns that were created with
+# an undersized type in a previous release.  Safe to re-run; uses TRY logic.
+# ==============================================================================
+
+COLUMN_ALTERATIONS = [
+    # comp_level was originally VARCHAR(10) but 'qualification' is 13 chars
+    ('match', 'comp_level', 'VARCHAR(20)', None),
+]
+
+
+def run_column_alterations(db):
+    """Widen columns that were previously defined with too-small types."""
+    altered = 0
+    for table_name, column_name, new_type, bind_key in COLUMN_ALTERATIONS:
+        try:
+            engine = get_engine_for_bind(db, bind_key)
+            dialect = getattr(engine.dialect, 'name', '').lower()
+            cols = get_table_columns(engine, table_name)
+            if cols is None or column_name not in cols:
+                continue  # Table/column doesn't exist yet – ADD COLUMN will handle it
+
+            # Check current length using inspector
+            try:
+                inspector = inspect(engine)
+                col_info = next(
+                    (c for c in inspector.get_columns(table_name) if c['name'] == column_name),
+                    None
+                )
+                if col_info:
+                    col_type = col_info.get('type')
+                    current_length = getattr(col_type, 'length', None)
+                    target_length = None
+                    # parse target length from new_type string e.g. 'VARCHAR(20)'
+                    import re
+                    m = re.search(r'\((\d+)\)', new_type)
+                    if m:
+                        target_length = int(m.group(1))
+                    if target_length and current_length and current_length >= target_length:
+                        continue  # Already wide enough
+            except Exception:
+                pass  # Can't inspect – attempt alteration defensively
+
+            with engine.connect() as conn:
+                if 'postgres' in dialect:
+                    sql = f'ALTER TABLE {table_name} ALTER COLUMN {column_name} TYPE {new_type}'
+                elif 'sqlite' in dialect:
+                    # SQLite doesn't support ALTER COLUMN; skip (new DBs use correct size)
+                    continue
+                else:
+                    sql = f'ALTER TABLE {table_name} ALTER COLUMN {column_name} {new_type}'
+                conn.execute(text(sql))
+                conn.commit()
+            print(f"  Widened column {table_name}.{column_name} to {new_type}")
+            altered += 1
+        except Exception as e:
+            err = str(e).lower()
+            if 'already' in err or 'no change' in err:
+                pass
+            else:
+                print(f"  Warning: Could not alter {table_name}.{column_name}: {e}")
+    return altered
+
+
+# ==============================================================================
 # MIGRATION DEFINITIONS
 # ==============================================================================
 # Each entry is (table_name, column_name, sql_type_and_default, bind_key)
@@ -62,6 +129,8 @@ MIGRATIONS = [
     # Match table migrations (default bind)
     # -------------------------------------------------------------------------
     ('match', 'display_match_number', 'VARCHAR(20)', None),  # Human-friendly playoff match display like '1-1'
+    ('match', 'comp_level', 'VARCHAR(20)', None),   # TBA comp_level: qm, ef, qf, sf, f
+    ('match', 'set_number', 'INTEGER DEFAULT 0', None),  # Playoff set number for correct schedule ordering
     
     # -------------------------------------------------------------------------
     # ScoutingData table migrations (default bind)
@@ -365,7 +434,14 @@ def run_migrations_for_bind(db, bind_key, migrations):
 def run_all_migrations(db):
     """Run all database migrations across all binds."""
     print("Checking for database schema migrations...")
-    
+
+    # Phase 0: widen any columns that were created with a too-small type
+    try:
+        altered = run_column_alterations(db)
+    except Exception as e:
+        print(f"  Warning: Column alteration phase failed: {e}")
+        altered = 0
+
     total_columns_added = 0
     
     # Get unique bind keys from migrations
@@ -381,8 +457,8 @@ def run_all_migrations(db):
         except Exception as e:
             print(f"  Warning: Migration check for {bind_name} database failed: {e}")
     
-    if total_columns_added > 0:
-        print(f"Database migration complete: {total_columns_added} columns added")
+    if total_columns_added > 0 or altered > 0:
+        print(f"Database migration complete: {total_columns_added} columns added, {altered} columns widened")
     else:
         print("Database schema is up to date")
     

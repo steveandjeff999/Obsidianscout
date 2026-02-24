@@ -759,6 +759,11 @@ if __name__ == '__main__':
                                             match.winner = match_data.get('winner', match.winner)
                                             match.red_score = match_data.get('red_score', match.red_score)
                                             match.blue_score = match_data.get('blue_score', match.blue_score)
+                                            match.display_match_number = match_data.get('display_match_number', match.display_match_number)
+                                            if match_data.get('comp_level'):
+                                                match.comp_level = match_data.get('comp_level')
+                                            if match_data.get('set_number') is not None:
+                                                match.set_number = match_data.get('set_number')
                                             matches_updated += 1
                                         else:
                                             match = Match(match_number=match_number,
@@ -769,6 +774,9 @@ if __name__ == '__main__':
                                                           red_score=match_data.get('red_score'),
                                                           blue_score=match_data.get('blue_score'),
                                                           winner=match_data.get('winner'),
+                                                          display_match_number=match_data.get('display_match_number'),
+                                                          comp_level=match_data.get('comp_level'),
+                                                          set_number=match_data.get('set_number', 0),
                                                           scouting_team_number=scouting_team_number)
                                             db.session.add(match)
                                             matches_added += 1

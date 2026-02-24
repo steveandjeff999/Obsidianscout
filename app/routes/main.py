@@ -2355,7 +2355,7 @@ def api_brief_data():
                 # Get matches after the last completed one
                 matches = brief_event_filter(filter_matches_by_scouting_team())\
                     .filter(Match.match_number > last_completed_match_num)\
-                    .order_by(Match.match_type, Match.match_number)\
+                    .order_by(*Match.schedule_order())\
                     .limit(5).all()
             else:
                 # Fallback to local DB logic - find last match with scores in our DB
@@ -2368,12 +2368,12 @@ def api_brief_data():
                 if last_local_match:
                     matches = brief_event_filter(filter_matches_by_scouting_team())\
                         .filter(Match.match_number > last_local_match.match_number)\
-                        .order_by(Match.match_type, Match.match_number)\
+                        .order_by(*Match.schedule_order())\
                         .limit(5).all()
                 else:
                     # No completed matches found, show first 5
                     matches = brief_event_filter(filter_matches_by_scouting_team())\
-                        .order_by(Match.match_type, Match.match_number)\
+                        .order_by(*Match.schedule_order())\
                         .limit(5).all()
             
             # If we didn't find any upcoming matches (e.g., event just started or API/DB indicates none),
