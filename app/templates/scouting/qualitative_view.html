@@ -65,7 +65,7 @@
                         <div class="small text-muted mt-1">
                             {% set ms = entry.data['_match_summary'] %}
                             {% if ms.roles_performed %}<div><strong>Roles:</strong> {{ ms.roles_performed|join(', ') }}</div>{% endif %}
-                            {% if ms.can_score_while_moving %}<div><strong>Field:</strong> Can score while moving</div>{% endif %}
+                            {% if ms.can_score_while_moving %}<div><strong>Field:</strong> Scores while moving</div>{% endif %}
                             {% if ms.driver_ability %}<div><strong>Driver ability:</strong> {{ ms.driver_ability }}/5</div>{% endif %}
                             {% if ms.defense_effectiveness %}<div><strong>Defense effectiveness:</strong> {{ ms.defense_effectiveness }}/5</div>{% endif %}
                             {% if ms.shot_accuracy is not none %}<div><strong>Shot accuracy:</strong> {{ ms.shot_accuracy }}/5</div>{% endif %}
@@ -140,7 +140,6 @@
                                             <strong>Endgame:</strong>
                                             <p class="mb-0 mt-1">{{ team_data.endgame }}</p>
                                         </div>
-                                        {% endif %}
 
                                         {% if team_data.get('endgame_climb_result') %}
                                         <div class="mb-2">
@@ -343,6 +342,7 @@
                                         {% if team_data.get('got_beached') %}
                                         <div class="mb-2"><span class="badge bg-warning text-dark me-1"><i class="fas fa-exclamation-triangle me-1"></i>Got Beached</span></div>
                                         {% endif %}
+                                        {% if team_data.get('endgame_climb_result') %}
                                         <div class="mb-2">
                                             <strong>Endgame climb:</strong>
                                             <span class="badge {% if team_data.endgame_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %}">{{ team_data.endgame_climb_result|title }}</span>
