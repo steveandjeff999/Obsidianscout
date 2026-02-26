@@ -5,7 +5,7 @@ from app.models import (
     Team, Match, Event, ScoutingData, StrategyDrawing, PitScoutingData,
     AllianceSelection, DoNotPickEntry, AvoidEntry,
     TeamListEntry, StrategyShare, SharedGraph, SharedTeamRanks, team_event,
-    AllianceSharedScoutingData, AllianceSharedPitData
+    AllianceSharedScoutingData, AllianceSharedPitData, AllianceSharedQualitativeData, QualitativeScoutingData
 )
 from app import db
 import pandas as pd
@@ -852,6 +852,67 @@ def _process_portable_data(export_data):
 
         db.session.commit()
 
+        # QUALITATIVE DATA - merge by match+alliance+scouting_team_number
+        for q in export_data.get('qualitative_data', []):
+            new_match = mapping['matches'].get(q.get('match_id'))
+            if not new_match:
+                report['skipped']['qualitative_data'] = report['skipped'].get('qualitative_data', 0) + 1 if report['skipped'].get('qualitative_data') else 1
+                continue
+            try:
+                nested = db.session.begin_nested()
+                existing_q = QualitativeScoutingData.query.filter_by(
+                    match_id=new_match,
+                    alliance_scouted=q.get('alliance_scouted'),
+                    scouting_team_number=q.get('scouting_team_number')
+                ).first()
+                if existing_q:
+                    # merge JSON conservatively like scouting_data
+                    try:
+                        incoming = json.loads(q.get('data_json')) if isinstance(q.get('data_json'), str) else q.get('data_json') or {}
+                    except Exception:
+                        incoming = {}
+                    try:
+                        existing = existing_q.data or {}
+                    except Exception:
+                        existing = {}
+                    merged = existing.copy()
+                    for k, v in incoming.items():
+                        if v is not None:
+                            merged[k] = v
+                    existing_q.data_json = json.dumps(merged)
+                    existing_q.scout_name = q.get('scout_name') or existing_q.scout_name
+                    existing_q.scout_id = q.get('scout_id') or existing_q.scout_id
+                    existing_q.alliance_scouted = q.get('alliance_scouted') or existing_q.alliance_scouted
+                    # update timestamp if provided
+                    if q.get('timestamp'):
+                        existing_q.timestamp = _sanitize_date(q.get('timestamp'))
+                    db.session.add(existing_q)
+                    mapping['qualitative_data'][q['id']] = existing_q.id
+                    report['updated']['qualitative_data'] = report['updated'].get('qualitative_data', 0) + 1 if report['updated'].get('qualitative_data') else 1
+                else:
+                    new_q = QualitativeScoutingData(
+                        match_id=new_match,
+                        scouting_team_number=q.get('scouting_team_number'),
+                        scout_name=q.get('scout_name'),
+                        scout_id=q.get('scout_id'),
+                        alliance_scouted=q.get('alliance_scouted'),
+                        data_json=q.get('data_json')
+                    )
+                    if q.get('timestamp'):
+                        new_q.timestamp = _sanitize_date(q.get('timestamp'))
+                    db.session.add(new_q)
+                    db.session.flush()
+                    mapping['qualitative_data'][q['id']] = new_q.id
+                    report['created']['qualitative_data'] = report['created'].get('qualitative_data', 0) + 1 if report['created'].get('qualitative_data') else 1
+                nested.commit()
+            except Exception as e:
+                try:
+                    nested.rollback()
+                except Exception:
+                    pass
+                report['errors'].append(f"Failed to import qualitative data entry: {e}")
+        db.session.commit()
+
         # The rest is best-effort and mirrors import_portable - skip for brevity but handle similar upserts
         # PIT SCOUTING
         for p in export_data.get('pit_scouting', []):
@@ -1254,6 +1315,7 @@ def import_portable_from_zip(zip_path):
                 'team_event': 'team_event.json',
                 'matches': 'matches.json',
                 'scouting_data': 'scouting_data.json',
+                'qualitative_data': 'qualitative_data.json',
                 'pit_scouting': 'pit_scouting.json',
                 'strategy_drawings': 'strategy_drawings.json',
                 'alliances': 'alliances.json',
@@ -2237,6 +2299,61 @@ def export_excel():
         except Exception:
             pd.DataFrame([]).to_excel(writer, index=False, sheet_name='Scouting Data')
 
+        # 4.5) Qualitative Scouting Data (export separately so consumers can access team notes/rankings)
+        try:
+            # recursion helper to flatten arbitrary nested dictionaries into row columns
+            def _flatten_json(prefix, obj, out_row):
+                """Recursively flatten nested dicts into out_row using prefixed keys.
+
+                Example: {'a': {'b': 1}} becomes out_row['data_a_b'] = 1.
+                """
+                if isinstance(obj, dict):
+                    for kk, vv in obj.items():
+                        new_prefix = f"{prefix}_{kk}" if prefix else kk
+                        _flatten_json(new_prefix, vv, out_row)
+                else:
+                    # leaf value - assign directly
+                    out_row[f"data_{prefix}"] = obj
+
+            # reuse alliance_id from above
+            if alliance_id:
+                qual_entries = AllianceSharedQualitativeData.query.filter_by(
+                    alliance_id=alliance_id,
+                    is_active=True
+                ).all()
+            else:
+                qual_entries = QualitativeScoutingData.query.filter_by(
+                    scouting_team_number=current_user.scouting_team_number
+                ).all()
+            qual_rows = []
+            for q in qual_entries:
+                row = {
+                    'id': q.id,
+                    'match_id': q.match_id,
+                    'match_number': q.match.match_number if q.match else None,
+                    'match_type': q.match.match_type if q.match else None,
+                    'scouting_team_number': q.scouting_team_number,
+                    'scout_name': q.scout_name,
+                    'scout_id': q.scout_id,
+                    'timestamp': q.timestamp,
+                    'alliance_scouted': q.alliance_scouted
+                }
+                # Flatten the JSON payload recursively to individual columns
+                try:
+                    _flatten_json('', q.data or {}, row)
+                except Exception:
+                    # if anything goes wrong with flattening, fall back to raw JSON
+                    row['data_json'] = q.data_json
+                # always keep raw JSON as backup
+                try:
+                    row['data_json'] = q.data_json
+                except Exception:
+                    row.setdefault('data_json', None)
+                qual_rows.append(row)
+            pd.DataFrame(qual_rows).to_excel(writer, index=False, sheet_name='Qualitative')
+        except Exception:
+            pd.DataFrame([]).to_excel(writer, index=False, sheet_name='Qualitative')
+
         # 5) Pit Scouting (use alliance data if in alliance mode)
         try:
             if alliance_id:
@@ -2465,6 +2582,24 @@ def export_portable():
                 'timestamp': sd.timestamp.isoformat() if sd.timestamp else None,
                 'alliance': sd.alliance,
                 'data_json': sd.data_json
+            })
+
+        # Qualitative scouting entries
+        if scouting_team_num:
+            qds = QualitativeScoutingData.query.filter_by(scouting_team_number=scouting_team_num).order_by(QualitativeScoutingData.timestamp).all()
+        else:
+            qds = QualitativeScoutingData.query.order_by(QualitativeScoutingData.timestamp).all()
+        export_data['qualitative_data'] = []
+        for q in qds:
+            export_data['qualitative_data'].append({
+                'id': q.id,
+                'match_id': q.match_id,
+                'scouting_team_number': q.scouting_team_number,
+                'scout_name': q.scout_name,
+                'scout_id': q.scout_id,
+                'timestamp': q.timestamp.isoformat() if q.timestamp else None,
+                'alliance_scouted': q.alliance_scouted,
+                'data_json': q.data_json
             })
 
         # Pit Scouting

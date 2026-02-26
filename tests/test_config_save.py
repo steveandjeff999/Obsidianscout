@@ -53,3 +53,52 @@ def test_simple_edit_allows_clearing_api_and_tba_keys():
         assert new_cfg.get('api_settings', {}).get('username', None) == ''
         assert new_cfg.get('api_settings', {}).get('auth_token', None) == ''
         assert new_cfg.get('tba_api_settings', {}).get('auth_key', None) == ''
+
+
+def test_simple_edit_no_duplicate_name_fields():
+    app = create_app()
+    with app.app_context():
+        try:
+            db.create_all()
+        except Exception:
+            pass
+
+        admin_role = _ensure_role('admin')
+        admin = User(username='admin_elem', scouting_team_number=None)
+        admin.set_password('pw')
+        admin.roles.append(admin_role)
+        db.session.add(admin)
+        db.session.commit()
+
+        # make sure pit config has one section with one element
+        from app.utils.config_manager import get_current_pit_config, save_pit_config
+        cfg = get_current_pit_config()
+        cfg['pit_scouting'] = {
+            'title': 'Test',
+            'description': '',
+            'sections': [
+                {
+                    'id': 'sec1',
+                    'name': 'Section 1',
+                    'elements': [
+                        {'id': 'el1', 'perm_id': 'el1', 'name': 'Element1', 'type': 'text'}
+                    ]
+                }
+            ]
+        }
+        assert save_pit_config(cfg)
+
+        client = app.test_client()
+        resp = client.post('/auth/login', data={'username': 'admin_elem', 'password': 'pw', 'team_number': ''}, follow_redirects=True)
+        assert resp.status_code == 200
+
+        resp = client.get('/pit_scouting/config/simple-edit')
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+
+        # every element_name pair should appear only once
+        import re, collections
+        names = re.findall(r'name="element_name_(\d+)_(\d+)"', html)
+        counts = collections.Counter(names)
+        for pair, cnt in counts.items():
+            assert cnt == 1, f"duplicate name field for element {pair}"

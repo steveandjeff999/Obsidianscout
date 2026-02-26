@@ -37,7 +37,8 @@
                         <button class="btn btn-primary" onclick="window.print()">
                             <i class="fas fa-print me-2"></i>Print QR Code
                         </button>
-                        <a href="{{ url_for('scouting.view_qualitative_data', entry_id=entry.id) }}" class="btn btn-secondary">
+                        {% set shared_param = entry.shared_id | default(None) %}
+                        <a href="{% if shared_param %}{{ url_for('scouting.view_qualitative_data', entry_id=entry.id) }}?shared_id={{ shared_param }}{% else %}{{ url_for('scouting.view_qualitative_data', entry_id=entry.id) }}{% endif %}" class="btn btn-secondary">
                             <i class="fas fa-arrow-left me-2"></i>Back to Entry
                         </a>
                         <a href="{{ url_for('scouting.list_qualitative_data') }}" class="btn btn-outline-secondary">
