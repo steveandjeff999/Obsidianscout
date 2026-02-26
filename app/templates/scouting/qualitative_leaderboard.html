@@ -107,9 +107,23 @@
                         <tr>
                             <th style="width: 80px;">Rank</th>
                             <th style="width: 120px;">Team</th>
-                            <th style="width: 220px;">Avg Overall Rating <span class="text-muted small">(higher is better)</span></th>
+                            <th style="width: 220px;">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-white text-decoration-none {% if sort_by == 'avg_rating' %}fw-bold{% endif %}" data-sort="avg_rating" title="Sort by average rating">
+                                    Avg Overall Rating <span class="text-muted small">(higher is better)</span> <i class="fas fa-sort-down sort-icon ms-1" data-for="avg_rating" style="{% if sort_by != 'avg_rating' %}opacity:0.3{% endif %}"></i>
+                                </button>
+                            </th>
                             <th style="width: 120px;">Appearances</th>
                             <th style="width: 200px;">Roles</th>
+                            <th style="width: 120px;">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-white text-decoration-none {% if sort_by == 'auto_climb' %}fw-bold{% endif %}" data-sort="auto_climb" title="Sort by auto climb">
+                                    Auto Climb <i class="fas fa-sort-down sort-icon ms-1" data-for="auto_climb" style="{% if sort_by != 'auto_climb' %}opacity:0.3{% endif %}"></i>
+                                </button>
+                            </th>
+                            <th style="width: 120px;">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-white text-decoration-none {% if sort_by == 'endgame_climb' %}fw-bold{% endif %}" data-sort="endgame_climb" title="Sort by endgame climb">
+                                    Endgame Climb <i class="fas fa-sort-down sort-icon ms-1" data-for="endgame_climb" style="{% if sort_by != 'endgame_climb' %}opacity:0.3{% endif %}"></i>
+                                </button>
+                            </th>
                             <th>Overall Ratings</th>
                             <th style="width: 150px;">Actions</th>
                         </tr>
@@ -117,20 +131,25 @@
                     <tbody>
                         {% for team in leaderboard %}
                         <tr class="team-row"
+                            data-average-ranking="{{ team.average_ranking }}"
                             data-cycling="{{ team.roles.cycling }}"
                             data-stealing="{{ team.roles.stealing }}"
                             data-scoring="{{ team.roles.scoring }}"
                             data-feeding="{{ team.roles.feeding }}"
                             data-defending="{{ team.roles.defending }}"
-                            data-did_not_contribute="{{ team.roles.did_not_contribute }}">
-                            <td class="text-center">
+                            data-did_not_contribute="{{ team.roles.did_not_contribute }}"
+                            data-auto-success="{{ team.auto_success }}"
+                            data-auto-fail="{{ team.auto_fail }}"
+                            data-endgame-success="{{ team.endgame_success }}"
+                            data-endgame-fail="{{ team.endgame_fail }}">
+                            <td class="text-center rank-cell">
                                 {% if loop.index <= 3 %}
                                 <span class="badge {% if loop.index == 1 %}bg-warning text-dark{% elif loop.index == 2 %}bg-secondary{% else %}bg-danger{% endif %} fs-5">
-                                    #{{ loop.index }}
+                                    #<span class="rank-num">{{ loop.index }}</span>
                                     {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% endif %}
                                 </span>
                                 {% else %}
-                                <span class="badge bg-dark fs-6">#{{ loop.index }}</span>
+                                <span class="badge bg-dark fs-6">#<span class="rank-num">{{ loop.index }}</span></span>
                                 {% endif %}
                             </td>
                             <td>
@@ -194,31 +213,29 @@
                             </td>
                             <td>
                                 {% if team.auto_success or team.auto_fail %}
-                                    <div class="mb-1">
-                                        <strong class="small me-1">Auto:</strong>
-                                        <span class="badge bg-success me-1">S: {{ team.auto_success }}</span>
-                                        <span class="badge bg-danger me-1">F: {{ team.auto_fail }}</span>
-                                    </div>
+                                <span class="badge bg-success me-1">S: {{ team.auto_success }}</span>
+                                <span class="badge bg-danger me-1">F: {{ team.auto_fail }}</span>
+                                {% else %}
+                                <span class="text-muted small">—</span>
                                 {% endif %}
+                            </td>
+                            <td>
                                 {% if team.endgame_success or team.endgame_fail %}
-                                    <div class="mb-1">
-                                        <strong class="small me-1">Endgame:</strong>
-                                        <span class="badge bg-success me-1">S: {{ team.endgame_success }}</span>
-                                        <span class="badge bg-danger me-1">F: {{ team.endgame_fail }}</span>
-                                    </div>
+                                <span class="badge bg-success me-1">S: {{ team.endgame_success }}</span>
+                                <span class="badge bg-danger me-1">F: {{ team.endgame_fail }}</span>
+                                {% else %}
+                                <span class="text-muted small">—</span>
                                 {% endif %}
+                            </td>
+                            <td>
                                 {% if team.feeder and (team.feeder.continuous or team.feeder.stop_to_shoot or team.feeder.dump) %}
-                                    <div>
+                                    <div class="mb-1">
                                         <strong class="small me-1">Feeder:</strong>
                                         {% if team.feeder.continuous %}<span class="badge bg-info me-1">Cont: {{ team.feeder.continuous }}</span>{% endif %}
                                         {% if team.feeder.stop_to_shoot %}<span class="badge bg-secondary me-1">Stop: {{ team.feeder.stop_to_shoot }}</span>{% endif %}
                                         {% if team.feeder.dump %}<span class="badge bg-dark me-1">Dump: {{ team.feeder.dump }}</span>{% endif %}
                                     </div>
-                                {% else %}
-                                    <div class="text-muted small">No climb/feeder data</div>
                                 {% endif %}
-                            </td>
-                            <td>
                                 {% for rating in team.rankings %}
                                 <span class="badge 
                                     {% if rating == 5 %}bg-success
@@ -229,6 +246,9 @@
                                     {{ rating }}
                                 </span>
                                 {% endfor %}
+                                {% if not (team.feeder and (team.feeder.continuous or team.feeder.stop_to_shoot or team.feeder.dump)) and not team.rankings %}
+                                    <span class="text-muted small">—</span>
+                                {% endif %}
                             </td>
                             <td>
                                 <button type="button" class="btn btn-sm btn-info" onclick="showTeamNotes('{{ team.team_number }}')">
@@ -354,8 +374,69 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Client-side leaderboard sorting (no refresh)
+function getSortKey(row, sortBy) {
+    if (sortBy === 'avg_rating') {
+        return parseFloat(row.dataset.averageRanking) || 0;
+    }
+    if (sortBy === 'auto_climb') {
+        const s = parseInt(row.dataset.autoSuccess) || 0;
+        const f = parseInt(row.dataset.autoFail) || 0;
+        const total = s + f;
+        const rate = total ? s / total : 0;
+        return [rate, total];
+    }
+    if (sortBy === 'endgame_climb') {
+        const s = parseInt(row.dataset.endgameSuccess) || 0;
+        const f = parseInt(row.dataset.endgameFail) || 0;
+        const total = s + f;
+        const rate = total ? s / total : 0;
+        return [rate, total];
+    }
+    return 0;
+}
+
+function sortLeaderboard(sortBy) {
+    const tbody = document.querySelector('#leaderboard-table tbody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr.team-row'));
+    rows.sort(function(a, b) {
+        const ka = getSortKey(a, sortBy);
+        const kb = getSortKey(b, sortBy);
+        if (Array.isArray(ka) && Array.isArray(kb)) {
+            if (kb[0] !== ka[0]) return kb[0] - ka[0];
+            return (kb[1] || 0) - (ka[1] || 0);
+        }
+        return (kb - ka);
+    });
+    rows.forEach(function(row) { tbody.appendChild(row); });
+    rows.forEach(function(row, i) {
+        const rank = i + 1;
+        const td = row.querySelector('.rank-cell');
+        if (!td) return;
+        var badgeClass = 'bg-dark', emoji = '', sizeClass = 'fs-6';
+        if (rank === 1) { badgeClass = 'bg-warning text-dark'; emoji = ' \uD83C\uDFC6'; sizeClass = 'fs-5'; }
+        else if (rank === 2) { badgeClass = 'bg-secondary'; emoji = ' \uD83C\uDFC8'; sizeClass = 'fs-5'; }
+        else if (rank === 3) { badgeClass = 'bg-danger'; emoji = ' \uD83C\uDFC5'; sizeClass = 'fs-5'; }
+        td.innerHTML = '<span class="badge ' + badgeClass + ' ' + sizeClass + '">#' + rank + emoji + '</span>';
+    });
+    document.querySelectorAll('.sort-col').forEach(function(btn) {
+        btn.classList.toggle('fw-bold', btn.dataset.sort === sortBy);
+    });
+    document.querySelectorAll('.sort-icon').forEach(function(icon) {
+        icon.style.opacity = icon.dataset.for === sortBy ? '1' : '0.3';
+    });
+}
+
 // Role filtering functionality
 document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.sort-col').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            sortLeaderboard(this.dataset.sort);
+        });
+    });
+
     const filterAll = document.getElementById('filter-all');
     const roleFilters = document.querySelectorAll('.role-filter');
     const teamRows = document.querySelectorAll('.team-row');
@@ -451,6 +532,12 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
+.sort-col {
+    cursor: pointer;
+}
+.sort-col:hover {
+    text-decoration: underline !important;
+}
 .progress {
     background-color: #e9ecef;
 }

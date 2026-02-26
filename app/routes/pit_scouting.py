@@ -21,6 +21,9 @@ from app.utils.alliance_data import (
     get_all_teams_for_alliance
 )
 
+# blueprint for this module
+bp = Blueprint('pit_scouting', __name__, url_prefix='/pit-scouting')
+
 def get_theme_context():
     theme_manager = ThemeManager()
     return {
@@ -33,6 +36,7 @@ def auto_sync_alliance_pit_data(pit_data_entry):
     try:
         # Check if alliance mode is active for current user's team
         if not is_alliance_mode_active():
+            current_app.logger.debug('Pit auto-sync skipped because alliance mode not active')
             return
         
         # Import here to avoid circular imports
@@ -47,6 +51,7 @@ def auto_sync_alliance_pit_data(pit_data_entry):
         ).first()
         
         if not alliance_status or not alliance_status.active_alliance:
+            current_app.logger.debug(f'Pit auto-sync skipped because no active alliance status for team {current_team}')
             return
             
         alliance = alliance_status.active_alliance
@@ -60,6 +65,7 @@ def auto_sync_alliance_pit_data(pit_data_entry):
         
         # If data sharing is disabled for this team, don't sync their data to others
         if current_member and not getattr(current_member, 'is_data_sharing_active', True):
+            current_app.logger.debug(f'Pit auto-sync skipped because data sharing disabled for team {current_team}')
             return
         
         # Also save to AllianceSharedPitData for centralized alliance storage
@@ -109,26 +115,24 @@ def auto_sync_alliance_pit_data(pit_data_entry):
                 db.session.add(sync_record)
                 sync_count += 1
                 
-                # Emit real-time sync to that team
-                socketio.emit('alliance_data_sync_auto', {
+                payload = {
                     'from_team': current_team,
                     'alliance_name': alliance.alliance_name,
                     'scouting_data': [],
                     'pit_data': [sync_data],
                     'sync_id': sync_record.id,
                     'type': 'auto_sync'
-                }, room=f'team_{member.team_number}')
-                
+                }
+                socketio.emit('alliance_data_sync_auto', payload, room=f'team_{member.team_number}')
+                socketio.emit('alliance_data_sync_auto', payload, room=f'alliance_{alliance.id}')
+        
         if sync_count > 0:
-            db.session.commit()
-            print(f"Auto-synced pit data for Team {pit_data_entry.team.team_number} to {sync_count} alliance members")
+            current_app.logger.debug(f"Auto-synced pit data for Team {pit_data_entry.team.team_number} to {sync_count} alliance members")
+        db.session.commit()
             
     except Exception as e:
-        print(f"Error in auto-sync alliance pit data: {str(e)}")
-        # Don't raise the exception to prevent disrupting the main save operation
-
-bp = Blueprint('pit_scouting', __name__, url_prefix='/pit-scouting')
-
+        current_app.logger.error(f"Error in auto-sync alliance pit data: {str(e)}")
+bp = Blueprint('pit_scouting', __name__, url_prefix='/pit_scouting')
 @bp.route('/')
 @login_required
 def index():

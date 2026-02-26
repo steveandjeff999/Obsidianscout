@@ -126,7 +126,7 @@ def get_tba_api_key():
         if isinstance(api_key, str):
             low = api_key.lower()
             if any(x in low for x in ('your ', 'your_', 'example', 'replace', 'todo')) or len(api_key.strip()) < 10:
-                print("TBA API key looks like a placeholder; ignoring and returning None")
+                # print("TBA API key looks like a placeholder; ignoring and returning None")
                 api_key = None
     except Exception:
         pass
@@ -151,7 +151,7 @@ def get_tba_api_key():
                             if k and isinstance(k, str):
                                 lk = k.strip().lower()
                                 if not any(x in lk for x in ('your ', 'your_', 'example', 'replace', 'todo')) and len(k.strip()) >= 10:
-                                    print(f"Found TBA key in team config {team_folder}; using it as fallback")
+                                    # print(f"Found TBA key in team config {team_folder}; using it as fallback")
                                     return k.strip()
                         except Exception:
                             continue
@@ -185,10 +185,10 @@ def get_tba_teams_at_event(event_key):
     api_url = f"{base_url}/event/{event_key}/teams"
     
     try:
-        print(f"Fetching teams from TBA: {api_url}")
+        # print(f"Fetching teams from TBA: {api_url}")
         
         headers = get_tba_api_headers()
-        print(f"Using headers: {list(headers.keys())} for TBA teams request")
+        # print(f"Using headers: {list(headers.keys())} for TBA teams request")
 
         response = requests.get(
             api_url,
@@ -196,14 +196,14 @@ def get_tba_teams_at_event(event_key):
             timeout=15
         )
         
-        print(f"TBA teams response status: {response.status_code}")
+        # print(f"TBA teams response status: {response.status_code}")
         
         if response.status_code == 200:
             teams_data = response.json()
-            print(f"Successfully fetched {len(teams_data)} teams from TBA")
+            # print(f"Successfully fetched {len(teams_data)} teams from TBA")
             return teams_data
         elif response.status_code == 304:
-            print("TBA teams data not modified (304)")
+            # print("TBA teams data not modified (304)")
             return []
         else:
             # Try to get error message
@@ -214,11 +214,11 @@ def get_tba_teams_at_event(event_key):
                 error_msg = f"HTTP {response.status_code}"
             if response.status_code == 401:
                 print("Authentication failed (401) when contacting TBA API.")
-                print(f"Authorization header present: {'X-TBA-Auth-Key' in headers}")
-                try:
-                    print(f"Response body: {response.text}")
-                except Exception:
-                    pass
+                # print(f"Authorization header present: {'X-TBA-Auth-Key' in headers}")
+                # try:
+                #     print(f"Response body: {response.text}")
+                # except Exception:
+                #     pass
 
             raise TBAApiError(f"TBA API Error: {error_msg}")
             
@@ -242,11 +242,11 @@ def get_tba_event_matches(event_key):
     api_url = f"{base_url}/event/{event_key}/matches"
     
     try:
-        print(f"Fetching matches from TBA: {api_url}")
-        print("  (TBA includes both scheduled and completed matches)")
+        # print(f"Fetching matches from TBA: {api_url}")
+        # print("  (TBA includes both scheduled and completed matches)")
         
         headers = get_tba_api_headers()
-        print(f"Using headers: {list(headers.keys())} for TBA matches request")
+        # print(f"Using headers: {list(headers.keys())} for TBA matches request")
 
         response = requests.get(
             api_url,
@@ -254,22 +254,22 @@ def get_tba_event_matches(event_key):
             timeout=15
         )
         
-        print(f"TBA matches response status: {response.status_code}")
+        # print(f"TBA matches response status: {response.status_code}")
         
         if response.status_code == 200:
             matches_data = response.json()
             
             # Count scheduled vs completed matches for logging
-            completed = sum(1 for m in matches_data if m.get('alliances', {}).get('red', {}).get('score', -1) >= 0)
-            scheduled = len(matches_data) - completed
+            # completed = sum(1 for m in matches_data if m.get('alliances', {}).get('red', {}).get('score', -1) >= 0)
+            # scheduled = len(matches_data) - completed
             
-            print(f"Successfully fetched {len(matches_data)} matches from TBA")
-            print(f"  - {completed} completed matches (with scores)")
-            print(f"  - {scheduled} scheduled matches (not yet played)")
+            # print(f"Successfully fetched {len(matches_data)} matches from TBA")
+            # print(f"  - {completed} completed matches (with scores)")
+            # print(f"  - {scheduled} scheduled matches (not yet played)")
             
             return matches_data
         elif response.status_code == 304:
-            print("TBA matches data not modified (304)")
+            # print("TBA matches data not modified (304)")
             return []
         else:
             # Try to get error message
@@ -280,11 +280,11 @@ def get_tba_event_matches(event_key):
                 error_msg = f"HTTP {response.status_code}"
             if response.status_code == 401:
                 print("Authentication failed (401) when contacting TBA API for matches.")
-                print(f"Authorization header present: {'X-TBA-Auth-Key' in headers}")
-                try:
-                    print(f"Response body: {response.text}")
-                except Exception:
-                    pass
+                # print(f"Authorization header present: {'X-TBA-Auth-Key' in headers}")
+                # try:
+                #     print(f"Response body: {response.text}")
+                # except Exception:
+                #     pass
 
             raise TBAApiError(f"TBA API Error: {error_msg}")
             
@@ -300,10 +300,10 @@ def get_tba_event_details(event_key):
     api_url = f"{base_url}/event/{event_key}"
     
     try:
-        print(f"Fetching event details from TBA: {api_url}")
+        # print(f"Fetching event details from TBA: {api_url}")
         
         headers = get_tba_api_headers()
-        print(f"Using headers: {list(headers.keys())} for TBA event details request")
+        # print(f"Using headers: {list(headers.keys())} for TBA event details request")
 
         response = requests.get(
             api_url,
@@ -313,16 +313,16 @@ def get_tba_event_details(event_key):
         
         if response.status_code == 200:
             event_data = response.json()
-            print(f"Successfully fetched event details from TBA: {event_data.get('name', 'Unknown Event')}")
+            # print(f"Successfully fetched event details from TBA: {event_data.get('name', 'Unknown Event')}")
             
             # Cache remap_teams if present (for offseason events with B/C/D teams)
             if 'remap_teams' in event_data and event_data['remap_teams']:
                 _event_remap_cache[event_key] = event_data['remap_teams']
-                print(f"Cached {len(event_data['remap_teams'])} team remappings for event {event_key}")
+                # print(f"Cached {len(event_data['remap_teams'])} team remappings for event {event_key}")
             
             return event_data
         elif response.status_code == 304:
-            print("TBA event data not modified (304)")
+            # print("TBA event data not modified (304)")
             return None
         else:
             # Try to get error message
@@ -333,11 +333,11 @@ def get_tba_event_details(event_key):
                 error_msg = f"HTTP {response.status_code}"
             if response.status_code == 401:
                 print("Authentication failed (401) when contacting TBA API for event details.")
-                print(f"Authorization header present: {'X-TBA-Auth-Key' in headers}")
-                try:
-                    print(f"Response body: {response.text}")
-                except Exception:
-                    pass
+                # print(f"Authorization header present: {'X-TBA-Auth-Key' in headers}")
+                # try:
+                #     print(f"Response body: {response.text}")
+                # except Exception:
+                #     pass
 
             raise TBAApiError(f"TBA API Error: {error_msg}")
             
@@ -436,7 +436,7 @@ def get_tba_events_by_year(year):
     api_url = f"{base_url}/events/{year}"
     
     try:
-        print(f"Fetching events from TBA for year {year}: {api_url}")
+        # print(f"Fetching events from TBA for year {year}: {api_url}")
         
         response = requests.get(
             api_url,
@@ -444,14 +444,14 @@ def get_tba_events_by_year(year):
             timeout=15
         )
         
-        print(f"TBA events response status: {response.status_code}")
+        # print(f"TBA events response status: {response.status_code}")
         
         if response.status_code == 200:
             events_data = response.json()
-            print(f"Successfully fetched {len(events_data)} events from TBA")
+            # print(f"Successfully fetched {len(events_data)} events from TBA")
             return events_data
         elif response.status_code == 304:
-            print("TBA events data not modified (304)")
+            # print("TBA events data not modified (304)")
             return []
         else:
             # Try to get error message
@@ -636,7 +636,7 @@ def get_tba_team_events(team_key, year=None):
         api_url = f"{base_url}/team/{team_key}/events"
     
     try:
-        print(f"Fetching team events from TBA: {api_url}")
+        # print(f"Fetching team events from TBA: {api_url}")
         
         response = requests.get(
             api_url,
@@ -644,14 +644,14 @@ def get_tba_team_events(team_key, year=None):
             timeout=15
         )
         
-        print(f"TBA team events response status: {response.status_code}")
+        # print(f"TBA team events response status: {response.status_code}")
         
         if response.status_code == 200:
             events_data = response.json()
-            print(f"Successfully fetched {len(events_data)} events for team {team_key}")
+            # print(f"Successfully fetched {len(events_data)} events for team {team_key}")
             return events_data
         elif response.status_code == 304:
-            print("TBA team events data not modified (304)")
+            # print("TBA team events data not modified (304)")
             return []
         else:
             # Try to get error message
@@ -675,7 +675,7 @@ def get_tba_team_matches_at_event(team_key, event_key):
     api_url = f"{base_url}/team/{team_key}/event/{event_key}/matches"
     
     try:
-        print(f"Fetching team matches from TBA: {api_url}")
+        # print(f"Fetching team matches from TBA: {api_url}")
         
         response = requests.get(
             api_url,
@@ -683,7 +683,7 @@ def get_tba_team_matches_at_event(team_key, event_key):
             timeout=15
         )
         
-        print(f"TBA team matches response status: {response.status_code}")
+        # print(f"TBA team matches response status: {response.status_code}")
         
         if response.status_code == 200:
             matches_data = response.json()

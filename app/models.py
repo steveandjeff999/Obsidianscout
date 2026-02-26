@@ -1984,6 +1984,103 @@ class AllianceSharedPitData(db.Model):
         )
 
 
+class AllianceSharedQualitativeData(db.Model):
+    """Model to store copies of qualitative scouting data shared with alliances.
+    
+    When qualitative data is synced to an alliance, a copy is made here so that
+    deleting the original doesn't affect other alliance members' access to the data.
+    """
+    __tablename__ = 'alliance_shared_qualitative_data'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    alliance_id = db.Column(db.Integer, db.ForeignKey('scouting_alliance.id'), nullable=False)
+    
+    # Reference to original data (may be null if original was deleted)
+    original_qualitative_data_id = db.Column(db.Integer, nullable=True)
+    
+    # Team that originally scouted this data (the "owner")
+    source_scouting_team_number = db.Column(db.Integer, nullable=False)
+    
+    # Copy of the qualitative scouting data fields
+    match_id = db.Column(db.Integer, db.ForeignKey('match.id', ondelete='CASCADE'), nullable=False)
+    scouting_team_number = db.Column(db.Integer, nullable=True)
+    scout_name = db.Column(db.String(50), nullable=False)
+    scout_id = db.Column(db.Integer, nullable=True)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    alliance_scouted = db.Column(db.String(10), nullable=False)  # 'red', 'blue', 'both', or 'team_XXXX'
+    data_json = db.Column(db.Text, nullable=False)  # JSON data
+    
+    # Metadata for alliance sharing
+    shared_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    shared_by_team = db.Column(db.Integer, nullable=False)  # Team that shared this
+    last_edited_by_team = db.Column(db.Integer, nullable=True)
+    last_edited_at = db.Column(db.DateTime, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    
+    # Relationships
+    alliance_rel = db.relationship('ScoutingAlliance', backref='shared_qualitative_data')
+    match = db.relationship('Match', backref=db.backref('shared_qualitative_scouting_data', lazy=True, cascade='all, delete-orphan'))
+    
+    def __repr__(self):
+        return f'<AllianceSharedQualitativeData Alliance {self.alliance_id} Match {self.match_id}>'
+    
+    @property
+    def data(self):
+        """Get data as a Python dictionary"""
+        try:
+            return json.loads(self.data_json)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    
+    @data.setter
+    def data(self, value):
+        """Set data from a Python dictionary"""
+        self.data_json = json.dumps(value)
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        # include some convenient match/event/team info for UI display
+        match_obj = self.match
+        return {
+            'id': self.id,
+            'alliance_id': self.alliance_id,
+            'original_id': self.original_qualitative_data_id,
+            'source_team': self.source_scouting_team_number,
+            'team_number': self.scouting_team_number,
+            'match_id': self.match_id,
+            'match_type': match_obj.match_type if match_obj else None,
+            'match_number': match_obj.match_number if match_obj else None,
+            'event_code': match_obj.event.code if match_obj and match_obj.event else None,
+            'scouting_team_number': self.scouting_team_number,
+            'scout_name': self.scout_name,
+            'alliance_scouted': self.alliance_scouted,
+            'data': self.data,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'shared_at': self.shared_at.isoformat() if self.shared_at else None,
+            'shared_by_team': self.shared_by_team,
+            'last_edited_by_team': self.last_edited_by_team,
+            'last_edited_at': self.last_edited_at.isoformat() if self.last_edited_at else None,
+            'is_active': self.is_active
+        }
+    
+    @classmethod
+    def create_from_qualitative_data(cls, qual_data, alliance_id, shared_by_team):
+        """Create a shared copy from original QualitativeScoutingData"""
+        return cls(
+            alliance_id=alliance_id,
+            original_qualitative_data_id=qual_data.id,
+            source_scouting_team_number=qual_data.scouting_team_number,
+            match_id=qual_data.match_id,
+            scouting_team_number=qual_data.scouting_team_number,
+            scout_name=qual_data.scout_name,
+            scout_id=qual_data.scout_id,
+            timestamp=qual_data.timestamp,
+            alliance_scouted=qual_data.alliance_scouted,
+            data_json=qual_data.data_json,
+            shared_by_team=shared_by_team
+        )
+
+
 class AllianceDeletedData(db.Model):
     """Track data that was deleted from an alliance by admin to prevent re-sync.
     
@@ -1994,7 +2091,7 @@ class AllianceDeletedData(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     alliance_id = db.Column(db.Integer, db.ForeignKey('scouting_alliance.id'), nullable=False)
-    data_type = db.Column(db.String(20), nullable=False)  # 'scouting' or 'pit'
+    data_type = db.Column(db.String(20), nullable=False)  # 'scouting', 'pit', or 'qualitative'
     
     # Identify the data that was deleted (match these fields to prevent re-sync)
     match_id = db.Column(db.Integer, nullable=True)  # For scouting data
@@ -2018,11 +2115,12 @@ class AllianceDeletedData(db.Model):
         query = cls.query.filter_by(
             alliance_id=alliance_id,
             data_type=data_type,
-            team_id=team_id,
             source_scouting_team_number=source_team
         )
-        if data_type == 'scouting':
+        if data_type in ('scouting', 'qualitative'):
             query = query.filter_by(match_id=match_id, alliance_color=alliance_color)
+        if team_id is not None:
+            query = query.filter_by(team_id=team_id)
         return query.first() is not None
     
     @classmethod
@@ -2032,11 +2130,12 @@ class AllianceDeletedData(db.Model):
         existing = cls.query.filter_by(
             alliance_id=alliance_id,
             data_type=data_type,
-            team_id=team_id,
             source_scouting_team_number=source_team
         )
-        if data_type == 'scouting':
+        if data_type in ('scouting', 'qualitative'):
             existing = existing.filter_by(match_id=match_id, alliance_color=alliance_color)
+        if team_id is not None:
+            existing = existing.filter_by(team_id=team_id)
         
         if existing.first():
             return  # Already marked

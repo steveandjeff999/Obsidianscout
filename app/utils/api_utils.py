@@ -189,7 +189,7 @@ def get_api_key():
             token = api_key.strip()
             low = token.lower()
             if any(x in low for x in ('your ', 'your_', 'example', 'replace', 'todo')) or len(token) < 10:
-                print("FIRST API key looks like a placeholder; ignoring and returning None")
+                # print("FIRST API key looks like a placeholder; ignoring and returning None")
                 api_key = None
             else:
                 return token
@@ -214,7 +214,7 @@ def get_api_key():
                             if k and isinstance(k, str):
                                 lk = k.strip().lower()
                                 if not any(x in lk for x in ('your ', 'your_', 'example', 'replace', 'todo')) and len(k.strip()) >= 10:
-                                    print(f"Found FIRST API token in team config {team_folder}; using it as fallback")
+                                    # print(f"Found FIRST API token in team config {team_folder}; using it as fallback")
                                     return k.strip()
                         except Exception:
                             continue
@@ -293,10 +293,9 @@ def get_teams(event_code):
     for endpoint in endpoints_to_try:
         api_url = f"{base_url}{endpoint}"
         try:
-            print(f"Trying teams endpoint: {api_url}")
+            # print(f"Trying teams endpoint: {api_url}")
             headers = get_api_headers()
-            # Print which header keys are being sent (do not print values)
-            print(f"Using headers: {list(headers.keys())}")
+            # print(f"Using headers: {list(headers.keys())}")
 
             response = requests.get(
                 api_url,
@@ -304,11 +303,10 @@ def get_teams(event_code):
                 timeout=15  # Increased timeout for potentially slow API responses
             )
             
-            # Log response info for debugging
-            print(f"Teams response status: {response.status_code}")
+            # print(f"Teams response status: {response.status_code}")
             
             if response.status_code == 200:
-                print("Success! API returned team data.")
+                # print("Success! API returned team data.")
                 data = response.json()
                 
                 # Check different response formats
@@ -322,7 +320,7 @@ def get_teams(event_code):
                         if isinstance(data[key], list) and len(data[key]) > 0:
                             return data[key]
                 else:
-                    print(f"Warning: Successful response but unknown data format. Keys: {list(data.keys())}")
+                    # print(f"Warning: Successful response but unknown data format. Keys: {list(data.keys())}")
                     # If we got data but in an unknown format, try to find a list that might contain teams
                     for key, value in data.items():
                         if isinstance(value, list) and len(value) > 0:
@@ -342,23 +340,23 @@ def get_teams(event_code):
                 except:
                     error_msg = f"HTTP {response.status_code}"
                 last_error = f"API Error: {error_msg}"
-                print(f"Endpoint {api_url} failed: {last_error}")
+                # print(f"Endpoint {api_url} failed: {last_error}")
                 if response.status_code == 401:
-                    # Helpful debug without printing secrets
+                    # Helpful debug without printing secrets (keep big one)
                     print("Authentication failed (401) when contacting FIRST API.")
-                    print(f"Authorization header present: {'Authorization' in headers}")
-                    try:
-                        print(f"Response body: {response.text}")
-                    except Exception:
-                        pass
+                    # print(f"Authorization header present: {'Authorization' in headers}")
+                    # try:
+                    #     print(f"Response body: {response.text}")
+                    # except Exception:
+                    #     pass
                 # Continue to try the next endpoint
         
         except Exception as e:
             last_error = f"Request error: {str(e)}"
-            print(f"Endpoint {api_url} exception: {last_error}")
+            # print(f"Endpoint {api_url} exception: {last_error}")
             # Continue to try the next endpoint
     
-    # If we get here, all endpoints failed
+    # If we get here, all endpoints failed (keep big one)
     print(f"All teams API endpoints failed. Last error: {last_error}")
     
     # Check if the event code looks valid
@@ -371,9 +369,9 @@ def get_teams(event_code):
 def fetch_from_endpoint(api_url, headers, timeout=15):
     """Helper function to fetch data from a single endpoint"""
     try:
-        print(f"Trying endpoint: {api_url}")
+        # print(f"Trying endpoint: {api_url}")
         response = requests.get(api_url, headers=headers, timeout=timeout)
-        print(f"Response status: {response.status_code}")
+        # print(f"Response status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
@@ -387,7 +385,7 @@ def fetch_from_endpoint(api_url, headers, timeout=15):
             elif 'matches' in data:
                 return data.get('matches', [])
             else:
-                print(f"Warning: Unknown data format. Keys: {data.keys()}")
+                # print(f"Warning: Unknown data format. Keys: {data.keys()}")
                 return list(data.values())[0] if data else []
         else:
             try:
@@ -535,16 +533,16 @@ def get_matches(event_code):
             api_url = f"{base_url}{endpoint}"
             matches = fetch_from_endpoint(api_url, headers)
             if matches:
-                print(f"  Found {len(matches)} matches from fallback {endpoint}")
+                # print(f"  Found {len(matches)} matches from fallback {endpoint}")
                 all_matches = merge_match_lists(all_matches, matches)
                 break  # Stop at first successful fallback
     
     # Check if we got any matches
     if all_matches:
-        print(f"=== Total unique matches retrieved: {len(all_matches)} ===")
+        # print(f"=== Total unique matches retrieved: {len(all_matches)} ===")
         return all_matches
     
-    # If we get here, all endpoints failed
+    # If we get here, all endpoints failed (keep big one)
     print("All API endpoints failed to return match data")
     
     # Check if the event code looks valid
@@ -556,7 +554,7 @@ def get_matches(event_code):
         raise ApiError(f"Season value ({season}) appears invalid. Check your configuration.")
     
     # Return empty list if no errors but no data - event may just not have matches scheduled yet
-    print("No matches found - event may not have matches scheduled yet")
+    # print("No matches found - event may not have matches scheduled yet")
     return []
 
 def api_to_db_team_conversion(api_team):
@@ -877,7 +875,7 @@ def get_teams_dual_api(event_code):
     
     try:
         if preferred_source == 'tba':
-            print(f"Using TBA API for teams at event {raw_event_code}")
+            # print(f"Using TBA API for teams at event {raw_event_code}")
             # Convert event code to TBA format
             game_config = get_current_game_config()
             season = game_config.get('season', 2026)
@@ -895,7 +893,7 @@ def get_teams_dual_api(event_code):
             
             return teams_db_format
         else:
-            print(f"Using FIRST API for teams at event {raw_event_code}")
+            # print(f"Using FIRST API for teams at event {raw_event_code}")
             # Use existing FIRST API function
             api_teams = get_teams(raw_event_code)
             
@@ -913,7 +911,7 @@ def get_teams_dual_api(event_code):
 
         # Try fallback API
         fallback_source = 'first' if preferred_source == 'tba' else 'tba'
-        print(f"Trying fallback API: {fallback_source}")
+        # print(f"Trying fallback API: {fallback_source}")
 
         try:
             if fallback_source == 'tba':
@@ -1168,7 +1166,7 @@ def get_matches_dual_api(event_code):
     
     try:
         if preferred_source == 'tba':
-            print(f"Using TBA API for matches at event {raw_event_code}")
+            # print(f"Using TBA API for matches at event {raw_event_code}")
             # Convert event code to TBA format
             game_config = get_current_game_config()
             season = game_config.get('season', 2026)
@@ -1200,14 +1198,14 @@ def get_matches_dual_api(event_code):
             merged = _merge_match_lists(primary_matches, fallback_matches)
             return merged
         else:
-            print(f"Using FIRST API for matches at event {raw_event_code}")
+            # print(f"Using FIRST API for matches at event {raw_event_code}")
             # Use existing FIRST API function
             api_matches = get_matches(raw_event_code)
 
             # If FIRST returned nothing, try TBA fallback immediately (don't wait for exception)
             if not api_matches:
                 try:
-                    print("FIRST API returned no matches; attempting TBA fallback")
+                    # print("FIRST API returned no matches; attempting TBA fallback")
                     game_config = get_current_game_config()
                     season = game_config.get('season', 2026)
                     tba_event_key = construct_tba_event_key(raw_event_code, season)
@@ -1266,7 +1264,7 @@ def get_matches_dual_api(event_code):
 
         # Try fallback API
         fallback_source = 'first' if preferred_source == 'tba' else 'tba'
-        print(f"Trying fallback API: {fallback_source}")
+        # print(f"Trying fallback API: {fallback_source}")
 
         try:
             if fallback_source == 'tba':
@@ -1331,7 +1329,7 @@ def get_event_details_dual_api(event_code):
     
     try:
         if preferred_source == 'tba':
-            print(f"Using TBA API for event details: {raw_event_code}")
+            # print(f"Using TBA API for event details: {raw_event_code}")
             # Convert event code to TBA format
             game_config = get_current_game_config()
             season = game_config.get('season', 2026)
@@ -1346,7 +1344,7 @@ def get_event_details_dual_api(event_code):
             else:
                 return None
         else:
-            print(f"Using FIRST API for event details: {raw_event_code}")
+            # print(f"Using FIRST API for event details: {raw_event_code}")
             # Use existing FIRST API function
             return get_event_details(raw_event_code)
     
@@ -1355,7 +1353,7 @@ def get_event_details_dual_api(event_code):
 
         # Try fallback API
         fallback_source = 'first' if preferred_source == 'tba' else 'tba'
-        print(f"Trying fallback API: {fallback_source}")
+        # print(f"Trying fallback API: {fallback_source}")
 
         try:
             if fallback_source == 'tba':
@@ -1401,7 +1399,7 @@ def get_teams_with_alliance_fallback(event_code, alliance_id=None):
             raise primary_error
         
         # Try alliance member API keys as fallback
-        print(f"Attempting alliance member API fallback for alliance {alliance_id}")
+        # print(f"Attempting alliance member API fallback for alliance {alliance_id}")
         
         try:
             from app.models import ScoutingAlliance, ScoutingAllianceMember
@@ -1427,16 +1425,17 @@ def get_teams_with_alliance_fallback(event_code, alliance_id=None):
                     # Check for FIRST API key
                     first_api_key = api_settings.get('first_api_key')
                     if first_api_key:
-                        print(f"  Trying team {member.team_number}'s FIRST API key...")
+                        # print(f"  Trying team {member.team_number}'s FIRST API key...")
                         # Temporarily set the config for this request
                         original_config = current_app.config.get('GAME_CONFIG')
                         try:
                             current_app.config['GAME_CONFIG'] = member_config
                             teams = get_teams_dual_api(event_code)
-                            print(f"  Success! Got {len(teams)} teams using team {member.team_number}'s API")
+                            # print(f"  Success! Got {len(teams)} teams using team {member.team_number}'s API")
                             return teams
                         except Exception as e:
-                            print(f"  Team {member.team_number}'s API failed: {e}")
+                            # print(f"  Team {member.team_number}'s API failed: {e}")
+                            pass
                         finally:
                             if original_config:
                                 current_app.config['GAME_CONFIG'] = original_config
@@ -1444,21 +1443,22 @@ def get_teams_with_alliance_fallback(event_code, alliance_id=None):
                     # Check for TBA API key
                     tba_key = api_settings.get('tba_api_key')
                     if tba_key:
-                        print(f"  Trying team {member.team_number}'s TBA API key...")
+                        # print(f"  Trying team {member.team_number}'s TBA API key...")
                         original_config = current_app.config.get('GAME_CONFIG')
                         try:
                             current_app.config['GAME_CONFIG'] = member_config
                             teams = get_teams_dual_api(event_code)
-                            print(f"  Success! Got {len(teams)} teams using team {member.team_number}'s TBA API")
+                            # print(f"  Success! Got {len(teams)} teams using team {member.team_number}'s TBA API")
                             return teams
                         except Exception as e:
-                            print(f"  Team {member.team_number}'s TBA API failed: {e}")
+                            # print(f"  Team {member.team_number}'s TBA API failed: {e}")
+                            pass
                         finally:
                             if original_config:
                                 current_app.config['GAME_CONFIG'] = original_config
                                 
                 except Exception as member_error:
-                    print(f"  Error trying team {member.team_number}: {member_error}")
+                    # print(f"  Error trying team {member.team_number}: {member_error}")
                     continue
             
             # All member APIs failed
@@ -1493,7 +1493,7 @@ def get_matches_with_alliance_fallback(event_code, alliance_id=None):
             raise primary_error
         
         # Try alliance member API keys as fallback
-        print(f"Attempting alliance member API fallback for alliance {alliance_id}")
+        # print(f"Attempting alliance member API fallback for alliance {alliance_id}")
         
         try:
             from app.models import ScoutingAlliance, ScoutingAllianceMember
@@ -1519,15 +1519,16 @@ def get_matches_with_alliance_fallback(event_code, alliance_id=None):
                     # Check for FIRST API key
                     first_api_key = api_settings.get('first_api_key')
                     if first_api_key:
-                        print(f"  Trying team {member.team_number}'s FIRST API key...")
+                        # print(f"  Trying team {member.team_number}'s FIRST API key...")
                         original_config = current_app.config.get('GAME_CONFIG')
                         try:
                             current_app.config['GAME_CONFIG'] = member_config
                             matches = get_matches_dual_api(event_code)
-                            print(f"  Success! Got {len(matches)} matches using team {member.team_number}'s API")
+                            # print(f"  Success! Got {len(matches)} matches using team {member.team_number}'s API")
                             return matches
                         except Exception as e:
-                            print(f"  Team {member.team_number}'s API failed: {e}")
+                            # print(f"  Team {member.team_number}'s API failed: {e}")
+                            pass
                         finally:
                             if original_config:
                                 current_app.config['GAME_CONFIG'] = original_config
@@ -1535,21 +1536,22 @@ def get_matches_with_alliance_fallback(event_code, alliance_id=None):
                     # Check for TBA API key
                     tba_key = api_settings.get('tba_api_key')
                     if tba_key:
-                        print(f"  Trying team {member.team_number}'s TBA API key...")
+                        # print(f"  Trying team {member.team_number}'s TBA API key...")
                         original_config = current_app.config.get('GAME_CONFIG')
                         try:
                             current_app.config['GAME_CONFIG'] = member_config
                             matches = get_matches_dual_api(event_code)
-                            print(f"  Success! Got {len(matches)} matches using team {member.team_number}'s TBA API")
+                            # print(f"  Success! Got {len(matches)} matches using team {member.team_number}'s TBA API")
                             return matches
                         except Exception as e:
-                            print(f"  Team {member.team_number}'s TBA API failed: {e}")
+                            # print(f"  Team {member.team_number}'s TBA API failed: {e}")
+                            pass
                         finally:
                             if original_config:
                                 current_app.config['GAME_CONFIG'] = original_config
                                 
                 except Exception as member_error:
-                    print(f"  Error trying team {member.team_number}: {member_error}")
+                    # print(f"  Error trying team {member.team_number}: {member_error}")
                     continue
             
             # All member APIs failed
@@ -1580,7 +1582,7 @@ def get_event_details_with_alliance_fallback(event_code, alliance_id=None):
             raise primary_error
         
         # Try alliance member API keys as fallback
-        print(f"Attempting alliance member API fallback for alliance {alliance_id}")
+        # print(f"Attempting alliance member API fallback for alliance {alliance_id}")
         
         try:
             from app.models import ScoutingAlliance
@@ -1605,21 +1607,22 @@ def get_event_details_with_alliance_fallback(event_code, alliance_id=None):
                     
                     # Check for FIRST API key or TBA API key
                     if api_settings.get('first_api_key') or api_settings.get('tba_api_key'):
-                        print(f"  Trying team {member.team_number}'s API key...")
+                        # print(f"  Trying team {member.team_number}'s API key...")
                         original_config = current_app.config.get('GAME_CONFIG')
                         try:
                             current_app.config['GAME_CONFIG'] = member_config
                             details = get_event_details_dual_api(event_code)
-                            print(f"  Success! Got event details using team {member.team_number}'s API")
+                            # print(f"  Success! Got event details using team {member.team_number}'s API")
                             return details
                         except Exception as e:
-                            print(f"  Team {member.team_number}'s API failed: {e}")
+                            # print(f"  Team {member.team_number}'s API failed: {e}")
+                            pass
                         finally:
                             if original_config:
                                 current_app.config['GAME_CONFIG'] = original_config
                                 
                 except Exception as member_error:
-                    print(f"  Error trying team {member.team_number}: {member_error}")
+                    # print(f"  Error trying team {member.team_number}: {member_error}")
                     continue
             
             # All member APIs failed

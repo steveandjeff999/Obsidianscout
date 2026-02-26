@@ -55,7 +55,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h2 class="mb-0">
-                        <i class="fas fa-file-import"></i> Share My Team's Data {{ help.help_icon("Share scouting and pit data from your team with the alliance. Select entries to import or ignore ones you don't want shared.", 'Share my data') }}
+                        <i class="fas fa-file-import"></i> Share My Team's Data {{ help.help_icon("Share scouting, pit, and qualitative data from your team with the alliance. Select entries to import or ignore ones you don't want shared.", 'Share my data') }}
                     </h2>
                     <p class="text-muted mb-0">
                         Share scouting data from <strong>Team {{ current_team }}</strong> with <strong>{{ alliance.alliance_name }}</strong>
@@ -92,7 +92,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-3 col-md-6 mb-3">
+        <div class="col-lg-2 col-md-4 mb-3">
             <div class="card h-100 border-success" id="foundDataCard">
                 <div class="card-body">
                     <h6 class="card-title text-success">
@@ -102,7 +102,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-3 col-md-6 mb-3">
+        <div class="col-lg-2 col-md-4 mb-3">
             <div class="card h-100 border-warning" id="foundPitCard">
                 <div class="card-body">
                     <h6 class="card-title text-warning">
@@ -112,12 +112,22 @@
                 </div>
             </div>
         </div>
+        <div class="col-lg-2 col-md-4 mb-3">
+            <div class="card h-100 border-success" id="foundQualCard">
+                <div class="card-body">
+                    <h6 class="card-title text-success">
+                        <i class="fas fa-comment-dots me-2"></i>Qualitative Available
+                    </h6>
+                    <p class="display-6 mb-0" id="totalQualFound">-</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Scan Options -->
     <div class="card mb-4">
         <div class="card-header">
-            <h5 class="mb-0"><i class="fas fa-search me-2"></i>Scan Your Data {{ help.help_icon('Scan your team\'s local scouting and pit data to find entries that can be shared with the alliance. Only new entries are shown.', 'Scan your data') }}</h5>
+            <h5 class="mb-0"><i class="fas fa-search me-2"></i>Scan Your Data {{ help.help_icon('Scan your team\'s local scouting, pit, and qualitative data to find entries that can be shared with the alliance. Only new entries are shown.', 'Scan your data') }}</h5>
         </div>
         <div class="card-body">
             <p class="text-muted">
@@ -128,9 +138,10 @@
                 <div class="col-md-6 mb-3">
                     <label class="form-label"><strong>Data Type</strong></label>
                     <select id="dataType" class="form-select" title="Select Data Type">
-                        <option value="all">All Data (Match + Pit)</option>
+                        <option value="all">All Data (Match, Pit, Qualitative)</option>
                         <option value="scouting">Match Scouting Only</option>
                         <option value="pit">Pit Scouting Only</option>
+                        <option value="qualitative">Qualitative Scouting Only</option>
                     </select>
                 </div>
                 <div class="col-md-6 mb-3 d-flex align-items-end">
@@ -212,6 +223,13 @@
                             <span class="badge bg-secondary" id="pitTabCount">0</span>
                         </button>
                     </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="qual-tab" data-bs-toggle="tab" 
+                                data-bs-target="#qualPane" type="button" role="tab">
+                            <i class="fas fa-comment-dots me-1"></i> Qualitative
+                            <span class="badge bg-secondary" id="qualTabCount">0</span>
+                        </button>
+                    </li>
                 </ul>
 
                 <div class="tab-content mt-3">
@@ -225,6 +243,12 @@
                     <!-- Pit Scouting Tab -->
                     <div class="tab-pane fade" id="pitPane" role="tabpanel">
                         <div id="pitResults">
+                            <p class="text-muted text-center py-4">Click "Scan My Data" to find available entries.</p>
+                        </div>
+                    </div>
+                    <!-- Qualitative Tab -->
+                    <div class="tab-pane fade" id="qualPane" role="tabpanel">
+                        <div id="qualResults">
                             <p class="text-muted text-center py-4">Click "Scan My Data" to find available entries.</p>
                         </div>
                     </div>
@@ -262,12 +286,15 @@ const currentTeam = {{ current_team }};
 let ignoreModeActive = false;
 let scannedData = {
     scouting: [],
-    pit: []
+    pit: [],
+    qualitative: []
 };
 let selectedScouting = new Set();
 let selectedPit = new Set();
+let selectedQualitative = new Set();
 let ignoredScouting = new Set();
 let ignoredPit = new Set();
+let ignoredQualitative = new Set();
 
 // CSRF Token helper
 function getCsrfToken() {
@@ -303,25 +330,31 @@ async function scanForData() {
             // Reset selections
             selectedScouting.clear();
             selectedPit.clear();
+            selectedQualitative.clear();
             ignoredScouting.clear();
             ignoredPit.clear();
+            ignoredQualitative.clear();
             
             scannedData.scouting = result.results.scouting_data || [];
             scannedData.pit = result.results.pit_data || [];
+            scannedData.qualitative = result.results.qualitative_data || [];
             
             // Update counts
             document.getElementById('totalScoutingFound').textContent = scannedData.scouting.length;
             document.getElementById('totalPitFound').textContent = scannedData.pit.length;
+            document.getElementById('totalQualFound').textContent = scannedData.qualitative.length;
             document.getElementById('scoutingTabCount').textContent = scannedData.scouting.length;
             document.getElementById('pitTabCount').textContent = scannedData.pit.length;
+            document.getElementById('qualTabCount').textContent = scannedData.qualitative.length;
             
-            if (scannedData.scouting.length === 0 && scannedData.pit.length === 0) {
+            if (scannedData.scouting.length === 0 && scannedData.pit.length === 0 && scannedData.qualitative.length === 0) {
                 // No data found
                 document.getElementById('noDataMessage').classList.remove('d-none');
             } else {
                 // Render results
                 renderScoutingResults();
                 renderPitResults();
+                renderQualitativeResults();
                 updateCounts();
                 
                 // Show results
@@ -446,6 +479,63 @@ function renderPitResults() {
     container.innerHTML = html;
 }
 
+// Render qualitative results
+function renderQualitativeResults() {
+    const container = document.getElementById('qualResults');
+    
+    if (scannedData.qualitative.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center py-4">No qualitative data available to share.</p>';
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 40px;"></th>
+                        <th>Match</th>
+                        <th>Event</th>
+                        <th>Alliance</th>
+                        <th>Scout</th>
+                        <th>Preview</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    for (const entry of scannedData.qualitative) {
+        const isSelected = selectedQualitative.has(entry.id);
+        const isIgnored = ignoredQualitative.has(entry.id);
+        html += `
+            <tr class="data-row ${isSelected ? 'selected' : ''} ${isIgnored ? 'ignored' : ''}" 
+                data-id="${entry.id}" data-type="qualitative"
+                onclick="toggleSelection(${entry.id}, 'qualitative')">
+                <td class="text-center">
+                    <i class="fas ${isSelected ? 'fa-check-circle text-success' : (isIgnored ? 'fa-ban text-danger' : 'fa-circle text-muted')}"></i>
+                </td>
+                <td>${entry.match_type || ''} ${entry.match_number}</td>
+                <td>${entry.event_code}</td>
+                <td>
+                    <span class="badge ${entry.alliance === 'red' ? 'bg-danger' : 'bg-primary'}">
+                        ${entry.alliance}
+                    </span>
+                </td>
+                <td>${entry.scout_name || 'N/A'}</td>
+                <td class="data-preview" title="${entry.data_preview || ''}">${entry.data_preview || ''}</td>
+            </tr>
+        `;
+    }
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
 // Toggle selection for an entry
 function toggleSelection(id, type) {
     if (ignoreModeActive) {
@@ -457,12 +547,19 @@ function toggleSelection(id, type) {
                 ignoredScouting.add(id);
                 selectedScouting.delete(id);
             }
-        } else {
+        } else if (type === 'pit') {
             if (ignoredPit.has(id)) {
                 ignoredPit.delete(id);
             } else {
                 ignoredPit.add(id);
                 selectedPit.delete(id);
+            }
+        } else if (type === 'qualitative') {
+            if (ignoredQualitative.has(id)) {
+                ignoredQualitative.delete(id);
+            } else {
+                ignoredQualitative.add(id);
+                selectedQualitative.delete(id);
             }
         }
     } else {
@@ -474,18 +571,26 @@ function toggleSelection(id, type) {
             } else {
                 selectedScouting.add(id);
             }
-        } else {
+        } else if (type === 'pit') {
             if (ignoredPit.has(id)) return;
             if (selectedPit.has(id)) {
                 selectedPit.delete(id);
             } else {
                 selectedPit.add(id);
             }
+        } else if (type === 'qualitative') {
+            if (ignoredQualitative.has(id)) return;
+            if (selectedQualitative.has(id)) {
+                selectedQualitative.delete(id);
+            } else {
+                selectedQualitative.add(id);
+            }
         }
     }
     
     renderScoutingResults();
     renderPitResults();
+    renderQualitativeResults();
     updateCounts();
 }
 
@@ -501,8 +606,14 @@ function selectAll() {
             selectedPit.add(entry.id);
         }
     }
+    for (const entry of scannedData.qualitative) {
+        if (!ignoredQualitative.has(entry.id)) {
+            selectedQualitative.add(entry.id);
+        }
+    }
     renderScoutingResults();
     renderPitResults();
+    renderQualitativeResults();
     updateCounts();
 }
 
@@ -510,8 +621,10 @@ function selectAll() {
 function deselectAll() {
     selectedScouting.clear();
     selectedPit.clear();
+    selectedQualitative.clear();
     renderScoutingResults();
     renderPitResults();
+    renderQualitativeResults();
     updateCounts();
 }
 
@@ -533,8 +646,8 @@ function toggleIgnoreMode() {
 
 // Update selection counts
 function updateCounts() {
-    const totalSelected = selectedScouting.size + selectedPit.size;
-    const totalIgnored = ignoredScouting.size + ignoredPit.size;
+    const totalSelected = selectedScouting.size + selectedPit.size + selectedQualitative.size;
+    const totalIgnored = ignoredScouting.size + ignoredPit.size + ignoredQualitative.size;
     
     document.getElementById('selectedCount').textContent = `${totalSelected} selected`;
     document.getElementById('ignoredCount').textContent = `${totalIgnored} ignored`;
@@ -547,8 +660,9 @@ function updateCounts() {
 async function importSelected() {
     const scoutingIds = Array.from(selectedScouting);
     const pitIds = Array.from(selectedPit);
+    const qualitativeIds = Array.from(selectedQualitative);
     
-    if (scoutingIds.length === 0 && pitIds.length === 0) {
+    if (scoutingIds.length === 0 && pitIds.length === 0 && qualitativeIds.length === 0) {
         alert('Please select at least one entry to share.');
         return;
     }
@@ -560,6 +674,9 @@ async function importSelected() {
     }
     for (const id of ignoredPit) {
         ignoreList.push({ type: 'pit', id: id });
+    }
+    for (const id of ignoredQualitative) {
+        ignoreList.push({ type: 'qualitative', id: id });
     }
     
     // Show progress modal
@@ -576,6 +693,7 @@ async function importSelected() {
             body: JSON.stringify({
                 scouting_ids: scoutingIds,
                 pit_ids: pitIds,
+                qualitative_ids: qualitativeIds,
                 ignore_ids: ignoreList
             })
         });
@@ -585,13 +703,15 @@ async function importSelected() {
         modal.hide();
         
         if (result.success) {
-            alert(`Successfully shared:\n- ${result.imported_scouting} match scouting entries\n- ${result.imported_pit} pit scouting entries\n- ${result.ignored_count} entries marked as ignored`);
+            alert(`Successfully shared:\n- ${result.imported_scouting} match scouting entries\n- ${result.imported_pit} pit scouting entries\n- ${result.imported_qualitative || 0} qualitative entries\n- ${result.ignored_count} entries marked as ignored`);
             
             // Clear selections and re-scan
             selectedScouting.clear();
             selectedPit.clear();
+            selectedQualitative.clear();
             ignoredScouting.clear();
             ignoredPit.clear();
+            ignoredQualitative.clear();
             
             // Re-scan to refresh
             scanForData();

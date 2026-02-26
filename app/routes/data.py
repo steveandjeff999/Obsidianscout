@@ -1646,6 +1646,12 @@ def import_qr():
                         existing.scout_name = scout_name
                         existing.timestamp = datetime.now(timezone.utc)
                         db.session.commit()
+                        # auto-sync after update
+                        try:
+                            from app.routes.scouting import auto_sync_alliance_qualitative_data
+                            auto_sync_alliance_qualitative_data(existing)
+                        except Exception as e:
+                            current_app.logger.warning(f"Alliance auto-sync failed for qualitative QR update: {e}")
                         return {'success': True, 'message': f'Updated qualitative scouting for {label}'}
                     else:
                         # Create new entry
@@ -1658,6 +1664,12 @@ def import_qr():
                         )
                         db.session.add(new_entry)
                         db.session.commit()
+                        # auto-sync new entry
+                        try:
+                            from app.routes.scouting import auto_sync_alliance_qualitative_data
+                            auto_sync_alliance_qualitative_data(new_entry)
+                        except Exception as e:
+                            current_app.logger.warning(f"Alliance auto-sync failed for qualitative QR add: {e}")
                         return {'success': True, 'message': f'Added qualitative scouting for {label}'}
                 
                 # Regular scouting data processing
