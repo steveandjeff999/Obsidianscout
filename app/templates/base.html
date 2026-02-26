@@ -3604,10 +3604,19 @@
             // Auto-join team room when connected
             window.socket.on('connect', function() {
                 console.log('Socket.IO connected, joining team room...');
-                {% if current_user.is_authenticated and current_user.scouting_team_number %}
+                // always join team room if a team number exists (allow 0)
+                {% if current_user.is_authenticated and current_user.scouting_team_number is not none %}
                     window.socket.emit('join_team_room');
                     console.log('Joined team room for team {{ current_user.scouting_team_number }}');
                 {% endif %}
+
+                // also join alliance room if alliance mode is active
+                fetchCurrentConfig().then(cfg => {
+                    if (cfg && cfg.alliance_status && cfg.alliance_status.alliance_id) {
+                        window.socket.emit('join_alliance_room', { alliance_id: cfg.alliance_status.alliance_id });
+                        console.log('Joined alliance room', cfg.alliance_status.alliance_id);
+                    }
+                }).catch(() => {});
             });
             
             // Handle team room join confirmation
@@ -3680,34 +3689,61 @@
             });
             
             // ======== ALLIANCE AUTO-SYNC HANDLERS ========
-            // Listen for automatic alliance data sync
-            window.socket.on('alliance_data_sync_auto', function(data) {
+            // helper used by both websocket and polling
+            function handleAllianceDataSyncAuto(data) {
                 console.log('Received auto-sync data from Team', data.from_team);
-                
-                // Automatically send acknowledgment that we received the data
-                window.socket.emit('alliance_auto_sync_received', data);
+                // acknowledge by whichever channel is available
+                if (window.socket) {
+                    window.socket.emit('alliance_auto_sync_received', data);
+                } else {
+                    // fall back to HTTP ack
+                    if (data.sync_id) {
+                        fetch(`/alliances/scouting/sync/ack/${data.sync_id}`, {method: 'POST'}).catch(()=>{});
+                    }
+                }
                 
                 // Show notification about incoming data (less verbose for periodic syncs)
                 if (data.type === 'periodic_sync') {
-                    // Only show periodic sync notifications if there's substantial data
-                    const totalEntries = data.scouting_data.length + data.pit_data.length;
+                    const totalEntries = data.scouting_data.length + data.pit_data.length + (data.qualitative_data ? data.qualitative_data.length : 0);
                     if (totalEntries > 0) {
                         console.log(`Periodic sync: Received ${totalEntries} entries from Team ${data.from_team}`);
-                        // Show subtle notification only for large periodic syncs
                         if (totalEntries >= 5) {
                             showAutoSyncNotification(`Periodic sync: ${totalEntries} entries from Team ${data.from_team}`, 'info');
                         }
                     }
                 } else {
-                    // Show full notifications for manual/immediate syncs
                     if (data.scouting_data.length > 0) {
                         showAutoSyncNotification(`Received ${data.scouting_data.length} scouting entries from Team ${data.from_team} (${data.alliance_name})`);
                     }
                     if (data.pit_data.length > 0) {
                         showAutoSyncNotification(`Received ${data.pit_data.length} pit scouting entries from Team ${data.from_team} (${data.alliance_name})`);
                     }
+                    if (data.qualitative_data && data.qualitative_data.length > 0) {
+                        showAutoSyncNotification(`Received ${data.qualitative_data.length} qualitative entries from Team ${data.from_team} (${data.alliance_name})`);
+                    }
                 }
-            });
+            }
+
+            // Listen for automatic alliance data sync via socket
+            window.socket.on('alliance_data_sync_auto', handleAllianceDataSyncAuto);
+
+            // Polling fallback for unreliable websocket
+            function pollAllianceSyncs() {
+                fetch('/alliances/scouting/sync/pending')
+                    .then(r => r.json())
+                    .then(resp => {
+                        if (resp && resp.syncs) {
+                            resp.syncs.forEach(s => {
+                                handleAllianceDataSyncAuto(s);
+                                // acknowledge via HTTP (socket ack already done above)
+                                fetch(`/alliances/scouting/sync/ack/${s.sync_id}`, {method: 'POST'}).catch(()=>{});
+                            });
+                        }
+                    }).catch(()=>{});
+            }
+            // start polling every 15s
+            setInterval(pollAllianceSyncs, 15000);
+            pollAllianceSyncs();
             
             // Listen for auto-sync completion confirmations
             window.socket.on('alliance_auto_sync_complete', function(data) {
@@ -3733,6 +3769,54 @@
                             window.location.reload();
                         }, 2000);
                     }
+                }
+            });
+
+            // ======== HTTP POLLING FALLBACK ========
+            let allianceSyncPoller = null;
+            function handleSyncPayload(data) {
+                // reuse same logic as the socket handler
+                console.log('Handling sync payload via polling', data.from_team);
+                // send ack immediately
+                if (data.sync_id) {
+                    fetch('/alliances/scouting/sync/ack/' + data.sync_id, {method: 'POST'}).catch(() => {});
+                }
+                // show notifications similar to socket
+                if (data.scouting_data.length) {
+                    showAutoSyncNotification(`${data.scouting_data.length} scouting entries from Team ${data.from_team} (${data.alliance_name})`);
+                }
+                if (data.pit_data.length) {
+                    showAutoSyncNotification(`${data.pit_data.length} pit entries from Team ${data.from_team} (${data.alliance_name})`);
+                }
+                if (data.qualitative_data && data.qualitative_data.length) {
+                    showAutoSyncNotification(`${data.qualitative_data.length} qualitative entries from Team ${data.from_team} (${data.alliance_name})`);
+                }
+                // optionally reload
+                if (window.location.pathname.includes('/scouting') ||
+                    window.location.pathname.includes('/analysis') ||
+                    window.location.pathname.includes('/pit-scouting')) {
+                    setTimeout(() => window.location.reload(), 2000);
+                }
+            }
+
+            function pollForSyncs() {
+                fetch('/alliances/scouting/sync/pending')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.syncs && d.syncs.length) {
+                            d.syncs.forEach(handleSyncPayload);
+                        }
+                    }).catch(() => {});
+            }
+
+            window.socket.on('connect', function() {
+                // stop polling when socket returns
+                if (allianceSyncPoller) { clearInterval(allianceSyncPoller); allianceSyncPoller = null; }
+            });
+            window.socket.on('disconnect', function() {
+                // start polling every 30 seconds when disconnected
+                if (!allianceSyncPoller) {
+                    allianceSyncPoller = setInterval(pollForSyncs, 30000);
                 }
             });
             

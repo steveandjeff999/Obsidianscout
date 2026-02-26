@@ -13,6 +13,7 @@ from app import db
 from app.models import (
     ScoutingData, PitScoutingData, Match, Team, Event,
     AllianceSharedScoutingData, AllianceSharedPitData,
+    AllianceSharedQualitativeData, QualitativeScoutingData,
     ScoutingAlliance, ScoutingAllianceMember, TeamAllianceStatus
 )
 from app.utils.config_manager import is_alliance_mode_active, get_active_alliance_info
@@ -329,6 +330,72 @@ def get_all_pit_data(team_number=None, order_by_timestamp=True):
             query = query.order_by(PitScoutingData.timestamp.desc())
     
     return query.all(), is_alliance_mode, alliance_id
+
+
+def get_all_qualitative_data(event_ids=None, order_by_timestamp=True):
+    """
+    Get all qualitative scouting data, including alliance shared data if in alliance mode.
+    
+    Returns:
+        tuple: (data_list, is_alliance_mode, alliance_id)
+    """
+    try:
+        current_team = current_user.scouting_team_number
+    except Exception:
+        current_team = None
+    
+    if not current_team:
+        return [], False, None
+    
+    is_alliance = is_alliance_mode_active()
+    alliance_id = None
+    
+    # Get own qualitative data
+    query = QualitativeScoutingData.query.filter_by(
+        scouting_team_number=current_team
+    )
+    if event_ids:
+        query = query.join(Match, QualitativeScoutingData.match_id == Match.id).filter(
+            Match.event_id.in_(event_ids)
+        )
+    if order_by_timestamp:
+        query = query.order_by(QualitativeScoutingData.timestamp.desc())
+    
+    try:
+        own_entries = query.all()
+    except Exception:
+        # any error leaves session in a bad state; rollback and continue with empty list
+        from app import db
+        db.session.rollback()
+        own_entries = []
+    
+    if is_alliance:
+        alliance_id = get_active_alliance_id()
+        if alliance_id:
+            # Also get shared qualitative data from alliance members (excluding own)
+            alliance_query = AllianceSharedQualitativeData.query.filter_by(
+                alliance_id=alliance_id,
+                is_active=True
+            ).filter(
+                AllianceSharedQualitativeData.source_scouting_team_number != current_team
+            )
+            if event_ids:
+                alliance_query = alliance_query.join(
+                    Match, AllianceSharedQualitativeData.match_id == Match.id
+                ).filter(Match.event_id.in_(event_ids))
+            if order_by_timestamp:
+                alliance_query = alliance_query.order_by(AllianceSharedQualitativeData.timestamp.desc())
+            
+            try:
+                alliance_entries = alliance_query.all()
+            except Exception:
+                from app import db
+                db.session.rollback()
+                alliance_entries = []
+                current_app.logger.debug('Error querying alliance shared qualitative data, returning only own entries')
+            return own_entries + alliance_entries, True, alliance_id
+    
+    return own_entries, False, None
 
 
 def get_teams_with_scouting_data(event_id=None):

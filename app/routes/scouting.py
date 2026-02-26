@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
-from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingData, QualitativeScoutingData
+from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingData, AllianceSharedQualitativeData, QualitativeScoutingData
 from app import db, socketio
 import json
 from datetime import datetime, timezone
@@ -22,6 +22,15 @@ from app.utils.alliance_data import (
 
 bp = Blueprint('scouting', __name__, url_prefix='/scouting')
 
+@bp.before_app_request
+def _scouting_rollback():
+    """Ensure any previous transaction errors are cleared before handling a request."""
+    from app import db
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+
 def get_theme_context():
     theme_manager = ThemeManager()
     return {
@@ -34,6 +43,7 @@ def auto_sync_alliance_data(scouting_data_entry):
     try:
         # Check if alliance mode is active for current user's team
         if not is_alliance_mode_active():
+            current_app.logger.debug('Auto-sync skipped because alliance mode not active')
             return
         
         # Import here to avoid circular imports
@@ -48,6 +58,7 @@ def auto_sync_alliance_data(scouting_data_entry):
         ).first()
         
         if not alliance_status or not alliance_status.active_alliance:
+            current_app.logger.debug(f'Auto-sync skipped because no active alliance status for team {current_team}')
             return
             
         alliance = alliance_status.active_alliance
@@ -61,6 +72,7 @@ def auto_sync_alliance_data(scouting_data_entry):
         
         # If data sharing is disabled for this team, don't sync their data to others
         if current_member and not getattr(current_member, 'is_data_sharing_active', True):
+            current_app.logger.debug(f'Auto-sync skipped because data sharing disabled for team {current_team} in alliance {alliance.id}')
             return
         
         # Also save to AllianceSharedScoutingData for centralized alliance storage
@@ -90,17 +102,26 @@ def auto_sync_alliance_data(scouting_data_entry):
         # Get alliance shared events to verify we should sync this data
         alliance_events = alliance.get_shared_events()
         
-        # Check if this scouting data is for a shared event
-        match_event_code = scouting_data_entry.match.event.code
-        if alliance_events and match_event_code not in alliance_events:
-            return  # Don't sync data for non-shared events
+        # Determine match event code safely
+        match_event_code = None
+        try:
+            match_event_code = scouting_data_entry.match.event.code if scouting_data_entry.match and scouting_data_entry.match.event else None
+        except Exception:
+            match_event_code = None
+        
+        if alliance_events and match_event_code and match_event_code not in alliance_events:
+            # if filter active and this entry is for an unrelated event, skip but log for debugging
+            current_app.logger.debug(f"Auto-sync skipped for team {current_team} match event '{match_event_code}' not in shared events {alliance_events}")
+            # still commit shared_data so central copy exists
+            db.session.commit()
+            return
         
         # Prepare the scouting data for sync
         sync_data = {
             'team_number': scouting_data_entry.team.team_number,
-            'match_number': scouting_data_entry.match.match_number,
-            'match_type': scouting_data_entry.match.match_type,
-            'event_code': match_event_code,
+            'match_number': scouting_data_entry.match.match_number if scouting_data_entry.match else None,
+            'match_type': scouting_data_entry.match.match_type if scouting_data_entry.match else None,
+            'event_code': match_event_code or '',
             'alliance': scouting_data_entry.alliance,
             'scout_name': scouting_data_entry.scout_name,
             'data': scouting_data_entry.data,
@@ -124,22 +145,157 @@ def auto_sync_alliance_data(scouting_data_entry):
                 db.session.add(sync_record)
                 sync_count += 1
                 
-                # Emit real-time sync to that team
-                socketio.emit('alliance_data_sync_auto', {
+                # Emit real-time sync to that team and also broadcast to alliance room
+                payload = {
                     'from_team': current_team,
                     'alliance_name': alliance.alliance_name,
                     'scouting_data': [sync_data],
                     'pit_data': [],
                     'sync_id': sync_record.id,
                     'type': 'auto_sync'
-                }, room=f'team_{member.team_number}')
-                
+                }
+                socketio.emit('alliance_data_sync_auto', payload, room=f'team_{member.team_number}')
+                socketio.emit('alliance_data_sync_auto', payload, room=f'alliance_{alliance.id}')
+        
+        # commit regardless of whether there were recipients so shared data is persisted
         if sync_count > 0:
-            db.session.commit()
-            print(f"Auto-synced scouting data for Team {scouting_data_entry.team.team_number} Match {scouting_data_entry.match.match_number} to {sync_count} alliance members")
+            print(f"Auto-synced scouting data for Team {scouting_data_entry.team.team_number} Match {scouting_data_entry.match.match_number if scouting_data_entry.match else ''} to {sync_count} alliance members")
+        db.session.commit()
             
     except Exception as e:
-        print(f"Error in auto-sync alliance data: {str(e)}")
+        current_app.logger.error(f"Error in auto-sync alliance data: {str(e)}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def auto_sync_alliance_qualitative_data(qualitative_data_entry):
+    """Automatically sync new qualitative scouting data to alliance members if alliance mode is active"""
+    try:
+        # Check if alliance mode is active for current user's team
+        if not is_alliance_mode_active():
+            current_app.logger.debug('Qualitative auto-sync skipped because alliance mode not active')
+            return
+        
+        # Import here to avoid circular imports
+        from app.models import TeamAllianceStatus, ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceSync
+        
+        current_team = current_user.scouting_team_number
+        
+        # Get the active alliance for this team
+        alliance_status = TeamAllianceStatus.query.filter_by(
+            team_number=current_team,
+            is_alliance_mode_active=True
+        ).first()
+        
+        if not alliance_status or not alliance_status.active_alliance:
+            current_app.logger.debug(f'Qualitative auto-sync skipped because no active alliance status for team {current_team}')
+            return
+            
+        alliance = alliance_status.active_alliance
+        
+        # Check if current team has data sharing enabled
+        current_member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance.id,
+            team_number=current_team,
+            status='accepted'
+        ).first()
+        
+        # If data sharing is disabled for this team, don't sync their data to others
+        if current_member and not getattr(current_member, 'is_data_sharing_active', True):
+            current_app.logger.debug(f'Qualitative auto-sync skipped because data sharing disabled for team {current_team}')
+            return
+        
+        # Save to AllianceSharedQualitativeData for centralized alliance storage
+        existing_shared = AllianceSharedQualitativeData.query.filter_by(
+            alliance_id=alliance.id,
+            original_qualitative_data_id=qualitative_data_entry.id,
+            is_active=True
+        ).first()
+        
+        if existing_shared:
+            # Update existing shared data
+            existing_shared.data = qualitative_data_entry.data
+            existing_shared.scout_name = qualitative_data_entry.scout_name
+            existing_shared.scout_id = qualitative_data_entry.scout_id
+            existing_shared.alliance_scouted = qualitative_data_entry.alliance_scouted
+            existing_shared.timestamp = qualitative_data_entry.timestamp
+            existing_shared.last_edited_by_team = current_team
+            existing_shared.last_edited_at = datetime.now(timezone.utc)
+        else:
+            # Create new shared data entry
+            shared_data = AllianceSharedQualitativeData.create_from_qualitative_data(
+                qualitative_data_entry, alliance.id, current_team
+            )
+            db.session.add(shared_data)
+        
+        # Get alliance shared events to verify we should sync this data
+        alliance_events = alliance.get_shared_events()
+        
+        # Determine match event code safely
+        match_event_code = None
+        try:
+            match_event_code = qualitative_data_entry.match.event.code if qualitative_data_entry.match and qualitative_data_entry.match.event else None
+        except Exception:
+            match_event_code = None
+        
+        if alliance_events and match_event_code and match_event_code not in alliance_events:
+            current_app.logger.debug(f"Qualitative auto-sync skipped for match event '{match_event_code}' not in shared events {alliance_events}")
+            db.session.commit()
+            return
+        
+        # Prepare the qualitative data for sync
+        sync_data = {
+            'match_id': qualitative_data_entry.match_id,
+            'match_number': qualitative_data_entry.match.match_number if qualitative_data_entry.match else None,
+            'match_type': qualitative_data_entry.match.match_type if qualitative_data_entry.match else None,
+            'event_code': match_event_code or '',
+            'alliance_scouted': qualitative_data_entry.alliance_scouted,
+            'scout_name': qualitative_data_entry.scout_name,
+            'data': qualitative_data_entry.data,
+            'timestamp': qualitative_data_entry.timestamp.isoformat()
+        }
+        
+        # Send data to alliance members via Socket.IO
+        sync_count = 0
+        active_members = alliance.get_active_members()
+        
+        for member in active_members:
+            if member.team_number != current_team:
+                # Create sync record
+                sync_record = ScoutingAllianceSync(
+                    alliance_id=alliance.id,
+                    from_team_number=current_team,
+                    to_team_number=member.team_number,
+                    data_type='qualitative',
+                    data_count=1
+                )
+                db.session.add(sync_record)
+                sync_count += 1
+                
+                payload = {
+                    'from_team': current_team,
+                    'alliance_name': alliance.alliance_name,
+                    'scouting_data': [],
+                    'pit_data': [],
+                    'qualitative_data': [sync_data],
+                    'sync_id': sync_record.id,
+                    'type': 'auto_sync'
+                }
+                socketio.emit('alliance_data_sync_auto', payload, room=f'team_{member.team_number}')
+                socketio.emit('alliance_data_sync_auto', payload, room=f'alliance_{alliance.id}')
+        
+        if sync_count > 0:
+            current_app.logger.debug(f"Auto-synced qualitative data for Match {qualitative_data_entry.match_id} to {sync_count} alliance members")
+        db.session.commit()
+            
+    except Exception as e:
+        current_app.logger.error(f"Error in auto-sync alliance qualitative data: {str(e)}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         # Don't raise the exception to prevent disrupting the main save operation
 
 @bp.route('/')
@@ -1514,6 +1670,12 @@ def view_text_elements():
 @login_required
 def qualitative_scouting():
     """Display qualitative scouting form"""
+    # roll back any previous failed transaction before running queries
+    from app import db
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
     # Get game configuration and current event (respect alliance config)
     game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code') if isinstance(game_config, dict) else None
@@ -1553,14 +1715,24 @@ def qualitative_scouting():
                 Event.start_date.desc(), Match.match_type, Match.match_number
             ).all()
     
-    # Get existing qualitative scouting data
-    existing_data = QualitativeScoutingData.query.filter_by(
-        scouting_team_number=current_user.scouting_team_number
-    ).order_by(QualitativeScoutingData.timestamp.desc()).all()
+    # Get existing qualitative scouting data (including alliance shared entries if active)
+    try:
+        from app.utils.alliance_data import get_all_qualitative_data
+        event_ids = None
+        if current_event and getattr(current_event, 'id', None):
+            event_ids = [current_event.id]
+        existing_data, is_alliance_mode, _ = get_all_qualitative_data(event_ids=event_ids)
+    except Exception:
+        # fallback to local-only if anything goes wrong
+        existing_data = QualitativeScoutingData.query.filter_by(
+            scouting_team_number=current_user.scouting_team_number
+        ).order_by(QualitativeScoutingData.timestamp.desc()).all()
+        is_alliance_mode = False
     
     return render_template('scouting/qualitative.html',
                          matches=matches,
                          existing_data=existing_data,
+                         is_alliance_mode=is_alliance_mode,
                          **get_theme_context())
 
 
@@ -1643,6 +1815,12 @@ def save_qualitative_scouting():
             db.session.add(qualitative_data)
             db.session.commit()
             
+            # Auto-sync to alliance members if alliance mode is active
+            try:
+                auto_sync_alliance_qualitative_data(qualitative_data)
+            except Exception as sync_err:
+                current_app.logger.warning(f"Alliance auto-sync failed for qualitative data: {sync_err}")
+            
             return jsonify({
                 'success': True,
                 'message': f'Qualitative scouting for team {team_number} saved successfully',
@@ -1713,6 +1891,13 @@ def save_qualitative_scouting():
             
             # Get the entry ID (either existing or newly created)
             entry_id = existing.id if existing else qualitative_data.id
+            saved_entry = existing if existing else qualitative_data
+            
+            # Auto-sync to alliance members if alliance mode is active
+            try:
+                auto_sync_alliance_qualitative_data(saved_entry)
+            except Exception as sync_err:
+                current_app.logger.warning(f"Alliance auto-sync failed for qualitative data: {sync_err}")
             
             return jsonify({
                 'success': True,
@@ -1780,6 +1965,24 @@ def list_qualitative_data():
         Match.match_number
     ).all()
     
+    # If alliance mode is active, also include shared qualitative data from alliance members
+    alliance_entries = []
+    if is_alliance_mode_active():
+        alliance_id = get_active_alliance_id()
+        if alliance_id:
+            alliance_entries = AllianceSharedQualitativeData.query.filter_by(
+                alliance_id=alliance_id,
+                is_active=True
+            ).filter(
+                AllianceSharedQualitativeData.source_scouting_team_number != current_user.scouting_team_number
+            ).join(Match, AllianceSharedQualitativeData.match_id == Match.id).join(
+                Event, Match.event_id == Event.id
+            ).order_by(
+                Event.start_date.desc(),
+                Match.match_type,
+                Match.match_number
+            ).all()
+    
     # Group entries by event
     from collections import defaultdict
     entries_by_event = defaultdict(list)
@@ -1787,9 +1990,16 @@ def list_qualitative_data():
         event_code = entry.match.event.code if entry.match.event else 'Unknown'
         entries_by_event[event_code].append(entry)
     
+    # Add alliance entries (they have the same interface: .match, .data, .alliance_scouted, etc.)
+    for entry in alliance_entries:
+        event_code = entry.match.event.code if entry.match and entry.match.event else 'Unknown'
+        entries_by_event[event_code].append(entry)
+    
+    total_entries = len(entries) + len(alliance_entries)
+    
     return render_template('scouting/qualitative_list.html',
                          entries_by_event=dict(entries_by_event),
-                         total_entries=len(entries),
+                         total_entries=total_entries,
                          **get_theme_context())
 
 
@@ -1809,11 +2019,35 @@ def qualitative_leaderboard():
         .order_by(Event.start_date.desc())
         .all()
     )
+    
+    # If alliance mode is active, also include events from alliance shared data
+    if is_alliance_mode_active():
+        alliance_id = get_active_alliance_id()
+        if alliance_id:
+            alliance_events_with_data = (
+                Event.query
+                .join(Match, Match.event_id == Event.id)
+                .join(AllianceSharedQualitativeData, AllianceSharedQualitativeData.match_id == Match.id)
+                .filter(
+                    AllianceSharedQualitativeData.alliance_id == alliance_id,
+                    AllianceSharedQualitativeData.is_active == True,
+                    AllianceSharedQualitativeData.source_scouting_team_number != current_user.scouting_team_number
+                )
+                .distinct()
+                .order_by(Event.start_date.desc())
+                .all()
+            )
+            # Merge event lists (deduplicate by id)
+            existing_ids = {e.id for e in events_with_data}
+            for e in alliance_events_with_data:
+                if e.id not in existing_ids:
+                    events_with_data.append(e)
+                    existing_ids.add(e.id)
 
     # Optional event filter from query param
     selected_event_id = request.args.get('event_id', type=int)
 
-    # Build base query
+    # Build base query for own data
     base_query = QualitativeScoutingData.query.filter_by(
         scouting_team_number=current_user.scouting_team_number
     )
@@ -1821,7 +2055,23 @@ def qualitative_leaderboard():
         base_query = base_query.join(Match, QualitativeScoutingData.match_id == Match.id).filter(
             Match.event_id == selected_event_id
         )
-    all_entries = base_query.all()
+    all_entries = list(base_query.all())
+    
+    # If alliance mode is active, also include shared qualitative data from other teams
+    if is_alliance_mode_active():
+        alliance_id = get_active_alliance_id()
+        if alliance_id:
+            alliance_query = AllianceSharedQualitativeData.query.filter_by(
+                alliance_id=alliance_id,
+                is_active=True
+            ).filter(
+                AllianceSharedQualitativeData.source_scouting_team_number != current_user.scouting_team_number
+            )
+            if selected_event_id:
+                alliance_query = alliance_query.join(
+                    Match, AllianceSharedQualitativeData.match_id == Match.id
+                ).filter(Match.event_id == selected_event_id)
+            all_entries.extend(alliance_query.all())
 
     # Aggregate rankings by team
     team_rankings = defaultdict(lambda: {

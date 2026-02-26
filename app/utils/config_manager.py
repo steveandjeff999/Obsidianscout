@@ -492,7 +492,8 @@ def is_alliance_mode_active():
     if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
         team_number = current_user.scouting_team_number
     
-    if not team_number:
+    # treat 0 as a legitimate team number; only None disables alliance mode
+    if team_number is None:
         return False
     
     return TeamAllianceStatus.is_alliance_mode_active_for_team(team_number)

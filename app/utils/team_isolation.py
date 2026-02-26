@@ -43,7 +43,8 @@ def is_alliance_mode_active_for_current_user():
         from app.models import TeamAllianceStatus
         
         current_team = get_current_scouting_team_number()
-        if not current_team:
+        # 0 counts as a valid team number
+        if current_team is None:
             return False
         
         return TeamAllianceStatus.is_alliance_mode_active_for_team(current_team)

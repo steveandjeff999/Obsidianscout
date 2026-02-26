@@ -11,7 +11,8 @@ from app.models import (
     ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceInvitation,
     ScoutingAllianceEvent, ScoutingAllianceSync, ScoutingAllianceChat,
     TeamAllianceStatus, AllianceSharedScoutingData, AllianceSharedPitData,
-    AllianceDeletedData
+    AllianceSharedQualitativeData, AllianceDeletedData,
+    QualitativeScoutingData
 )
 from app.routes.auth import admin_required
 from app.utils.theme_manager import ThemeManager
@@ -21,6 +22,7 @@ from datetime import datetime, timezone, timedelta
 from app.utils.timezone_utils import utc_now_iso, iso_utc
 import json
 import uuid
+import os
 
 bp = Blueprint('scouting_alliances', __name__, url_prefix='/alliances/scouting')
 
@@ -721,6 +723,7 @@ def sync_scouting_data(alliance_id):
         # STEP 1: Collect data from ALL alliance members WHO HAVE DATA SHARING ENABLED and create shared copies
         all_scouting_data = {}
         all_pit_data = {}
+        all_qualitative_data = {}
         
         for team_num in member_teams:
             # Get scouting data for each team
@@ -840,15 +843,74 @@ def sync_scouting_data(alliance_id):
                     db.session.add(shared_copy)
                     total_shared_copies += 1
         
+            # Get qualitative scouting data for each team
+            qual_entries = QualitativeScoutingData.query.join(Match).filter(
+                Match.event_id.in_(event_ids),
+                QualitativeScoutingData.scouting_team_number == team_num
+            ).all()
+            
+            for entry in qual_entries:
+                # Create unique key for this qualitative entry
+                key = (entry.match_id, entry.alliance_scouted, team_num)
+                
+                if key not in all_qualitative_data:
+                    all_qualitative_data[key] = {
+                        'match_id': entry.match_id,
+                        'match_number': entry.match.match_number if entry.match else None,
+                        'match_type': entry.match.match_type if entry.match else None,
+                        'event_code': entry.match.event.code if entry.match and entry.match.event else '',
+                        'alliance_scouted': entry.alliance_scouted,
+                        'scout_name': entry.scout_name,
+                        'data': entry.data,
+                        'timestamp': entry.timestamp.isoformat(),
+                        'source_team': team_num,
+                        'original_id': entry.id,
+                        'entry': entry
+                    }
+                
+                # Create shared copy in AllianceSharedQualitativeData if not exists
+                # Skip if previously deleted by alliance admin
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='qualitative',
+                    match_id=entry.match_id,
+                    team_id=None,
+                    alliance_color=entry.alliance_scouted,
+                    source_team=team_num
+                ):
+                    continue
+                
+                existing_shared = AllianceSharedQualitativeData.query.filter_by(
+                    alliance_id=alliance_id,
+                    original_qualitative_data_id=entry.id
+                ).first()
+                
+                if not existing_shared:
+                    # Also check by match/alliance_scouted/source_team combo
+                    existing_shared = AllianceSharedQualitativeData.query.filter_by(
+                        alliance_id=alliance_id,
+                        match_id=entry.match_id,
+                        alliance_scouted=entry.alliance_scouted,
+                        source_scouting_team_number=team_num
+                    ).first()
+                
+                if not existing_shared:
+                    shared_copy = AllianceSharedQualitativeData.create_from_qualitative_data(
+                        entry, alliance_id, team_num
+                    )
+                    db.session.add(shared_copy)
+                    total_shared_copies += 1
+        
         # NOTE: We no longer create local copies in each team's ScoutingData/PitScoutingData.
-        # Alliance data lives ONLY in AllianceSharedScoutingData/AllianceSharedPitData tables.
+        # Alliance data lives ONLY in AllianceShared*Data tables.
         # This prevents duplicates and makes delete work properly.
         
         # STEP 2: Share current team's data with other members via SocketIO (if they're online)
         # This notifies them that new data is available in the shared tables
         current_team_scouting = [data for key, data in all_scouting_data.items() if data['source_team'] == current_team]
         current_team_pit = [data for key, data in all_pit_data.items() if data['source_team'] == current_team]
-        total_shared = len(current_team_scouting) + len(current_team_pit)
+        current_team_qualitative = [data for key, data in all_qualitative_data.items() if data['source_team'] == current_team]
+        total_shared = len(current_team_scouting) + len(current_team_pit) + len(current_team_qualitative)
         
         # Send to other teams via SocketIO
         sync_count = 0
@@ -860,7 +922,8 @@ def sync_scouting_data(alliance_id):
                     from_team_number=current_team,
                     to_team_number=member_obj.team_number,
                     data_type='combined',
-                    data_count=total_shared
+                    data_count=total_shared,
+                    sync_status='pending'
                 )
                 db.session.add(sync_record)
                 sync_count += 1
@@ -870,6 +933,7 @@ def sync_scouting_data(alliance_id):
                     'from_team': current_team,
                     'scouting_data': [{k: v for k, v in d.items() if k != 'entry'} for d in current_team_scouting],
                     'pit_data': [{k: v for k, v in d.items() if k != 'entry'} for d in current_team_pit],
+                    'qualitative_data': [{k: v for k, v in d.items() if k != 'entry'} for d in current_team_qualitative],
                     'sync_id': sync_record.id
                 }, room=f'team_{member_obj.team_number}')
     
@@ -919,6 +983,7 @@ def populate_alliance_shared_data(alliance_id):
     
     total_scouting_copies = 0
     total_pit_copies = 0
+    total_qualitative_copies = 0
     
     if alliance_events:
         # Get events
@@ -1008,6 +1073,45 @@ def populate_alliance_shared_data(alliance_id):
                     )
                     db.session.add(shared_copy)
                     total_pit_copies += 1
+            
+            # Get ALL qualitative scouting data for each team
+            qual_entries = QualitativeScoutingData.query.join(Match).filter(
+                Match.event_id.in_(event_ids),
+                QualitativeScoutingData.scouting_team_number == team_num
+            ).all()
+            
+            for entry in qual_entries:
+                # Skip if previously deleted by alliance admin
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='qualitative',
+                    match_id=entry.match_id,
+                    team_id=None,
+                    alliance_color=entry.alliance_scouted,
+                    source_team=team_num
+                ):
+                    continue
+                
+                # Check if shared copy already exists by original ID
+                existing_shared = AllianceSharedQualitativeData.query.filter_by(
+                    alliance_id=alliance_id,
+                    original_qualitative_data_id=entry.id
+                ).first()
+                
+                if not existing_shared:
+                    existing_shared = AllianceSharedQualitativeData.query.filter_by(
+                        alliance_id=alliance_id,
+                        match_id=entry.match_id,
+                        alliance_scouted=entry.alliance_scouted,
+                        source_scouting_team_number=team_num
+                    ).first()
+                
+                if not existing_shared:
+                    shared_copy = AllianceSharedQualitativeData.create_from_qualitative_data(
+                        entry, alliance_id, team_num
+                    )
+                    db.session.add(shared_copy)
+                    total_qualitative_copies += 1
     
     db.session.commit()
     
@@ -1015,7 +1119,8 @@ def populate_alliance_shared_data(alliance_id):
         'success': True,
         'scouting_copies_created': total_scouting_copies,
         'pit_copies_created': total_pit_copies,
-        'message': f'Created {total_scouting_copies} scouting and {total_pit_copies} pit shared copies'
+        'qualitative_copies_created': total_qualitative_copies,
+        'message': f'Created {total_scouting_copies} scouting, {total_pit_copies} pit, and {total_qualitative_copies} qualitative shared copies'
     })
 
 
@@ -1155,6 +1260,15 @@ def get_alliance_sync_stats(alliance_id, current_team):
 
 # ======== SOCKETIO EVENTS ========
 
+@socketio.on('join_team_room')
+def on_join_team_room(data=None):
+    """Join a per-team socket room for real-time updates."""
+    current_team = get_current_scouting_team_number()
+    if current_team is not None:
+        join_room(f'team_{current_team}')
+        emit('joined_team_room', {'team_number': current_team})
+
+
 @socketio.on('join_alliance_room')
 def on_join_alliance_room(data):
     """Join alliance room for real-time updates"""
@@ -1233,6 +1347,117 @@ def on_leave_alliance_room(data):
 
     # If payload didn't include either key, ignore gracefully.
     return
+
+
+# ======== SYNC RELIABILITY HELPERS ========
+
+@socketio.on('alliance_auto_sync_received')
+def on_auto_sync_received(data):
+    """Mark sync record as delivered when client acknowledges receipt."""
+    try:
+        sync_id = data.get('sync_id')
+        if sync_id:
+            rec = ScoutingAllianceSync.query.get(sync_id)
+            if rec:
+                rec.sync_status = 'synced'
+                db.session.commit()
+    except Exception:
+        current_app.logger.exception('Error acknowledging alliance sync')
+
+
+@bp.route('/sync/pending', methods=['GET'])
+@login_required
+
+def get_pending_syncs():
+    """Return any sync payloads that have not yet been marked synced.
+
+    This endpoint allows clients to poll in lieu of websockets gaining
+    insight into what data the server synchronized on their behalf.
+    """
+    current_team = get_current_scouting_team_number()
+    if current_team is None:
+        return jsonify({'syncs': []})
+
+    pending = ScoutingAllianceSync.query.filter(
+        ScoutingAllianceSync.to_team_number == current_team,
+        ScoutingAllianceSync.sync_status != 'synced'
+    ).all()
+
+    syncs = []
+    for rec in pending:
+        scouting_data = []
+        pit_data = []
+        qualitative_data = []
+        ts = rec.last_sync or datetime.now(timezone.utc)
+
+        if rec.data_type in ('scouting', 'manual_sync', 'periodic_sync', 'combined'):
+            entries = AllianceSharedScoutingData.query.filter_by(
+                alliance_id=rec.alliance_id,
+                source_scouting_team_number=rec.from_team_number
+            ).filter(AllianceSharedScoutingData.timestamp >= ts).all()
+            for entry in entries:
+                scouting_data.append({
+                    'team_number': entry.team.team_number,
+                    'match_number': entry.match.match_number if entry.match else None,
+                    'match_type': entry.match.match_type if entry.match else None,
+                    'event_code': entry.match.event.code if entry.match and entry.match.event else '',
+                    'alliance': entry.alliance,
+                    'scout_name': entry.scout_name,
+                    'data': entry.data,
+                    'timestamp': entry.timestamp.isoformat()
+                })
+        if rec.data_type in ('pit', 'manual_sync', 'periodic_sync', 'combined'):
+            entries = AllianceSharedPitData.query.filter_by(
+                alliance_id=rec.alliance_id,
+                source_scouting_team_number=rec.from_team_number
+            ).filter(AllianceSharedPitData.timestamp >= ts).all()
+            for entry in entries:
+                pit_data.append({
+                    'team_number': entry.team.team_number,
+                    'scout_name': entry.scout_name,
+                    'data': entry.data,
+                    'timestamp': entry.timestamp.isoformat()
+                })
+        if rec.data_type in ('qualitative', 'manual_sync', 'periodic_sync', 'combined'):
+            entries = AllianceSharedQualitativeData.query.filter_by(
+                alliance_id=rec.alliance_id,
+                source_scouting_team_number=rec.from_team_number
+            ).filter(AllianceSharedQualitativeData.timestamp >= ts).all()
+            for entry in entries:
+                qualitative_data.append({
+                    'match_id': entry.match_id,
+                    'match_number': entry.match.match_number if entry.match else None,
+                    'match_type': entry.match.match_type if entry.match else None,
+                    'event_code': entry.match.event.code if entry.match and entry.match.event else '',
+                    'alliance_scouted': entry.alliance_scouted,
+                    'scout_name': entry.scout_name,
+                    'data': entry.data,
+                    'timestamp': entry.timestamp.isoformat()
+                })
+        syncs.append({
+            'sync_id': rec.id,
+            'from_team': rec.from_team_number,
+            'alliance_name': rec.alliance.alliance_name if rec.alliance else '',
+            'scouting_data': scouting_data,
+            'pit_data': pit_data,
+            'qualitative_data': qualitative_data,
+            'type': rec.data_type
+        })
+    return jsonify({'syncs': syncs})
+
+
+@bp.route('/sync/ack/<int:sync_id>', methods=['POST'])
+@login_required
+
+def ack_sync(sync_id):
+    """Mark a pending sync record as successfully delivered."""
+    current_team = get_current_scouting_team_number()
+    rec = ScoutingAllianceSync.query.get_or_404(sync_id)
+    if rec.to_team_number != current_team:
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    rec.sync_status = 'synced'
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 # ======== API ENDPOINTS ========
@@ -1444,6 +1669,7 @@ def api_sync_alliance_data():
         # Get scouting data to sync
         scouting_data = []
         pit_data = []
+        qualitative_data = []
         
         if alliance_events:
             # Get events
@@ -1480,6 +1706,24 @@ def api_sync_alliance_data():
                     'data': entry.data,  # This uses the @property method which parses data_json
                     'timestamp': entry.timestamp.isoformat()
                 })
+            
+            # Get qualitative scouting data for these events
+            qual_entries = QualitativeScoutingData.query.join(Match).filter(
+                Match.event_id.in_(event_ids),
+                QualitativeScoutingData.scouting_team_number == current_team
+            ).all()
+            
+            for entry in qual_entries:
+                qualitative_data.append({
+                    'match_id': entry.match_id,
+                    'match_number': entry.match.match_number if entry.match else None,
+                    'match_type': entry.match.match_type if entry.match else None,
+                    'event_code': entry.match.event.code if entry.match and entry.match.event else '',
+                    'alliance_scouted': entry.alliance_scouted,
+                    'scout_name': entry.scout_name,
+                    'data': entry.data,
+                    'timestamp': entry.timestamp.isoformat()
+                })
         
         # Send data to alliance members
         sync_count = 0
@@ -1491,8 +1735,8 @@ def api_sync_alliance_data():
                     from_team_number=current_team,
                     to_team_number=member_obj.team_number,
                     data_type='manual_sync',
-                    data_count=len(scouting_data) + len(pit_data),
-                    sync_status='sent',
+                    data_count=len(scouting_data) + len(pit_data) + len(qualitative_data),
+                    sync_status='pending',
                     last_sync=datetime.now(timezone.utc)
                 )
                 db.session.add(sync_record)
@@ -1504,6 +1748,7 @@ def api_sync_alliance_data():
                     'alliance_name': alliance.alliance_name,
                     'scouting_data': scouting_data,
                     'pit_data': pit_data,
+                    'qualitative_data': qualitative_data,
                     'sync_id': sync_record.id,
                     'type': 'manual_sync'
                 }, room=f'team_{member_obj.team_number}')
@@ -1515,7 +1760,8 @@ def api_sync_alliance_data():
             'message': 'Alliance data synchronized successfully',
             'synced_to': sync_count,
             'scouting_entries': len(scouting_data),
-            'pit_entries': len(pit_data)
+            'pit_entries': len(pit_data),
+            'qualitative_entries': len(qualitative_data)
         })
         
     except Exception as e:
@@ -2436,15 +2682,23 @@ def perform_periodic_alliance_sync():
                     current_team = status.team_number
                     alliance_events = alliance.get_shared_events()
                     
-                    if not alliance_events:
-                        continue
-                    
-                    # Get events
-                    events = Event.query.filter(Event.code.in_(alliance_events)).all()
-                    event_ids = [e.id for e in events]
-                    
-                    if not event_ids:
-                        continue
+                    # When no explicit shared events are configured we fall back to syncing
+                    # all available events so teams don't wonder why nothing ever goes out.
+                    if alliance_events:
+                        # restrict to listed event codes
+                        events = Event.query.filter(Event.code.in_(alliance_events)).all()
+                        event_ids = [e.id for e in events]
+                        if not event_ids:
+                            # couldn't resolve any codes? skip this alliance
+                            current_app.logger.debug(f"Periodic sync: no matching Event records for codes {alliance_events} in alliance {alliance.id}")
+                            continue
+                    else:
+                        # no filter defined, sync across all events
+                        events = Event.query.all()
+                        event_ids = [e.id for e in events]
+                        # if there are literally no events in the system, skip
+                        if not event_ids:
+                            continue
                     
                     # Get recent scouting data (last 5 minutes) to avoid re-syncing old data
                     recent_time = datetime.now(timezone.utc) - timedelta(minutes=5)
@@ -2466,7 +2720,15 @@ def perform_periodic_alliance_sync():
                         ~PitScoutingData.scout_name.like('[Alliance-%')
                     ).all()
                     
-                    if not recent_scouting and not recent_pit:
+                    # Always fetch recent qualitative; needed later for total count
+                    recent_qualitative = QualitativeScoutingData.query.join(Match).filter(
+                        Match.event_id.in_(event_ids),
+                        QualitativeScoutingData.scouting_team_number == current_team,
+                        QualitativeScoutingData.timestamp >= recent_time
+                    ).all()
+                    
+                    # If no data whatsoever, skip
+                    if not recent_scouting and not recent_pit and not recent_qualitative:
                         continue  # No recent data to sync
                     
                     # Create shared copies in AllianceSharedScoutingData/AllianceSharedPitData
@@ -2538,14 +2800,46 @@ def perform_periodic_alliance_sync():
                             db.session.add(shared_copy)
                             shared_copies_created += 1
                     
+                    # Create shared copies for recent qualitative data
+                    for entry in recent_qualitative:
+                        if AllianceDeletedData.is_deleted(
+                            alliance_id=alliance.id,
+                            data_type='qualitative',
+                            match_id=entry.match_id,
+                            team_id=None,
+                            alliance_color=entry.alliance_scouted,
+                            source_team=current_team
+                        ):
+                            continue
+                        
+                        existing_shared = AllianceSharedQualitativeData.query.filter_by(
+                            alliance_id=alliance.id,
+                            original_qualitative_data_id=entry.id
+                        ).first()
+                        
+                        if not existing_shared:
+                            existing_shared = AllianceSharedQualitativeData.query.filter_by(
+                                alliance_id=alliance.id,
+                                match_id=entry.match_id,
+                                alliance_scouted=entry.alliance_scouted,
+                                source_scouting_team_number=current_team
+                            ).first()
+                        
+                        if not existing_shared:
+                            shared_copy = AllianceSharedQualitativeData.create_from_qualitative_data(
+                                entry, alliance.id, current_team
+                            )
+                            db.session.add(shared_copy)
+                            shared_copies_created += 1
+                    
                     # Prepare sync data
                     scouting_data = []
                     for entry in recent_scouting:
                         scouting_data.append({
                             'team_number': entry.team.team_number,
-                            'match_number': entry.match.match_number,
-                            'match_type': entry.match.match_type,
-                            'event_code': entry.match.event.code,
+                            'match_number': entry.match.match_number if entry.match else None,
+                            'match_type': entry.match.match_type if entry.match else None,
+                            'event_code': entry.match.event.code if entry.match and entry.match.event else '',
                             'alliance': entry.alliance,
                             'scout_name': entry.scout_name,
                             'data': entry.data,
@@ -2556,6 +2850,19 @@ def perform_periodic_alliance_sync():
                     for entry in recent_pit:
                         pit_data.append({
                             'team_number': entry.team.team_number,
+                            'scout_name': entry.scout_name,
+                            'data': entry.data,
+                            'timestamp': entry.timestamp.isoformat()
+                        })
+                    
+                    qualitative_data = []
+                    for entry in recent_qualitative:
+                        qualitative_data.append({
+                            'match_id': entry.match_id,
+                            'match_number': entry.match.match_number if entry.match else None,
+                            'match_type': entry.match.match_type if entry.match else None,
+                            'event_code': entry.match.event.code if entry.match and entry.match.event else '',
+                            'alliance_scouted': entry.alliance_scouted,
                             'scout_name': entry.scout_name,
                             'data': entry.data,
                             'timestamp': entry.timestamp.isoformat()
@@ -2573,26 +2880,29 @@ def perform_periodic_alliance_sync():
                                 from_team_number=current_team,
                                 to_team_number=member.team_number,
                                 data_type='periodic_sync',
-                                data_count=len(scouting_data) + len(pit_data),
-                                sync_status='sent',
+                                data_count=len(scouting_data) + len(pit_data) + len(qualitative_data),
+                                sync_status='pending',
                                 last_sync=datetime.now(timezone.utc)
                             )
                             db.session.add(sync_record)
                             sync_count += 1
                             
-                            # Emit data via SocketIO
-                            socketio.emit('alliance_data_sync_auto', {
+                            # Emit data via SocketIO to both team and alliance room
+                            payload = {
                                 'from_team': current_team,
                                 'alliance_name': alliance.alliance_name,
                                 'scouting_data': scouting_data,
                                 'pit_data': pit_data,
+                                'qualitative_data': qualitative_data,
                                 'sync_id': sync_record.id,
                                 'type': 'periodic_sync'
-                            }, room=f'team_{member.team_number}')
+                            }
+                            socketio.emit('alliance_data_sync_auto', payload, room=f'team_{member.team_number}')
+                            socketio.emit('alliance_data_sync_auto', payload, room=f'alliance_{alliance.id}')
                     
                     if sync_count > 0 or shared_copies_created > 0:
                         db.session.commit()
-                        print(f"Periodic sync: Team {current_team} synced {len(scouting_data)} scouting + {len(pit_data)} pit entries to {sync_count} alliance members, created {shared_copies_created} shared copies")
+                        print(f"Periodic sync: Team {current_team} synced {len(scouting_data)} scouting + {len(pit_data)} pit + {len(qualitative_data)} qualitative entries to {sync_count} alliance members, created {shared_copies_created} shared copies")
                 
                 except Exception as e:
                     print(f"Error in periodic sync for team {status.team_number}: {str(e)}")
@@ -3494,6 +3804,55 @@ def api_delete_from_alliance():
                     
                     db.session.delete(entry)
                     deleted_count += 1
+        
+        elif data_type == 'qualitative':
+            # Qualitative data delete - no synced copies to worry about
+            if shared_id:
+                shared_entry = AllianceSharedQualitativeData.query.get(shared_id)
+                if not shared_entry:
+                    return jsonify({'success': False, 'error': 'Shared qualitative entry not found'}), 404
+                
+                if shared_entry.source_scouting_team_number != current_team and not is_admin:
+                    return jsonify({'success': False, 'error': 'Only the source team or alliance admin can delete this'}), 403
+                
+                # Mark as deleted to prevent re-sync
+                AllianceDeletedData.mark_deleted(
+                    alliance_id=shared_entry.alliance_id,
+                    data_type='qualitative',
+                    match_id=shared_entry.match_id,
+                    team_id=None,
+                    alliance_color=shared_entry.alliance_scouted,
+                    source_team=shared_entry.source_scouting_team_number,
+                    deleted_by=current_team
+                )
+                
+                db.session.delete(shared_entry)
+                deleted_count += 1
+            else:
+                # Owner deletes by original_qualitative_data_id
+                query = AllianceSharedQualitativeData.query.filter_by(
+                    original_qualitative_data_id=original_data_id,
+                    source_scouting_team_number=current_team
+                )
+                
+                if alliance_id:
+                    query = query.filter_by(alliance_id=alliance_id)
+                
+                shared_entries = query.all()
+                
+                for entry in shared_entries:
+                    AllianceDeletedData.mark_deleted(
+                        alliance_id=entry.alliance_id,
+                        data_type='qualitative',
+                        match_id=entry.match_id,
+                        team_id=None,
+                        alliance_color=entry.alliance_scouted,
+                        source_team=entry.source_scouting_team_number,
+                        deleted_by=current_team
+                    )
+                    db.session.delete(entry)
+                    deleted_count += 1
+        
         else:
             return jsonify({'success': False, 'error': 'Invalid data type'}), 400
         
@@ -3965,10 +4324,17 @@ def api_get_alliance_shared_data(alliance_id):
             is_active=True
         ).all()
         
+        # Get all active shared qualitative data
+        qualitative_data = AllianceSharedQualitativeData.query.filter_by(
+            alliance_id=alliance_id,
+            is_active=True
+        ).all()
+        
         return jsonify({
             'success': True,
             'scouting_data': [d.to_dict() for d in scouting_data],
             'pit_data': [d.to_dict() for d in pit_data],
+            'qualitative_data': [d.to_dict() for d in qualitative_data],
             'is_admin': member.role == 'admin'
         })
         
@@ -4048,6 +4414,26 @@ def api_edit_alliance_shared_data(alliance_id):
             # Optionally update the original if requested
             if include_original and shared.original_pit_data_id:
                 original = PitScoutingData.query.get(shared.original_pit_data_id)
+                if original:
+                    original.data = new_data
+        
+        elif data_type == 'qualitative':
+            shared = AllianceSharedQualitativeData.query.filter_by(
+                id=shared_id,
+                alliance_id=alliance_id
+            ).first()
+            
+            if not shared:
+                return jsonify({'success': False, 'error': 'Shared data not found'}), 404
+            
+            # Update the shared data
+            shared.data = new_data
+            shared.last_edited_by_team = current_team
+            shared.last_edited_at = datetime.now(timezone.utc)
+            
+            # Optionally update the original if requested
+            if include_original and shared.original_qualitative_data_id:
+                original = QualitativeScoutingData.query.get(shared.original_qualitative_data_id)
                 if original:
                     original.data = new_data
         else:
@@ -5098,9 +5484,20 @@ def scan_my_team_data(alliance_id):
         
         current_app.logger.info(f"[ImportScan] Existing pit team IDs: {len(existing_pit_team_ids)}")
         
+        # Prepare existing qualitative keys (match_id + alliance_scouted)
+        existing_qualitative_keys = set()
+        existing_shared_qualitative = AllianceSharedQualitativeData.query.filter_by(
+            alliance_id=alliance_id,
+            is_active=True
+        ).all()
+        for shared in existing_shared_qualitative:
+            existing_qualitative_keys.add((shared.match_id, shared.alliance_scouted))
+        current_app.logger.info(f"[ImportScan] Existing qualitative keys: {len(existing_qualitative_keys)}")
+        
         results = {
             'scouting_data': [],
             'pit_data': [],
+            'qualitative_data': [],
             'source_team': current_team,
             'alliance_events': alliance_events
         }
@@ -5175,6 +5572,56 @@ def scan_my_team_data(alliance_id):
                     PitScoutingData.scouting_team_number == None
                 )
             )
+        
+        # Scan qualitative data from CURRENT TEAM ONLY
+        if data_type in ['all', 'qualitative']:
+            # Get all qualitative data from current team
+            qual_query = QualitativeScoutingData.query.filter(
+                QualitativeScoutingData.scouting_team_number == current_team
+            )
+            # Exclude alliance-received entries
+            qual_query = qual_query.filter(
+                db.or_(
+                    QualitativeScoutingData.scout_name == None,
+                    ~QualitativeScoutingData.scout_name.like('[Alliance-%')
+                )
+            )
+            # filter by events if needed
+            if event_ids:
+                qual_query = qual_query.join(Match).filter(
+                    Match.event_id.in_(event_ids)
+                )
+            qual_entries = qual_query.all()
+            current_app.logger.info(f"[ImportScan] Found {len(qual_entries)} qualitative entries for team {current_team}")
+            
+            for entry in qual_entries:
+                key = (entry.match_id, entry.alliance_scouted)
+                if key in existing_qualitative_keys:
+                    current_app.logger.debug(f"[ImportScan] Skipping duplicate qualitative entry: {key}")
+                    continue
+                
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='qualitative',
+                    match_id=entry.match_id,
+                    team_id=None,
+                    alliance_color=entry.alliance_scouted,
+                    source_team=current_team
+                ):
+                    continue
+                
+                results['qualitative_data'].append({
+                    'id': entry.id,
+                    'match_type': entry.match.match_type if entry.match else 'Unknown',
+                    'match_number': entry.match.match_number if entry.match else 'Unknown',
+                    'event_code': entry.match.event.code if entry.match and entry.match.event else 'Unknown',
+                    'event_name': entry.match.event.name if entry.match and entry.match.event else 'Unknown',
+                    'team_number': current_team,
+                    'alliance': entry.alliance_scouted,
+                    'scout_name': entry.scout_name,
+                    'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
+                    'data_preview': _get_data_preview(entry.data)
+                })
             
             # Exclude alliance-received data
             pit_query = pit_query.filter(
@@ -5214,10 +5661,14 @@ def scan_my_team_data(alliance_id):
                     'data_preview': _get_data_preview(entry.data)
                 })
         
-        current_app.logger.info(f"[ImportScan] Results: {len(results['scouting_data'])} scouting, {len(results['pit_data'])} pit")
+        current_app.logger.info(f"[ImportScan] Results: {len(results['scouting_data'])} scouting, {len(results['pit_data'])} pit, {len(results['qualitative_data'])} qualitative")
         
         return jsonify({
             'success': True,
+            'results': results,
+            'total_scouting': len(results['scouting_data']),
+            'total_pit': len(results['pit_data']),
+            'total_qualitative': len(results['qualitative_data']),
             'results': results,
             'total_scouting': len(results['scouting_data']),
             'total_pit': len(results['pit_data'])
@@ -5279,11 +5730,13 @@ def import_selected_data(alliance_id):
     data = request.get_json()
     scouting_ids = data.get('scouting_ids', [])  # List of ScoutingData IDs to import
     pit_ids = data.get('pit_ids', [])  # List of PitScoutingData IDs to import
+    qualitative_ids = data.get('qualitative_ids', [])  # List of QualitativeScoutingData IDs to import
     ignore_ids = data.get('ignore_ids', [])  # IDs to mark as ignored (won't show again)
     
     try:
         imported_scouting = 0
         imported_pit = 0
+        imported_qualitative = 0
         ignored_count = 0
         skipped_wrong_team = 0
         skipped_duplicate = 0
@@ -5368,9 +5821,41 @@ def import_selected_data(alliance_id):
             db.session.add(shared_copy)
             imported_pit += 1
         
+        # Import qualitative data
+        for qual_id in qualitative_ids:
+            entry = QualitativeScoutingData.query.get(qual_id)
+            if not entry:
+                continue
+            if entry.scouting_team_number != current_team:
+                skipped_wrong_team += 1
+                continue
+            # check existing from this source
+            existing = AllianceSharedQualitativeData.query.filter_by(
+                alliance_id=alliance_id,
+                original_qualitative_data_id=entry.id
+            ).first()
+            if existing:
+                skipped_duplicate += 1
+                continue
+            # also check by match/alliance from any source
+            existing = AllianceSharedQualitativeData.query.filter_by(
+                alliance_id=alliance_id,
+                match_id=entry.match_id,
+                alliance_scouted=entry.alliance_scouted,
+                is_active=True
+            ).first()
+            if existing:
+                skipped_duplicate += 1
+                continue
+            shared_copy = AllianceSharedQualitativeData.create_from_qualitative_data(
+                entry, alliance_id, current_team
+            )
+            db.session.add(shared_copy)
+            imported_qualitative += 1
+        
         # Mark ignored entries as "deleted" so they won't show up again
         for ignore_entry in ignore_ids:
-            ignore_type = ignore_entry.get('type')  # 'scouting' or 'pit'
+            ignore_type = ignore_entry.get('type')  # 'scouting', 'pit', or 'qualitative'
             ignore_id = ignore_entry.get('id')
             
             if ignore_type == 'scouting':
@@ -5404,6 +5889,20 @@ def import_selected_data(alliance_id):
                     )
                     db.session.add(deleted_record)
                     ignored_count += 1
+            elif ignore_type == 'qualitative':
+                entry = QualitativeScoutingData.query.get(ignore_id)
+                if entry and entry.scouting_team_number == current_team:
+                    deleted_record = AllianceDeletedData(
+                        alliance_id=alliance_id,
+                        data_type='qualitative',
+                        match_id=entry.match_id,
+                        team_id=None,
+                        alliance_color=entry.alliance_scouted,
+                        source_scouting_team_number=current_team,
+                        deleted_by_team=current_team
+                    )
+                    db.session.add(deleted_record)
+                    ignored_count += 1
         
         db.session.commit()
         
@@ -5413,6 +5912,7 @@ def import_selected_data(alliance_id):
             'source_team': current_team,
             'imported_scouting': imported_scouting,
             'imported_pit': imported_pit,
+            'imported_qualitative': imported_qualitative,
             'imported_by': current_team
         }, room=f'alliance_{alliance_id}')
         
@@ -5422,8 +5922,9 @@ def import_selected_data(alliance_id):
             'success': True,
             'imported_scouting': imported_scouting,
             'imported_pit': imported_pit,
+            'imported_qualitative': imported_qualitative,
             'ignored_count': ignored_count,
-            'message': f'Imported {imported_scouting} scouting entries and {imported_pit} pit entries. {ignored_count} entries marked as ignored.'
+            'message': f'Imported {imported_scouting} scouting entries, {imported_pit} pit entries, and {imported_qualitative} qualitative entries. {ignored_count} entries marked as ignored.'
         })
         
     except Exception as e:
