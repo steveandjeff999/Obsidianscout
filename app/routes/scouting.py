@@ -1917,12 +1917,41 @@ def save_qualitative_scouting():
 @bp.route('/qualitative/view/<int:entry_id>')
 @login_required
 def view_qualitative_data(entry_id):
-    """View a specific Qualitative scouting entry"""
-    entry = QualitativeScoutingData.query.filter_by(
-        id=entry_id,
-        scouting_team_number=current_user.scouting_team_number
-    ).first_or_404()
-    
+    """View a specific Qualitative scouting entry.  Supports alliance-shared
+    data by checking for a ``shared_id`` query parameter or attempting to
+    resolve the given ``entry_id`` in the shared table when alliance mode is
+    active. This mirrors the logic used by the regular scouting view route so
+    users can click entries coming from other teams without getting a 404.
+    """
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    shared_id = request.args.get('shared_id', type=int)
+
+    if is_alliance_mode and shared_id:
+        # explicitly requested shared entry
+        entry = AllianceSharedQualitativeData.query.filter_by(
+            id=shared_id,
+            alliance_id=alliance_id,
+            is_active=True
+        ).first_or_404()
+    elif is_alliance_mode:
+        # try looking up a shared entry first and fall back to own data
+        entry = AllianceSharedQualitativeData.query.filter_by(
+            id=entry_id,
+            alliance_id=alliance_id,
+            is_active=True
+        ).first()
+        if not entry:
+            entry = QualitativeScoutingData.query.filter_by(
+                id=entry_id,
+                scouting_team_number=current_user.scouting_team_number
+            ).first_or_404()
+    else:
+        entry = QualitativeScoutingData.query.filter_by(
+            id=entry_id,
+            scouting_team_number=current_user.scouting_team_number
+        ).first_or_404()
+
     return render_template('scouting/qualitative_view.html',
                          entry=entry,
                          data=entry.data,
@@ -1992,6 +2021,8 @@ def list_qualitative_data():
     
     # Add alliance entries (they have the same interface: .match, .data, .alliance_scouted, etc.)
     for entry in alliance_entries:
+        # attach shared_id so templates can generate proper links
+        setattr(entry, 'shared_id', entry.id)
         event_code = entry.match.event.code if entry.match and entry.match.event else 'Unknown'
         entries_by_event[event_code].append(entry)
     
@@ -2000,6 +2031,7 @@ def list_qualitative_data():
     return render_template('scouting/qualitative_list.html',
                          entries_by_event=dict(entries_by_event),
                          total_entries=total_entries,
+                         is_alliance_mode=is_alliance_mode_active(),
                          **get_theme_context())
 
 
@@ -2170,12 +2202,45 @@ def qualitative_leaderboard():
 @bp.route('/qualitative/qr/<int:entry_id>')
 @login_required
 def qualitative_qr_code(entry_id):
-    """Generate QR code for Qualitative scouting data"""
-    entry = QualitativeScoutingData.query.filter_by(
-        id=entry_id,
-        scouting_team_number=current_user.scouting_team_number
-    ).first_or_404()
-    
+    """Generate QR code for Qualitative scouting data.
+
+    This mirrors :func:`view_qualitative_data` by supporting alliance mode.  When
+    alliance mode is active we allow lookups of ``AllianceSharedQualitativeData``
+    records by either the ``shared_id`` query parameter or by interpreting the
+    provided ``entry_id`` as a shared entry.  If no shared data is found we fall
+    back to the normal team-owned record.  This prevents 404s when viewing or
+    generating QR codes for entries that originated from other alliance
+    members.
+    """
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    shared_id = request.args.get('shared_id', type=int)
+
+    if is_alliance_mode and shared_id:
+        # explicit shared lookup
+        entry = AllianceSharedQualitativeData.query.filter_by(
+            id=shared_id,
+            alliance_id=alliance_id,
+            is_active=True
+        ).first_or_404()
+    elif is_alliance_mode:
+        # try the shared table first, then fall back to local data
+        entry = AllianceSharedQualitativeData.query.filter_by(
+            id=entry_id,
+            alliance_id=alliance_id,
+            is_active=True
+        ).first()
+        if not entry:
+            entry = QualitativeScoutingData.query.filter_by(
+                id=entry_id,
+                scouting_team_number=current_user.scouting_team_number
+            ).first_or_404()
+    else:
+        entry = QualitativeScoutingData.query.filter_by(
+            id=entry_id,
+            scouting_team_number=current_user.scouting_team_number
+        ).first_or_404()
+
     # Create QR code data with qualitative flag
     if entry.alliance_scouted and entry.alliance_scouted.startswith('team_'):
         # Individual team scouting

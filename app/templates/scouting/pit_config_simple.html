@@ -72,10 +72,14 @@
                                     <div class="section-item card mb-3" data-section-index="{{ loop.index0 }}">
                                         <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
                                             <h4 class="mb-2 mb-md-0" style="font-size: 1.1rem;">
+                                                <span class="move-section-controls me-2">
+                                                    <button type="button" class="btn btn-sm btn-light move-section-up" title="Move section up"><i class="fas fa-arrow-up"></i></button>
+                                                    <button type="button" class="btn btn-sm btn-light move-section-down" title="Move section down"><i class="fas fa-arrow-down"></i></button>
+                                                </span>
                                                 <button class="btn btn-sm btn-link p-0 me-2 text-decoration-none" type="button" data-bs-toggle="collapse" data-bs-target="#sectionCollapse{{ loop.index0 }}">
                                                     <i class="fas fa-chevron-down"></i>
                                                 </button>
-                                                Section {{ loop.index }}
+                                                <span class="section-label">Section <span class="section-number">{{ loop.index }}</span></span>
                                             </h4>
                                             <button type="button" class="btn btn-sm btn-danger remove-section">
                                                 <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Remove</span>
@@ -109,7 +113,10 @@
                                                 <div class="element-item border p-2 p-md-3 mb-2" data-element-index="{{ loop.index0 }}">
                                                     <div class="row">
                                                         <div class="col-12 d-flex justify-content-between align-items-center mb-2">
-                                                            <h6 class="mb-0" style="font-size: 0.95rem;">Element {{ loop.index }}</h6>
+                                                            <h6 class="mb-0" style="font-size: 0.95rem;"><span class="move-element-controls me-2">
+                                                            <button type="button" class="btn btn-sm btn-light move-element-up" title="Move element up"><i class="fas fa-arrow-up"></i></button>
+                                                            <button type="button" class="btn btn-sm btn-light move-element-down" title="Move element down"><i class="fas fa-arrow-down"></i></button>
+                                                        </span><span class="element-label">Element <span class="element-number">{{ loop.index }}</span></span></h6>
                                                             <button type="button" class="btn btn-sm btn-danger remove-element">
                                                                 <i class="fas fa-trash"></i>
                                                             </button>
@@ -203,11 +210,15 @@
                                                             <div class="table-responsive">
                                                             <table class="table table-bordered table-sm option-points-table">
                                                                 <thead>
-                                                                    <tr><th>Option Name</th><th></th></tr>
+                                                                    <tr><th style="width:1%;"></th><th>Option Name</th><th></th></tr>
                                                                 </thead>
                                                                 <tbody>
                                                                 {% for opt in element.options %}
                                                                 <tr>
+                                                                    <td class="move-option-cell text-center" style="width:1%;white-space:nowrap;">
+                                                                        <button type="button" class="btn btn-sm btn-light move-option-up" title="Move option up"><i class="fas fa-arrow-up"></i></button>
+                                                                        <button type="button" class="btn btn-sm btn-light move-option-down" title="Move option down"><i class="fas fa-arrow-down"></i></button>
+                                                                    </td>
                                                                     <td><input type="text" class="form-control form-control-sm option-label" name="element_option_label_{{ section_index }}_{{ element_index }}_{{ loop.index0 }}" value="{{ opt.label if opt.label else opt.value }}" required></td>
                                                                     <td style="display:none;">
                                                                         <input type="hidden" name="element_option_value_{{ section_index }}_{{ element_index }}_{{ loop.index0 }}" value="{{ opt.value }}" data-auto="{{ 'true' if not opt.value else 'false' }}">
@@ -272,6 +283,7 @@ document.addEventListener('DOMContentLoaded', function() {
     elementIndexes[{{ loop.index0 }}] = {{ section.elements|length }};
     {% endfor %}
 
+
     // Utility: slugify name -> id (lowercase, replace non-alnum -> underscore, collapse underscores, trim)
     function slugifyName(name) {
         if (!name) return '';
@@ -295,6 +307,51 @@ document.addEventListener('DOMContentLoaded', function() {
         while (ids.includes(`${base}_${i}`)) i++;
         return `${base}_${i}`;
     }
+
+    // Reorder helpers using up/down arrows ---------------------------------
+    function moveSection(section, direction) {
+        const parent = section.parentNode;
+        if (direction < 0) {
+            const prev = section.previousElementSibling;
+            if (prev) parent.insertBefore(section, prev);
+        } else {
+            const next = section.nextElementSibling;
+            if (next) parent.insertBefore(next, section);
+        }
+        updateSectionIndexes();
+    }
+
+    function moveElement(element, direction) {
+        const container = element.parentNode;
+        if (direction < 0) {
+            const prev = element.previousElementSibling;
+            if (prev) container.insertBefore(element, prev);
+        } else {
+            const next = element.nextElementSibling;
+            if (next) container.insertBefore(next, element);
+        }
+        updateSectionIndexes();
+    }
+
+    function moveOption(row, direction) {
+        const tbody = row.parentNode;
+        if (direction < 0) {
+            const prev = row.previousElementSibling;
+            if (prev) tbody.insertBefore(row, prev);
+        } else {
+            const next = row.nextElementSibling;
+            if (next) tbody.insertBefore(next, row);
+        }
+        // reindex options in this element
+        const elem = row.closest('.element-item');
+        const sec = row.closest('.section-item');
+        if (elem && sec) {
+            reindexOptionRows(sec.dataset.sectionIndex, elem.dataset.elementIndex);
+        }
+    }
+
+    // no drag/drop initialization needed; arrow clicks handled globally
+
 
     // Auto-generate IDs when names change, but do not overwrite if user typed their own ID
     document.addEventListener('input', function(e) {
@@ -629,6 +686,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (display) display.textContent = candidate;
         }
         sectionIndex++;
+        // update indexes after adding
+        updateSectionIndexes();
     });
     
     // Remove section functionality (use closest to handle clicks on icon or button reliably)
@@ -663,6 +722,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (display) display.textContent = candidate;
             }
             elementIndexes[sectionIdx]++;
+            updateSectionIndexes();
         }
     });
     
@@ -730,6 +790,44 @@ document.addEventListener('DOMContentLoaded', function() {
             const template = createOptionTemplate(sectionIndex, elementIndex, newOptionIndex);
             container.insertAdjacentHTML('beforeend', template);
             reindexOptionRows(sectionIndex, elementIndex);
+            // reinitialize option row drag handlers for this element
+            initOptionDrag();
+        }
+
+        // Section move buttons
+        const moveSecUp = e.target.closest && e.target.closest('.move-section-up');
+        if (moveSecUp) {
+            const sec = moveSecUp.closest('.section-item');
+            if (sec) moveSection(sec, -1);
+        }
+        const moveSecDown = e.target.closest && e.target.closest('.move-section-down');
+        if (moveSecDown) {
+            const sec = moveSecDown.closest('.section-item');
+            if (sec) moveSection(sec, 1);
+        }
+
+        // Element move buttons
+        const moveElUp = e.target.closest && e.target.closest('.move-element-up');
+        if (moveElUp) {
+            const el = moveElUp.closest('.element-item');
+            if (el) moveElement(el, -1);
+        }
+        const moveElDown = e.target.closest && e.target.closest('.move-element-down');
+        if (moveElDown) {
+            const el = moveElDown.closest('.element-item');
+            if (el) moveElement(el, 1);
+        }
+
+        // Option move buttons
+        const moveOptUp = e.target.closest && e.target.closest('.move-option-up');
+        if (moveOptUp) {
+            const row = moveOptUp.closest('tr');
+            if (row) moveOption(row, -1);
+        }
+        const moveOptDown = e.target.closest && e.target.closest('.move-option-down');
+        if (moveOptDown) {
+            const row = moveOptDown.closest('tr');
+            if (row) moveOption(row, 1);
         }
 
         // Remove option row
@@ -775,6 +873,10 @@ document.addEventListener('DOMContentLoaded', function() {
 function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
     return `
         <tr>
+            <td class="move-option-cell text-center" style="width:1%;white-space:nowrap;">
+                <button type="button" class="btn btn-sm btn-light move-option-up" title="Move option up"><i class="fas fa-arrow-up"></i></button>
+                <button type="button" class="btn btn-sm btn-light move-option-down" title="Move option down"><i class="fas fa-arrow-down"></i></button>
+            </td>
             <td><input type="text" class="form-control option-label" name="element_option_label_${sectionIndex}_${elementIndex}_${optionIndex}" required></td>
             <td style="display:none;">
                 <input type="hidden" name="element_option_value_${sectionIndex}_${elementIndex}_${optionIndex}" value="" data-auto="true">
@@ -793,10 +895,14 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
         sectionDiv.innerHTML = `
             <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
                 <h4 class="mb-2 mb-md-0" style="font-size: 1.1rem;">
+                    <span class="move-section-controls me-2">
+                        <button type="button" class="btn btn-sm btn-light move-section-up" title="Move section up"><i class="fas fa-arrow-up"></i></button>
+                        <button type="button" class="btn btn-sm btn-light move-section-down" title="Move section down"><i class="fas fa-arrow-down"></i></button>
+                    </span>
                     <button class="btn btn-sm btn-link p-0 me-2 text-decoration-none" type="button" data-bs-toggle="collapse" data-bs-target="#sectionCollapse${sectionIdx}">
                         <i class="fas fa-chevron-down"></i>
                     </button>
-                    Section ${sectionIdx + 1}
+                    <span class="section-label">Section <span class="section-number">${sectionIdx + 1}</span></span>
                 </h4>
                 <button type="button" class="btn btn-sm btn-danger remove-section">
                     <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Remove</span>
@@ -845,7 +951,10 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
         elementDiv.innerHTML = `
             <div class="row">
                 <div class="col-12 d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="mb-0" style="font-size: 0.95rem;">Element ${elementIdx + 1}</h6>
+                    <h6 class="mb-0" style="font-size: 0.95rem;"><span class="move-element-controls me-2">
+                        <button type="button" class="btn btn-sm btn-light move-element-up" title="Move element up"><i class="fas fa-arrow-up"></i></button>
+                        <button type="button" class="btn btn-sm btn-light move-element-down" title="Move element down"><i class="fas fa-arrow-down"></i></button>
+                    </span><span class="element-label">Element <span class="element-number">${elementIdx + 1}</span></span></h6>
                     <button type="button" class="btn btn-sm btn-danger remove-element">
                         <i class="fas fa-trash"></i>
                     </button>
@@ -862,12 +971,6 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
                     <div class="form-group mb-0">
                         <small class="text-muted">Generated Element ID: <code class="generated-element-id"></code></small>
                         <input type="hidden" class="form-control form-control-sm" name="element_id_${sectionIdx}_${elementIdx}" data-auto="true" required>
-                    </div>
-                </div>
-                <div class="col-12 col-md-4 mb-2">
-                    <div class="form-group mb-0">
-                        <label class="small">Element Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control form-control-sm" name="element_name_${sectionIdx}_${elementIdx}" required>
                     </div>
                 </div>
                 <div class="col-12 col-md-4 mb-2">
@@ -956,17 +1059,10 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
                 collapseButton.setAttribute('data-bs-target', `#sectionCollapse${index}`);
             }
             
-            // Update section header text - find the text node and update it
-            const header = section.querySelector('h4');
-            if (header) {
-                // Find the text node (skip the button element)
-                for (let i = 0; i < header.childNodes.length; i++) {
-                    const node = header.childNodes[i];
-                    if (node.nodeType === Node.TEXT_NODE && node.textContent.trim().startsWith('Section')) {
-                        node.textContent = `Section ${index + 1}`;
-                        break;
-                    }
-                }
+            // Update section header number
+            const headerNum = section.querySelector('.section-number');
+            if (headerNum) {
+                headerNum.textContent = index + 1;
             }
             
             // Update form field names
@@ -986,9 +1082,9 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
             const elements = section.querySelectorAll('.element-item');
             elements.forEach((element, elementIndex) => {
                 element.dataset.elementIndex = elementIndex;
-                const elementHeader = element.querySelector('h6');
-                if (elementHeader) {
-                    elementHeader.textContent = `Element ${elementIndex + 1}`;
+                const elementNum = element.querySelector('.element-number');
+                if (elementNum) {
+                    elementNum.textContent = elementIndex + 1;
                 }
                 
                 // Update all form field names for this element
@@ -1210,5 +1306,24 @@ body.dark-mode .element-item {
         font-size: 1rem;
     }
 }
+
+/* Reorderable items cursor/dragging appearance - arrows used instead */
+.section-item, .element-item, .option-points-table tbody tr {
+    /* cursor left as default */
+}
+.section-item.dragging, .element-item.dragging, .option-points-table tbody tr.dragging {
+    /* no drag state */
+}
+
+/* Button spacing for move controls */
+.move-section-controls .btn,
+.move-element-controls .btn,
+.move-option-cell .btn {
+    padding: 0.25rem 0.4rem;
+}
+.move-option-cell {
+    white-space: nowrap;
+}
+
 </style>
 {% endblock %}

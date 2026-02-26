@@ -30,7 +30,17 @@ def test_import_from_separate_files(tmp_path):
     files = {
         'events.json': [{"id": 1, "name": "Test Event", "code": "TEST", "year": 2025}],
         'teams.json': [{"id": 1, "team_number": 111}],
-        'matches.json': [{"id": 1, "match_number": 1}]
+        'matches.json': [{"id": 1, "match_number": 1}],
+        'qualitative_data.json': [{
+            "id": 5,
+            "match_id": 1,
+            "scouting_team_number": 42,
+            "alliance_scouted": "red",
+            "scout_name": "foo",
+            "scout_id": 7,
+            "timestamp": "2025-01-01T00:00:00Z",
+            "data_json": "{}"
+        }]
     }
     zip_bytes = _make_zip_bytes(files)
     zpath = tmp_path / 'portable.zip'
@@ -54,12 +64,23 @@ def test_import_from_separate_files(tmp_path):
     assert success
     assert 'events' in captured and len(captured['events']) == 1
     assert 'teams' in captured and len(captured['teams']) == 1
+    assert 'qualitative_data' in captured and len(captured['qualitative_data']) == 1
 
 
 def test_import_from_bundle_file(tmp_path):
     bundle = {
         'events': [{"id": 99, "name": "Bundle Event", "code": "BND", "year": 2025}],
-        'teams': [{"id": 88, "team_number": 888}]
+        'teams': [{"id": 88, "team_number": 888}],
+        'qualitative_data': [{
+            "id": 6,
+            "match_id": 99,
+            "scouting_team_number": None,
+            "alliance_scouted": "blue",
+            "scout_name": "bar",
+            "scout_id": None,
+            "timestamp": "2025-01-02T00:00:00Z",
+            "data_json": "{}"
+        }]
     }
     zip_bytes = _make_zip_bytes({'export.json': bundle})
     zpath = tmp_path / 'bundle.zip'
@@ -83,3 +104,4 @@ def test_import_from_bundle_file(tmp_path):
     assert 'events' in captured and len(captured['events']) == 1
     assert captured['events'][0]['id'] == 99
     assert 'teams' in captured and len(captured['teams']) == 1
+    assert 'qualitative_data' in captured and len(captured['qualitative_data']) == 1

@@ -97,20 +97,23 @@
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
-                                        <a href="{{ url_for('scouting.view_qualitative_data', entry_id=entry.id) }}" class="btn btn-primary">
+                                        {% set shared_param = entry.shared_id if entry.shared_id %}
+                                        <a href="{% if shared_param %}{{ url_for('scouting.view_qualitative_data', entry_id=entry.id) }}?shared_id={{ shared_param }}{% else %}{{ url_for('scouting.view_qualitative_data', entry_id=entry.id) }}{% endif %}" class="btn btn-primary">
                                             <i class="fas fa-eye"></i>
                                         </a>
-                                        <a href="{{ url_for('scouting.qualitative_qr_code', entry_id=entry.id) }}" class="btn btn-success">
+                                        <a href="{% if shared_param %}{{ url_for('scouting.qualitative_qr_code', entry_id=entry.id) }}?shared_id={{ shared_param }}{% else %}{{ url_for('scouting.qualitative_qr_code', entry_id=entry.id) }}{% endif %}" class="btn btn-success">
                                             <i class="fas fa-qrcode"></i>
                                         </a>
-                                        <button type="button" class="btn btn-info" onclick="showQuickView({{ entry.id }})">
+                                        <button type="button" class="btn btn-info" onclick="showQuickView({{ entry.id }}, {{ shared_param or 'null' }})">
                                             <i class="fas fa-info-circle"></i>
                                         </button>
+                                        {% if not shared_param %}
                                         <form action="{{ url_for('scouting.delete_qualitative_data', entry_id=entry.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this entry?');">
                                             <button type="submit" class="btn btn-danger">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </form>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>
@@ -153,7 +156,7 @@
 </div>
 
 <script>
-function showQuickView(entryId) {
+function showQuickView(entryId, sharedId) {
     const modal = new bootstrap.Modal(document.getElementById('quickViewModal'));
     const content = document.getElementById('quickViewContent');
     
@@ -161,8 +164,14 @@ function showQuickView(entryId) {
     content.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
     modal.show();
     
+    // Build URL, including shared_id when provided
+    let url = `{{ url_for('scouting.view_qualitative_data', entry_id=0) }}`.replace('0', entryId);
+    if (sharedId) {
+        url += `?shared_id=${sharedId}`;
+    }
+    
     // Fetch entry data
-    fetch(`{{ url_for('scouting.view_qualitative_data', entry_id=0) }}`.replace('0', entryId))
+    fetch(url)
         .then(response => response.text())
         .then(html => {
             // Extract just the card body content

@@ -226,7 +226,7 @@ def log_response(response):
     try:
         remote = request.remote_addr or request.environ.get('REMOTE_ADDR')
         # Use response.status for human readable status
-        #print(f"Outgoing response to {remote}: {request.method} {request.path} -> {response.status}")
+        print(f"Outgoing response to {remote}: {request.method} {request.path} -> {response.status}")
         # If enabled, write mobile API responses to file as well
         try:
             if MOBILE_API_LOG_TO_FILE and request.path.startswith('/api/mobile'):
@@ -261,18 +261,6 @@ if __name__ == '__main__':
     # Initialize database first
     print("Starting FRC Scouting Platform...")
     with app.app_context():
-        # Ensure alliance qualitative model is imported so create_all picks it up
-    # make sure any leftover aborted transaction is cleared when server starts
-        try:
-            from app import db
-            db.session.rollback()
-        except Exception:
-            pass
-        try:
-            from app.models import AllianceSharedQualitativeData
-        except Exception:
-            pass
-        
         try:
             # Check if database needs initialization
             if not check_database_health():
@@ -771,11 +759,6 @@ if __name__ == '__main__':
                                             match.winner = match_data.get('winner', match.winner)
                                             match.red_score = match_data.get('red_score', match.red_score)
                                             match.blue_score = match_data.get('blue_score', match.blue_score)
-                                            match.display_match_number = match_data.get('display_match_number', match.display_match_number)
-                                            if match_data.get('comp_level'):
-                                                match.comp_level = match_data.get('comp_level')
-                                            if match_data.get('set_number') is not None:
-                                                match.set_number = match_data.get('set_number')
                                             matches_updated += 1
                                         else:
                                             match = Match(match_number=match_number,
@@ -786,9 +769,6 @@ if __name__ == '__main__':
                                                           red_score=match_data.get('red_score'),
                                                           blue_score=match_data.get('blue_score'),
                                                           winner=match_data.get('winner'),
-                                                          display_match_number=match_data.get('display_match_number'),
-                                                          comp_level=match_data.get('comp_level'),
-                                                          set_number=match_data.get('set_number', 0),
                                                           scouting_team_number=scouting_team_number)
                                             db.session.add(match)
                                             matches_added += 1
