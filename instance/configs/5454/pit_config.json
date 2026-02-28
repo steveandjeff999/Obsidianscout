@@ -1,264 +1,270 @@
 {
   "pit_scouting": {
+    "title": "REBUILT 2026 Pit Scouting",
     "description": "Collect detailed information about teams and their robots for the 2026 REBUILT game.",
     "sections": [
       {
+        "id": "team_info",
+        "name": "Team Information",
         "elements": [
           {
             "id": "drive_team_experience",
+            "perm_id": "drive_team_experience",
             "name": "Drive Team Experience",
+            "type": "select",
             "options": [
               {
-                "label": "1 Year",
-                "value": "yr1"
+                "value": "yr1",
+                "label": "1 Year"
               },
               {
-                "label": "2 Year",
-                "value": "yr2"
+                "value": "yr2",
+                "label": "2 Year"
               },
               {
-                "label": "3+ Years",
-                "value": "yr3"
+                "value": "yr3",
+                "label": "3+ Years"
               }
             ],
-            "perm_id": "drive_team_experience",
             "points": {
               "yr1": 0,
               "yr2": 0,
               "yr3": 0
-            },
-            "type": "select"
+            }
           },
           {
-            "default": "Select",
             "id": "programming_language",
+            "perm_id": "programming_language",
             "name": "Programming Language",
+            "type": "select",
+            "default": "Select",
             "options": [
               {
-                "label": "Java",
-                "value": "java"
+                "value": "java",
+                "label": "Java"
               },
               {
-                "label": "Python",
-                "value": "python"
+                "value": "python",
+                "label": "Python"
               },
               {
-                "label": "C++",
-                "value": "cpp"
+                "value": "cpp",
+                "label": "C++"
               },
               {
-                "label": "Labview",
-                "value": "labview"
+                "value": "labview",
+                "label": "Labview"
               }
             ],
-            "perm_id": "programming_language",
             "points": {
-              "cpp": 0,
               "java": 0,
-              "labview": 0,
-              "python": 0
-            },
-            "type": "select"
+              "python": 0,
+              "cpp": 0,
+              "labview": 0
+            }
           }
-        ],
-        "id": "team_info",
-        "name": "Team Information"
+        ]
       },
       {
+        "id": "robot_design",
+        "name": "Robot Design & Drivetrain",
         "elements": [
           {
             "id": "drivetrain_type",
+            "perm_id": "drivetrain_type",
             "name": "Drivetrain Type",
+            "type": "select",
             "options": [
               {
-                "label": "Swerve",
-                "value": "swerve"
+                "value": "swerve",
+                "label": "Swerve"
               },
               {
-                "label": "Tank",
-                "value": "tank"
+                "value": "tank",
+                "label": "Tank"
               },
               {
-                "label": "other",
-                "value": "other"
+                "value": "other",
+                "label": "other"
               }
             ],
-            "perm_id": "drivetrain_type",
             "points": {
-              "other": 0,
               "swerve": 0,
-              "tank": 0
-            },
-            "type": "select"
+              "tank": 0,
+              "other": 0
+            }
           },
           {
             "id": "drivetrain_motors",
-            "name": "Number of Drive Motors",
             "perm_id": "drivetrain_motors",
+            "name": "Number of Drive Motors",
             "type": "number",
             "validation": {
-              "max": 12,
-              "min": 1
+              "min": 1,
+              "max": 12
             }
           },
           {
             "id": "motor_type",
+            "perm_id": "motor_type",
             "name": "Drive Motor Type",
+            "type": "select",
             "options": [
               {
-                "label": "Kraken",
-                "value": "kraken"
+                "value": "kraken",
+                "label": "Kraken"
               },
               {
-                "label": "Neo",
-                "value": "neo"
+                "value": "neo",
+                "label": "Neo"
               },
               {
-                "label": "cim",
-                "value": "cim"
+                "value": "cim",
+                "label": "cim"
               },
               {
-                "label": "other",
-                "value": "other"
+                "value": "other",
+                "label": "other"
               }
             ],
-            "perm_id": "motor_type",
             "points": {
-              "cim": 0,
               "kraken": 0,
               "neo": 0,
+              "cim": 0,
               "other": 0
-            },
-            "type": "select"
+            }
           },
           {
             "id": "robot_weight",
-            "name": "Robot Weight (lbs)",
             "perm_id": "robot_weight",
+            "name": "Robot Weight (lbs)",
             "type": "number",
             "validation": {
-              "max": 150,
-              "min": 0
+              "min": 0,
+              "max": 150
             }
           },
           {
             "id": "robot_height",
-            "name": "Robot Height (inches)",
             "perm_id": "robot_height",
+            "name": "Robot Height (inches)",
             "type": "number",
             "validation": {
-              "max": 840,
-              "min": 0
+              "min": 0,
+              "max": 840
             }
           },
           {
             "id": "max_speed",
-            "name": "Estimated Max Speed (ft/s)",
             "perm_id": "max_speed",
+            "name": "Estimated Max Speed (ft/s)",
             "type": "number",
             "validation": {
-              "max": 48,
-              "min": 0
+              "min": 0,
+              "max": 48
             }
           }
-        ],
-        "id": "robot_design",
-        "name": "Robot Design & Drivetrain"
+        ]
       },
       {
+        "id": "match_data",
+        "name": "Match Data",
         "elements": [
           {
-            "default": "0",
             "id": "fuel_capacity_1",
-            "name": "Fuel Capacity",
             "perm_id": "fuel_capacity_1",
+            "name": "Fuel Capacity",
             "type": "number",
+            "default": "0",
             "validation": {
-              "max": 500,
-              "min": 0
+              "min": 0,
+              "max": 500
             }
+          },
+          {
+            "id": "test",
+            "perm_id": "test",
+            "name": "test",
+            "type": "text"
           }
-        ],
-        "id": "match_data",
-        "name": "Match Data"
+        ]
       },
       {
+        "id": "climb_capabilities",
+        "name": "Match",
         "elements": [
           {
             "id": "can_climb",
-            "name": "Can climb in auto?",
             "perm_id": "can_climb",
+            "name": "Can climb in auto?",
             "type": "boolean"
           },
           {
             "id": "climb_levels",
+            "perm_id": "climb_levels",
             "name": "Climb Levels Achieved",
+            "type": "multiselect",
             "options": [
               {
-                "label": "L1",
-                "value": "1"
+                "value": "1",
+                "label": "L1"
               },
               {
-                "label": "L2",
-                "value": "2"
+                "value": "2",
+                "label": "L2"
               },
               {
-                "label": "L3",
-                "value": "3"
+                "value": "3",
+                "label": "L3"
               },
               {
-                "label": "none",
-                "value": "none"
+                "value": "none",
+                "label": "none"
               }
             ],
-            "perm_id": "climb_levels",
             "points": {
               "1": 0,
               "2": 0,
               "3": 0,
               "none": 0
-            },
-            "type": "multiselect"
+            }
           },
           {
             "id": "climb_time",
-            "name": "Climb Time (seconds) if applicable",
             "perm_id": "climb_time",
+            "name": "Climb Time (seconds) if applicable",
             "type": "number",
             "validation": {
-              "max": 60,
-              "min": 0
+              "min": 0,
+              "max": 60
             }
           }
-        ],
-        "id": "climb_capabilities",
-        "name": "Match"
+        ]
       },
       {
+        "id": "strategy_notes",
+        "name": "Strategy & Notes",
         "elements": [
           {
             "id": "robot_strengths",
-            "name": "Robot Strengths",
             "perm_id": "robot_strengths",
+            "name": "Robot Strengths",
             "type": "textarea"
           },
           {
             "id": "robot_weaknesses",
-            "name": "Areas for Improvement",
             "perm_id": "robot_weaknesses",
+            "name": "Areas for Improvement",
             "type": "textarea"
           },
           {
             "id": "additional_notes",
-            "name": "Additional Notes",
             "perm_id": "additional_notes",
+            "name": "Additional Notes",
             "type": "textarea"
           }
-        ],
-        "id": "strategy_notes",
-        "name": "Strategy & Notes"
+        ]
       }
-    ],
-    "title": "REBUILT 2026 Pit Scouting"
+    ]
   }
 }

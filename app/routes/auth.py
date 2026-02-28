@@ -1665,6 +1665,72 @@ def spinning_counter_status():
     enabled = team_settings.spinning_counters_enabled if team_settings else False
     return jsonify({'enabled': bool(enabled)})
 
+# -------------------------------------------------------------------------
+# Prediction and leaderboard toggles
+# -------------------------------------------------------------------------
+
+@bp.route('/admin/toggle-predictions', methods=['POST'])
+@admin_required
+def toggle_predictions():
+    """Toggle whether the scouting form shows the winner prediction field"""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.admin_settings'))
+    from app.models import ScoutingTeamSettings
+
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    if not team_settings:
+        team_settings = ScoutingTeamSettings(scouting_team_number=current_user.scouting_team_number)
+        db.session.add(team_settings)
+
+    team_settings.predictions_enabled = not team_settings.predictions_enabled
+    team_settings.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    status = "enabled" if team_settings.predictions_enabled else "disabled"
+    flash(f'Predictions on scouting form have been {status} for your team.', 'success')
+    return redirect(url_for('auth.admin_settings'))
+
+@bp.route('/admin/predictions-status', methods=['GET'])
+def predictions_status():
+    """Return JSON with current predictions-enabled status for the user's team"""
+    if not current_user.is_authenticated:
+        return jsonify({'enabled': False})
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    enabled = team_settings.predictions_enabled if team_settings else True
+    return jsonify({'enabled': bool(enabled)})
+
+@bp.route('/admin/toggle-leaderboard-accuracy', methods=['POST'])
+@admin_required
+def toggle_leaderboard_accuracy():
+    """Toggle whether the scout leaderboard shows prediction accuracy"""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.admin_settings'))
+    from app.models import ScoutingTeamSettings
+
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    if not team_settings:
+        team_settings = ScoutingTeamSettings(scouting_team_number=current_user.scouting_team_number)
+        db.session.add(team_settings)
+
+    team_settings.leaderboard_accuracy_visible = not team_settings.leaderboard_accuracy_visible
+    team_settings.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    status = "visible" if team_settings.leaderboard_accuracy_visible else "hidden"
+    flash(f'Prediction accuracy on leaderboard has been {status} for your team.', 'success')
+    return redirect(url_for('auth.admin_settings'))
+
+@bp.route('/admin/leaderboard-accuracy-status', methods=['GET'])
+def leaderboard_accuracy_status():
+    """Return JSON with current leaderboard-accuracy visibility for the user's team"""
+    if not current_user.is_authenticated:
+        return jsonify({'enabled': False})
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    enabled = team_settings.leaderboard_accuracy_visible if team_settings else True
+    return jsonify({'enabled': bool(enabled)})
+
 @bp.route('/admin/toggle-account-lock', methods=['POST'])
 @admin_required
 def toggle_account_lock():

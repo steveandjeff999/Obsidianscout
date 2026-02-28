@@ -204,6 +204,7 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                     </div>
                     <div class="form-text">Blank uses your account name while keeping your account ID linked.</div>
                 </div>
+                {% if predictions_enabled %}
                 <div class="col-md-4">
                     <label class="form-label">Your Prediction</label>
                     <div class="d-flex gap-2 flex-wrap" role="group" aria-label="Predicted winner">
@@ -218,6 +219,7 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                     </div>
                     <div class="form-text">Used for prediction accuracy; optional.</div>
                 </div>
+                {% endif %}
                 <div class="col-md-3">
                     <label class="form-label">Auto Period Timer</label>
                     <div class="form-check form-switch">
@@ -539,20 +541,7 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                 <h5 class="mb-0 text-white">Post-Match</h5>
                 <span class="text-muted">Ratings and narrative</span>
             </div>
-            <div class="glass-card p-3 mb-3">
-                <h6 class="text-white mb-2"><i class="fas fa-clipboard-check me-2"></i>Result Prediction</h6>
-                <div class="d-flex gap-2 flex-wrap" role="group" aria-label="Predicted winner">
-                    <input type="radio" class="btn-check" name="predicted_winner" id="pred_red_post" value="red" autocomplete="off" {% if form_data.get('predicted_winner') == 'red' %}checked{% endif %}>
-                    <label class="btn btn-outline-danger" for="pred_red_post">Red</label>
-                    <input type="radio" class="btn-check" name="predicted_winner" id="pred_blue_post" value="blue" autocomplete="off" {% if form_data.get('predicted_winner') == 'blue' %}checked{% endif %}>
-                    <label class="btn btn-outline-primary" for="pred_blue_post">Blue</label>
-                    <input type="radio" class="btn-check" name="predicted_winner" id="pred_tie_post" value="tie" autocomplete="off" {% if form_data.get('predicted_winner') == 'tie' %}checked{% endif %}>
-                    <label class="btn btn-outline-secondary" for="pred_tie_post">Tie</label>
-                    <input type="radio" class="btn-check" name="predicted_winner" id="pred_none_post" value="" autocomplete="off" {% if not form_data.get('predicted_winner') %}checked{% endif %}>
-                    <label class="btn btn-outline-secondary" for="pred_none_post">None</label>
-                </div>
-                <small class="text-muted">Changing here will overwrite the pre-match pick.</small>
-            </div>
+            <!-- Prediction removed from post-match as per requirements -->
 
             {% if game_config.post_match and game_config.post_match.rating_elements %}
             <div class="row g-3 mb-3">

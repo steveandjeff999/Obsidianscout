@@ -40,7 +40,9 @@ def test_run_all_migrations_creates_offset_column(tmp_path):
         # drop column if exists (simulating previous schema)
         engine = db.engine
         if 'offset_updated_at' in [c['name'] for c in inspect(engine).get_columns('event')]:
-            engine.execute(text('ALTER TABLE event DROP COLUMN offset_updated_at'))
+            # use connection.execute for modern SQLAlchemy
+            with engine.connect() as conn:
+                conn.execute(text('ALTER TABLE event DROP COLUMN offset_updated_at'))
         # verify column absent
         cols = [c['name'] for c in inspect(engine).get_columns('event')]
         assert 'offset_updated_at' not in cols
@@ -50,3 +52,8 @@ def test_run_all_migrations_creates_offset_column(tmp_path):
         assert added >= 1
         cols = [c['name'] for c in inspect(engine).get_columns('event')]
         assert 'offset_updated_at' in cols
+
+        # also verify the new team settings columns are added if missing
+        cols2 = [c['name'] for c in inspect(engine).get_columns('scouting_team_settings')]
+        assert 'predictions_enabled' in cols2
+        assert 'leaderboard_accuracy_visible' in cols2

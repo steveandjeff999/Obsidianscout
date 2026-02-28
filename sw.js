@@ -1,7 +1,7 @@
 // Service Worker for ObsidianScout - Simplified version without offline analytics
 
 // Increment the CACHE_VERSION to force clients to update caches when you change assets
-const CACHE_VERSION = 8;
+const CACHE_VERSION = 10;
 const CACHE_NAME = `scout-app-cache-v${CACHE_VERSION}`;
 
 // Core site shell files to pre-cache. Add any top-level routes or critical files here.
@@ -19,6 +19,10 @@ const STATIC_ASSETS = [
   '/static/js/modal-override.js',
   '/static/js/scouting_form_offline.js',
   '/static/manifest.json',
+  // sidebar brand icon – pre-cache so it appears instantly without repeated network fetches
+  '/static/obsidian-192.png',
+  // qualitative scouting form page
+  '/scouting/qualitative',
   '/static/js/pit_scouting_offline.js',
   '/static/offline.html',
   '/scouting/form'
@@ -29,7 +33,9 @@ const STATIC_ASSETS = [
 STATIC_ASSETS.push('/static/img/avatars/default.png');
 STATIC_ASSETS.push('/static/img/obsidian.png');
 STATIC_ASSETS.push('/static/assets/obsidian.png');
-
+// also cache the brand icon used in the sidebar header
+STATIC_ASSETS.push('/static/obsidian-192.png');// ensure the qualitative scouting page is available offline quickly
+STATIC_ASSETS.push('/scouting/qualitative');
 STATIC_ASSETS.push('/teams/');
 STATIC_ASSETS.push('/sponsors/');
 STATIC_ASSETS.push('/help/');

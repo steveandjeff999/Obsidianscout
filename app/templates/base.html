@@ -70,7 +70,7 @@
                 // Accent color is removed from per-user settings; rely on theme defaults.
 
                     var br = null; try { br = localStorage.getItem('border_radius'); } catch(e) { br = null; }
-                    if (br) { try { document.documentElement.style.setProperty('--border-radius', br+'px'); document.body.style.setProperty('--border-radius', br+'px'); try{ document.documentElement.style.setProperty('--card-radius', Math.max(parseInt(br,10),4) + 'px'); document.body.style.setProperty('--card-radius', Math.max(parseInt(br,10),4) + 'px'); document.documentElement.style.setProperty('--control-radius', Math.max(parseInt(br,10) - 4,4) + 'px'); document.body.style.setProperty('--control-radius', Math.max(parseInt(br,10) - 4,4) + 'px'); }catch(e){} } catch(e) {} }
+                    if (br) { try { document.documentElement.style.setProperty('--border-radius', br+'px'); document.body.style.setProperty('--border-radius', br+'px'); try{ document.documentElement.style.setProperty('--card-radius', Math.max(parseInt(br,10),4) + 'px'); document.body.style.setProperty('--card-radius', Math.max(parseInt(br,10),4) + 'px'); document.documentElement.style.setProperty('--control-radius', Math.max(parseInt(br,10) - 4,4) + 'px'); document.body.style.setProperty('--control-radius', Math.max(parseInt(br,10) - 4,4) + 'px'); }catch(e){} } catch(e){} }
 
                     /* Button size customization removed: no early btn-size class applied */
 
@@ -116,7 +116,6 @@
                             // else leave server default as rendered by template
                         }
                     } catch(e) { /* non-fatal */ }
-                } catch(e) {}
             } catch (e) { /* silently ignore */ }
         })();
     </script>
