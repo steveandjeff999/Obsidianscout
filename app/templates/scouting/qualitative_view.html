@@ -69,6 +69,9 @@
                             {% if ms.driver_ability %}<div><strong>Driver ability:</strong> {{ ms.driver_ability }}/5</div>{% endif %}
                             {% if ms.defense_effectiveness %}<div><strong>Defense effectiveness:</strong> {{ ms.defense_effectiveness }}/5</div>{% endif %}
                             {% if ms.shot_accuracy is not none %}<div><strong>Shot accuracy:</strong> {{ ms.shot_accuracy }}/5</div>{% endif %}
+                            {% if ms.predicted_winner %}
+                                <div><strong>Predicted Winner:</strong> <span class="badge bg-{{ 'danger' if ms.predicted_winner == 'red' else 'primary' if ms.predicted_winner == 'blue' else 'secondary' }}">{{ ms.predicted_winner|upper }}</span></div>
+                            {% endif %}
                             {% if ms.got_beached %}<div><strong>Notes:</strong> Got beached</div>{% endif %}
                             {% if ms.feeder_type and ms.feeder_type|length > 0 %}<div><strong>Feeder type:</strong> {{ ms.feeder_type|join(', ') }}</div>{% endif %}
                         </div>

@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
-from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingData, AllianceSharedQualitativeData, QualitativeScoutingData
+from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingData, AllianceSharedQualitativeData, QualitativeScoutingData, ScoutingTeamSettings
 from app import db, socketio
 import json
 from datetime import datetime, timezone
@@ -1775,6 +1775,10 @@ def save_qualitative_scouting():
     try:
         data = request.get_json()
         individual_team = data.get('individual_team', False)
+
+        # determine whether predictions are allowed for this team
+        ts = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+        predictions_allowed = bool(ts and getattr(ts, 'predictions_enabled', True))
         
         if individual_team:
             # Individual team scouting mode (from a match, single team)
@@ -1784,7 +1788,10 @@ def save_qualitative_scouting():
             show_auto = data.get('show_auto_climb', False)
             show_endgame = data.get('show_endgame_climb', False)
             match_summary = data.get('match_summary') or {}
-            
+            # strip prediction if disabled
+            if not predictions_allowed and 'predicted_winner' in match_summary:
+                match_summary.pop('predicted_winner', None)
+
             if not team_number or not match_id:
                 return jsonify({'success': False, 'message': 'Missing team number or match'}), 400
 
@@ -1845,6 +1852,9 @@ def save_qualitative_scouting():
             show_auto = data.get('show_auto_climb', False)
             show_endgame = data.get('show_endgame_climb', False)
             match_summary = data.get('match_summary') or {}
+            # strip prediction if disabled
+            if not predictions_allowed and 'predicted_winner' in match_summary:
+                match_summary.pop('predicted_winner', None)
 
             # Server-side validation: require rankings for all teams in the selected alliance(s)
             if alliance_scouted in ('red', 'both'):

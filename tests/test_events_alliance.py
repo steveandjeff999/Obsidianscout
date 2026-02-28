@@ -1,6 +1,6 @@
 import json
 from app import create_app, db
-from app.models import Event, Team, ScoutingAlliance, ScoutingAllianceEvent, ScoutingAllianceMember
+from app.models import Event, Team, Match, ScoutingAlliance, ScoutingAllianceEvent, ScoutingAllianceMember
 from app.api_models import create_api_key
 
 
@@ -59,6 +59,76 @@ def test_event_is_alliance_and_deduplicated():
         html = resp_html.get_data(as_text=True)
         # Link text 'Alliance' should appear once for the TEST event
         assert html.count('Alliance') >= 1
+
+
+def test_get_events_with_scouting_data_order_by():
+    """Regression test for DISTINCT ON / ORDER BY issue seen in Postgres.
+    Previously a query built by get_events_with_scouting_data would add
+    ``.distinct(func.upper(Event.code))`` without a matching
+    ``ORDER BY`` prefix, causing a ``ProgrammingError`` when callers then
+    appended ``.order_by(Event.name)``.  The helper now forces an initial
+    order on the same expression.  This test exercises the code path to
+    ensure no exception is raised and deduplication still occurs.
+    """
+    app = create_app()
+    with app.app_context():
+        # similar setup to earlier tests: create team, events, alliance
+        team = Team(team_number=8888, team_name='Team 8888', scouting_team_number=8888)
+        db.session.add(team)
+        db.session.commit()
+
+        evt1 = Event(name='Alpha Event', code='ALPHA', location='Loc', year=2026, scouting_team_number=8888)
+        evt2 = Event(name='Alpha Event Duplicate', code='ALPHA', location='Loc2', year=2026, scouting_team_number=8888)
+        db.session.add_all([evt1, evt2])
+        db.session.commit()
+        team.events.extend([evt1, evt2])
+        db.session.commit()
+
+        alliance = ScoutingAlliance(alliance_name='OrderTest')
+        # mark alliance as having configs so is_config_complete() returns True and
+        # get_alliance_team_numbers() will include our team.
+        alliance.game_config_team = 8888
+        alliance.pit_config_team = 8888
+        db.session.add(alliance)
+        db.session.flush()
+        sa_event = ScoutingAllianceEvent(alliance_id=alliance.id, event_code='ALPHA', event_name='Alpha Event')
+        db.session.add(sa_event)
+        member = ScoutingAllianceMember(alliance_id=alliance.id, team_number=8888, team_name='Team 8888', role='admin', status='accepted')
+        db.session.add(member)
+        db.session.commit()
+
+        # Create a match under one of our events so we have some shared data to copy
+        match = Match(match_number=1, match_type='Qualification', event_id=evt1.id, scouting_team_number=8888)
+        db.session.add(match)
+        db.session.commit()
+
+        # Insert a dummy AllianceSharedScoutingData record for that match
+        from app.models import AllianceSharedScoutingData
+        share = AllianceSharedScoutingData(
+            alliance_id=alliance.id,
+            original_scouting_data_id=None,
+            source_scouting_team_number=8888,
+            match_id=match.id,
+            team_id=team.id,
+            scout_name='tester',
+            scouting_station=1,
+            data_json='{}',
+            shared_by_team=8888,
+            is_active=True
+        )
+        db.session.add(share)
+        db.session.commit()
+
+        from app.models import TeamAllianceStatus
+        TeamAllianceStatus.activate_alliance_for_team(8888, alliance.id)
+
+        # Now call the helper that triggered the error previously
+        from app.utils.alliance_data import get_events_with_scouting_data
+        events, is_alliance, alliance_id = get_events_with_scouting_data()
+        # there should be a single event returned for code ALPHA
+        assert len([e for e in events if e.code and e.code.upper() == 'ALPHA']) == 1
+        assert is_alliance is True
+        assert alliance_id == alliance.id
 
 
 def test_combined_dropdown_events_shows_both_alliance_and_non_alliance():

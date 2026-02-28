@@ -27,8 +27,10 @@ def test_export_portable_includes_qualitative(client, app):
             scouting_team_number=123,
             scout_name="tester",
             alliance_scouted="red",
-            data_json=json.dumps({"key": "value"})
+            data_json=json.dumps({"key": "value"}),
         )
+        # inject predicted winner in the stored JSON so export should include it
+        q.data = {"_match_summary": {"predicted_winner": "blue"}}
         from app import db
         db.session.add(q)
         db.session.commit()
@@ -41,6 +43,8 @@ def test_export_portable_includes_qualitative(client, app):
     qual = json.loads(z.read('qualitative_data.json'))
     assert len(qual) == 1
     assert qual[0].get('scout_name') == 'tester'
+    # prediction should be preserved in _match_summary
+    assert qual[0].get('data', {}).get('_match_summary', {}).get('predicted_winner') == 'blue'
 
 
 def test_export_excel_includes_qualitative(client, app):
