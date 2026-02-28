@@ -85,12 +85,25 @@ def initialize_database():
     # Some routes query ScoutingTeamSettings.liquid_glass_buttons directly at runtime.
     try:
         from app.utils.database_migrations import column_exists_for_bind, run_all_migrations
+        # ensure each new UI column exists so routes that query them won't error
         if not column_exists_for_bind(db, None, 'scouting_team_settings', 'liquid_glass_buttons'):
             print("Detected missing scouting_team_settings.liquid_glass_buttons column - applying migrations...")
             try:
                 run_all_migrations(db)
             except Exception as mm_e:
                 print(f"Warning: run_all_migrations failed while adding liquid_glass_buttons: {mm_e}")
+        if not column_exists_for_bind(db, None, 'scouting_team_settings', 'predictions_enabled'):
+            print("Detected missing scouting_team_settings.predictions_enabled column - applying migrations...")
+            try:
+                run_all_migrations(db)
+            except Exception as mm_e:
+                print(f"Warning: run_all_migrations failed while adding predictions_enabled: {mm_e}")
+        if not column_exists_for_bind(db, None, 'scouting_team_settings', 'leaderboard_accuracy_visible'):
+            print("Detected missing scouting_team_settings.leaderboard_accuracy_visible column - applying migrations...")
+            try:
+                run_all_migrations(db)
+            except Exception as mm_e:
+                print(f"Warning: run_all_migrations failed while adding leaderboard_accuracy_visible: {mm_e}")
     except Exception:
         # Not critical - continue
         pass

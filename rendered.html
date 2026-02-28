@@ -6,7 +6,7 @@
         // Server-side indication whether liquid glass buttons are allowed for this team.
         // This is a small, early flag used by client scripts to decide whether to honor
         // per-user 'liquid_glass_buttons' preference stored in localStorage.
-        window.__server_liquid_glass_allowed = {{ 'true' if liquid_glass_buttons_enabled|default(False) else 'false' }};
+        window.__server_liquid_glass_allowed = false;
     </script>
     <script>
         (function(){
@@ -206,70 +206,55 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
-    <meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
-    <title>{% block title %}ObsidianScout{% endblock %}</title>
+    <meta name="csrf-token" content="">
+    <title>Scouting Form</title>
     
-    {% if game_config %}
-    <meta name="auto_duration" content="{{ game_config.get('auto_period', {}).get('duration_seconds', 15) }}">
-    <meta name="teleop_duration" content="{{ game_config.get('teleop_period', {}).get('duration_seconds', 120) }}">
-    <meta name="endgame_duration" content="{{ game_config.get('endgame_period', {}).get('duration_seconds', 30) }}">
-    <script>
-        // Pass game configuration as a JavaScript variable to avoid HTML escaping issues
-        // Use direct object embedding to avoid JSON.parse on potentially large strings
-        window.GAME_CONFIG = {{ game_config|tojson|safe }};
-    </script>
-    {% endif %}
     
-    <link href="{{ url_for('static', filename='css/vendor/bootstrap.min.css') }}" rel="stylesheet">
     
-    <link href="{{ url_for('static', filename='css/vendor/fontawesome-all.min.css') }}" rel="stylesheet">
+    <link href="/static/css/vendor/bootstrap.min.css" rel="stylesheet">
+    
+    <link href="/static/css/vendor/fontawesome-all.min.css" rel="stylesheet">
     <!-- Preload FontAwesome webfonts to avoid icons briefly missing while fonts load -->
-    <link rel="preload" href="{{ url_for('static', filename='css/vendor/webfonts/fa-solid-900.woff2') }}" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="{{ url_for('static', filename='css/vendor/webfonts/fa-regular-400.woff2') }}" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="{{ url_for('static', filename='css/vendor/webfonts/fa-brands-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/static/css/vendor/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/static/css/vendor/webfonts/fa-regular-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/static/css/vendor/webfonts/fa-brands-400.woff2" as="font" type="font/woff2" crossorigin>
 
     <!-- Modern fonts: Inter for UI + Poppins for headings -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     
-    {# Google Fonts are internet-hosted; fallback to system fonts for offline use #}
+    
     <style>body{font-family: Roboto, Montserrat, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;}</style>
     
-    <link href="{{ url_for('static', filename='css/vendor/select2.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/vendor/select2-bootstrap-5-theme.min.css') }}" rel="stylesheet">
+    <link href="/static/css/vendor/select2.min.css" rel="stylesheet">
+    <link href="/static/css/vendor/select2-bootstrap-5-theme.min.css" rel="stylesheet">
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="/static/css/styles.css">
     <script>
         // Apply the current theme as an early-class to avoid visual flash (class added server-side variable)
-        (function(){ try { document.documentElement.classList.add('theme-' + '{{ current_theme_id|default('light') }}'); } catch(e) {} })();
+        (function(){ try { document.documentElement.classList.add('theme-' + 'light'); } catch(e) {} })();
     </script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-overrides.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modal-fix.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-improvements.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/topbar-notifications.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/search-enhancements.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-force.css') }}">
+    <link rel="stylesheet" href="/static/css/theme-overrides.css">
+    <link rel="stylesheet" href="/static/css/modal-fix.css">
+    <link rel="stylesheet" href="/static/css/navbar-improvements.css">
+    <link rel="stylesheet" href="/static/css/topbar-notifications.css">
+    <link rel="stylesheet" href="/static/css/search-enhancements.css">
+    <link rel="stylesheet" href="/static/css/sidebar.css">
+    <link rel="stylesheet" href="/static/css/modern-ui.css">
+    <link rel="stylesheet" href="/static/css/dark-mode-force.css">
     <!-- Modern dark theme additions (more refined surfaces, softened shadows, updated accents) -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-theme-modern.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/glass-theme.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/new-glass-theme.css') }}">
-    {% if current_theme_id in ['gloss-light', 'gloss-dark'] %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/gloss-theme.css') }}">
-    {% endif %}
+    <link rel="stylesheet" href="/static/css/dark-theme-modern.css">
+    <link rel="stylesheet" href="/static/css/glass-theme.css">
+    <link rel="stylesheet" href="/static/css/new-glass-theme.css">
+    
     <!-- Button shape customization removed: ui-rounded styles no longer included -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-fixes.css') }}">
+    <link rel="stylesheet" href="/static/css/mobile-fixes.css">
     <!-- Use UMD build of Chart.js for compatibility with non-module script loading -->
-    <script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
+    <script src="/static/js/vendor/chart.umd.min.js"></script>
     
     <!-- Dynamic Theme CSS Variables -->
-    {% if theme_css_variables and theme_css_variables.strip() %}
-    <style id="theme-variables">
-        :root { {{ theme_css_variables | safe }} }
-    </style>
-    {% endif %}
+    
     <style>
         /* Ensure card-bg variable uses the neutral, non-blue glass color in dark mode */
         body.dark-mode, body.modern-layout.dark-mode {
@@ -296,7 +281,7 @@
         }
     </style>
     
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="manifest" href="/static/manifest.json">
     <link rel="icon" type="image/png" sizes="192x192" href="/static/obsidian-192.png">
     <link rel="apple-touch-icon" href="/static/obsidian-192.png">
     <meta name="theme-color" content="#1976d2">
@@ -1024,114 +1009,31 @@
         .sidebar .nav-link:focus-visible { outline: 2px solid rgba(255,255,255,0.06) !important; outline-offset: 2px !important; }
     </style>
 
-    {% block head %}{% endblock %}
+    
 </head>
-{# If an endpoint wants to render without the global chrome (topbar/sidebar)
-    it can pass `no_chrome=True` in the template context (auth pages do this).
-    When true we omit the sidebar/topbar helper classes so related JS/CSS
-    won't add overlays or offsets on mobile which can cause tap/click
-    coordinate mismatches. #}
-<body class="d-flex flex-column h-100 modern-layout {% if not no_chrome %}with-sidebar topbar-fixed{% endif %} {% if liquid_glass_buttons_enabled %}liquid-glass-buttons{% endif %} {% if spinning_counters_enabled %}spinning-counters{% endif %}">
+
+<body class="d-flex flex-column h-100 modern-layout with-sidebar topbar-fixed  ">
     <!-- Global Top Bar (search + user) -->
     <div class="topbar glass navbar-glass d-flex align-items-center gap-2 px-3 py-2 shadow-sm" role="banner">
         <div class="d-flex align-items-center gap-2 flex-shrink-0">
             <button id="sidebarToggle" class="btn btn-outline-primary btn-sm rounded-pill-soft" aria-label="Toggle navigation"><i class="fas fa-bars"></i></button>
         </div>
-        {% if current_user.is_authenticated %}
-        <div class="top-search d-none d-sm-block">
-            <form method="GET" action="{{ url_for('search.search_page') }}" class="position-relative" role="search" aria-label="Global search">
-                <div class="enhanced-search-container w-100">
-                    <div class="search-input-wrapper">
-                        <i class="fas fa-search search-icon"></i>
-                        <input type="text" class="form-control enhanced-search-input" name="q" placeholder="Search" id="quickSearchInputTop" autocomplete="off" aria-label="Search teams and users" aria-expanded="false" role="combobox">
-                        <button type="button" class="search-clear-btn initially-hidden" id="searchClearBtnTop" aria-label="Clear search">
-                            <i class="fas fa-times"></i>
-                        </button>
-                        <button class="search-submit-btn" type="submit" title="Search" aria-label="Submit search">
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </div>
-                    <div id="searchSuggestionsTop" class="enhanced-search-suggestions" role="listbox" aria-label="Search suggestions"></div>
-                </div>
-            </form>
-        </div>
-        {# Mobile search button removed; navbar searchbar is present #}
-        {% endif %}
+        
         <!-- User dropdown and notifications -->
         <div class="ms-auto d-flex align-items-center flex-shrink-0 navbar-actions">
-            {% if current_user.is_authenticated %}
-                <div class="d-flex align-items-center">
-                    <!-- Notifications dropdown -->
-                    <div class="dropdown me-2 topbar-notifications">
-                        <button id="notificationsToggle" class="btn btn-outline-secondary btn-sm rounded-pill-soft d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" aria-controls="notificationsMenu" aria-label="Notifications">
-                            <i class="fas fa-bell"></i>
-                            <span id="notificationsBadge" class="badge bg-danger ms-1 initially-hidden badge-small">0</span>
-                        </button>
-                        <div id="notificationsMenu" class="dropdown-menu dropdown-menu-end shadow notifications-dropdown" aria-labelledby="notificationsToggle">
-                            <div class="dropdown-header d-flex align-items-center justify-content-between px-3 py-2">
-                                <strong>Notifications</strong>
-                                <button id="clearAllNotificationsBtn" class="btn btn-sm btn-link small" title="Clear all">Clear all</button>
-                            </div>
-                            <div id="notificationsList" class="list-group list-group-flush notifications-list">
-                                <div class="list-group-item text-muted small">Loading...</div>
-                            </div>
-                            <div class="dropdown-footer text-center py-2">
-                                <a href="{{ url_for('main.chat_page') }}" class="small">Open chat</a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="dropdown">
-                        <button id="userToggle" class="btn btn-outline-primary btn-sm rounded-pill-soft d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" aria-controls="userMenu">
-                            <i class="fas fa-user-circle me-1"></i>
-                            <span class="d-none d-md-inline">{{ current_user.username }}</span>
-                            <span id="userChatDot" class="user-chat-dot initially-hidden" title="You have unread chat messages"></span>
-                        </button>
-                        <ul id="userMenu" class="dropdown-menu dropdown-menu-end shadow notifications-dropdown navbar-glass" aria-labelledby="userToggle">
-                            <li id="userDropdownUnreadItem" class="initially-hidden"><a id="openUnreadChatLink" class="dropdown-item py-2" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments me-2 text-danger"></i>Open unread chat</a></li>
-                            <li><hr class="dropdown-divider my-1"></li>
-                            <li>
-                                <div class="dropdown-user-header d-flex align-items-center px-3 py-2">
-                                    <div class="me-2">
-                                        <i class="fas fa-user-circle fa-2x"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <div class="user-name fw-semibold">{{ current_user.username or 'User' }}</div>
-                                        <div class="user-roles text-muted small">
-                                            {% for role in current_user.roles %}
-                                                <span class="badge bg-secondary text-uppercase me-1">{{ role.name }}</span>
-                                            {% else %}
-                                                <span class="text-muted">No roles</span>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                </div>
-                            </li>
-                            <li><hr class="dropdown-divider my-1"></li>
-                            <li><a class="dropdown-item py-2" href="{{ url_for('auth.profile') }}"><i class="fas fa-user-edit me-2 text-primary"></i>Profile</a></li>
-                            {% if user_has_role('admin') or user_has_role('analytics') %}
-                            <li><a class="dropdown-item py-2 {% if request.endpoint == 'main.config' %}active{% endif %}" href="{{ url_for('main.config') }}"><i class="fas fa-wrench me-2 text-primary"></i>Game Configuration</a></li>
-                            {% endif %}
-                            {% if user_has_role('superadmin') and not use_postgres %}
-                            <li><a class="dropdown-item py-2" href="{{ url_for('db_admin.database_status') }}"><i class="fas fa-database me-2 text-success"></i>Database Admin</a></li>
-                            {% endif %}
-                            <li><hr class="dropdown-divider my-1"></li>
-                            <li><a class="dropdown-item py-2 text-danger" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
-                        </ul>
-                    </div>
-                </div>
-            {% else %}
-            <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-sm">Login</a>
-            {% endif %}
+            
+            <a href="/auth/login" class="btn btn-primary btn-sm">Login</a>
+            
         </div>
     </div>
 
     <!-- Sidebar -->
     <aside id="appSidebar" class="sidebar glass" role="navigation" aria-label="Main sidebar">
         <div class="sidebar-header d-flex align-items-center justify-content-between">
-            <a class="brand d-flex align-items-center text-decoration-none" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
+            <a class="brand d-flex align-items-center text-decoration-none" href="/">
                 <div class="brand-logo d-flex align-items-center justify-content-center me-2" role="img" aria-label="ObsidianScout logo" tabindex="0">
                     <!-- Use the same image that’s used for the favicon/tab icon -->
-                    <img src="{{ url_for('static', filename='obsidian-192.png') }}" class="brand-svg" aria-hidden="true" alt="">
+                    <img src="/static/obsidian-192.png" class="brand-svg" aria-hidden="true" alt="">
                 </div>
                 <div class="brand-info d-flex flex-column">
                     <span class="brand-text fw-bold"><span class="obsidian-gradient">Obsidian</span>Scout</span>
@@ -1143,126 +1045,11 @@
                 <span class="visually-hidden">Close sidebar</span>
             </button>
         </div>
-    {# Removed quick search from sidebar (now in top bar) #}
+    
         <nav class="sidebar-nav flex-grow-1" aria-label="Main navigation">
-            {% if current_user.is_authenticated %}
-            {% if user_has_role('superadmin') %}
-            <div class="nav-group" id="group-superadmin">
-                <button class="nav-group-title btn btn-toggle" aria-expanded="true" aria-controls="group-superadmin-items" data-group="group-superadmin">
-                    Super Admin <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
-                </button>
-                <div class="nav-group-items" id="group-superadmin-items">
-                    <a class="nav-link {% if request.endpoint == 'auth.manage_users' %}active{% endif %}" href="{{ url_for('auth.manage_users') }}"><i class="fas fa-user-shield"></i><span>Manage Users</span></a>
-                    <a class="nav-link {% if request.endpoint == 'main.manage_updates' %}active{% endif %}" href="{{ url_for('main.manage_updates') }}"><i class="fas fa-newspaper"></i><span>Manage Updates</span></a>
-                    <a class="nav-link {% if request.endpoint == 'auth.add_user' %}active{% endif %}" href="{{ url_for('auth.add_user') }}"><i class="fas fa-user-plus"></i><span>Add User</span></a>
-                    <a class="nav-link {% if request.endpoint == 'auth.manage_site_notifications' %}active{% endif %}" href="{{ url_for('auth.manage_site_notifications') }}"><i class="fas fa-bell"></i><span>Manage Notifications</span></a>
-                </div>
-            </div>
-            {% endif %}
-            {# Administration nav-group removed on request #}
-            <div class="nav-group" id="group-core">
-                <button class="nav-group-title btn btn-toggle" aria-expanded="true" aria-controls="group-core-items" data-group="group-core">
-                    Core <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
-                </button>
-                <div class="nav-group-items" id="group-core-items">
-                {% if not (user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics')) %}
-                {% if 'dashboard' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}"><i class="fas fa-home"></i><span>Dashboard</span></a>{% endif %}
-                {% endif %}
-                {% if 'scouting_dashboard' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.index' %}active{% endif %}" href="{{ url_for('scouting.index') }}"><i class="fas fa-clipboard"></i><span>Scouting Dashboard</span></a>{% endif %}
-                {% if 'start_scouting' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.scouting_form' %}active{% endif %}" href="{{ url_for('scouting.scouting_form') }}"><i class="fas fa-rocket"></i><span>Start Scouting</span></a>{% endif %}
-                {% if 'qualitative_scouting' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.qualitative_scouting' %}active{% endif %}" href="{{ url_for('scouting.qualitative_scouting') }}"><i class="fas fa-star"></i><span>Qualitative Scouting</span></a>{% endif %}
-                {% if 'pit_scouting' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'pit_scouting.index' %}active{% endif %}" href="{{ url_for('pit_scouting.index') }}"><i class="fas fa-wrench"></i><span>Pit Scouting</span></a>{% endif %}
-                {% if 'scouting_alliances_nav' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('scouting_alliances') %}active{% endif %}" href="{{ url_for('scouting_alliances.dashboard') }}"><i class="fas fa-users"></i><span>Scouting Alliances</span></a>{% endif %}
-                {% if 'all_data' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.list_data' %}active{% endif %}" href="{{ url_for('scouting.list_data') }}"><i class="fas fa-list"></i><span>All Data</span></a>{% endif %}
-                {% if 'text_elements' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.view_text_elements' %}active{% endif %}" href="{{ url_for('scouting.view_text_elements') }}"><i class="fas fa-comment-alt"></i><span>Text Elements</span></a>{% endif %}
-                </div>
-            </div>
-            {% if user_has_role('admin') or user_has_role('analytics') %}
-            <div class="nav-group" id="group-analytics">
-                <button class="nav-group-title btn btn-toggle" aria-expanded="true" aria-controls="group-analytics-items" data-group="group-analytics">
-                    Analytics <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
-                </button>
-                <div class="nav-group-items" id="group-analytics-items">
-                {% if 'teams' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('teams') and not (request.endpoint == 'teams.ranks' or request.endpoint == 'teams.my_ranks_shares') %}active{% endif %}" href="{{ url_for('teams.index') }}"><i class="fas fa-users"></i><span>Teams</span></a>{% endif %}
-                {% if 'team_rankings' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}"><i class="fas fa-list-ol"></i><span>Team Rankings</span></a>{% endif %}
-                {% if 'matches' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.index' %}active{% endif %}" href="{{ url_for('matches.index') }}"><i class="fas fa-gamepad"></i><span>Matches</span></a>{% endif %}
-                {% if 'alliance_selection' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" href="{{ url_for('alliances.index') }}"><i class="fas fa-handshake"></i><span>Alliance Selection</span></a>{% endif %}
-                {# Main graphs link: treat as active for top-level graphs pages, but exclude side-by-side, custom pages, scout leaderboard, and my-shares which have their own nav items #}
-                {% if 'graphs' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') and not (request.endpoint.startswith('graphs.side_by_side') or request.endpoint.startswith('graphs.pages') or request.endpoint == 'graphs.my_shares' or request.endpoint == 'graphs.scout_leaderboard') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Graphs</span></a>{% endif %}
-                {# Comparison (side-by-side) link: match the actual endpoint name using underscore #}
-                {% if 'comparison' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.side_by_side') %}active{% endif %}" href="{{ url_for('graphs.side_by_side') }}"><i class="fas fa-columns"></i><span>Comparison</span></a>{% endif %}
-                {% if 'config_averages' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.analytics_config_averages' %}active{% endif %}" href="{{ url_for('main.analytics_config_averages') }}"><i class="fas fa-calculator"></i><span>Config Averages</span></a>{% endif %}
-                {% if 'custom_pages' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.pages') %}active{% endif %}" href="{{ url_for('graphs.pages_index') }}"><i class="fas fa-file-alt"></i><span>Custom Pages</span></a>{% endif %}
-                {% if 'strategy' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy' %}active{% endif %}" href="{{ url_for('matches.strategy') }}"><i class="fas fa-chess"></i><span>Strategy</span></a>{% endif %}
-                {% if 'strategy_all' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_all' %}active{% endif %}" href="{{ url_for('matches.strategy_all') }}"><i class="fas fa-th-large"></i><span>Strategy — All Matches</span></a>{% endif %}
-                {% if 'strategy_draw' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}" href="{{ url_for('matches.strategy_draw') }}"><i class="fas fa-pen-ruler"></i><span>Strategy Draw</span></a>{% endif %}
-                {% if 'strategy_live' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_live' %}active{% endif %}" href="{{ url_for('matches.strategy_live') }}"><i class="fas fa-broadcast-tower"></i><span>Live Strategy</span></a>{% endif %}
-                {% if 'my_graph_shares' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}" href="{{ url_for('graphs.my_shares') }}"><i class="fas fa-share-alt"></i><span>My Graph Shares</span></a>{% endif %}
-                {% if 'my_ranking_shares' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}" href="{{ url_for('teams.my_ranks_shares') }}"><i class="fas fa-trophy"></i><span>My Ranking Shares</span></a>{% endif %}
-                {% if 'trends' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('team_trends') %}active{% endif %}" href="{{ url_for('team_trends.index') }}"><i class="fas fa-chart-line"></i><span>Trends</span></a>{% endif %}
-                {% if 'data' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" href="{{ url_for('data.index') }}"><i class="fas fa-database"></i><span>Data</span></a>{% endif %}
-                {% if 'simulations' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('simulations') %}active{% endif %}" href="{{ url_for('simulations.index') }}"><i class="fas fa-dice"></i><span>Simulations</span></a>{% endif %}
-                </div>
-            </div>
-            {% endif %}
-            <div class="nav-group" id="group-community">
-                <button class="nav-group-title btn btn-toggle" aria-expanded="true" aria-controls="group-community-items" data-group="group-community">
-                    Community <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
-                </button>
-                <div class="nav-group-items" id="group-community-items">
-                {% if 'users' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.users_page' %}active{% endif %}" href="{{ url_for('main.users_page') }}"><i class="fas fa-users"></i><span>Users</span></a>{% endif %}
-                {% if 'chat' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.chat_page' %}active{% endif %}" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments"></i><span>Chat <span id="chatUnreadBadge" class="badge bg-danger ms-1 initially-hidden badge-small">0</span></span></a>{% endif %}
-                {% if 'assistant' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('assistant') %}active{% endif %}" href="{{ url_for('assistant.index') }}"><i class="fas fa-robot"></i><span>Assistant</span></a>{% endif %}
-                {% if 'notifications_nav' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'notifications.index' %}active{% endif %}" href="{{ url_for('notifications.index') }}"><i class="fas fa-bell"></i><span>Notifications</span></a>{% endif %}
-                {% if 'sponsors' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}"><i class="fas fa-handshake"></i><span>Sponsors</span></a>{% endif %}
-                {% if 'contact' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.contact' %}active{% endif %}" href="{{ url_for('main.contact') }}"><i class="fas fa-envelope"></i><span>Contact</span></a>{% endif %}
-                {% if 'scout_leaderboard' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'graphs.scout_leaderboard' %}active{% endif %}" href="{{ url_for('graphs.scout_leaderboard') }}"><i class="fas fa-medal"></i><span>Scout Leaderboard</span></a>{% endif %}
-                </div>
-            </div>
-            <div class="nav-group" id="group-help">
-                <button class="nav-group-title btn btn-toggle" aria-expanded="true" aria-controls="group-help-items" data-group="group-help">
-                    Help <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
-                </button>
-                <div class="nav-group-items" id="group-help-items">
-                {% if 'documentation' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.help_page' %}active{% endif %}" href="{{ url_for('main.help_page') }}"><i class="fas fa-book"></i><span>Documentation</span></a>{% endif %}
-                {% if 'setup_tutorial' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('setup') %}active{% endif %}" href="{{ url_for('setup.index') }}"><i class="fas fa-graduation-cap"></i><span>Setup & Tutorial</span></a>{% endif %}
-                </div>
-            </div>
-            {% endif %}
+            
         </nav>
-        {% if current_user.is_authenticated %}
-        <div class="sidebar-footer mt-auto">
-            <div class="user-mini d-flex align-items-center mb-2">
-                <i class="fas fa-user-circle me-2 fs-4"></i>
-                <div class="flex-grow-1">
-                    <div class="fw-semibold small">{{ current_user.username }}</div>
-                    <div class="text-muted tiny">
-                        {% for role in current_user.roles %}
-                            <span class="badge bg-secondary text-uppercase me-1 mb-1">{{ role.name }}</span>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-                <div class="d-flex flex-column gap-2">
-                {% if user_has_role('admin') %}
-                <a class="btn btn-outline-primary btn-sm w-100 text-start {% if request.endpoint == 'auth.admin_settings' %}active{% endif %}" href="{{ url_for('auth.admin_settings') }}"><i class="fas fa-cog me-2"></i>Admin Settings</a>
-                {% endif %}
-                {% if user_has_role('admin') or user_has_role('analytics') %}
-                <a class="btn btn-outline-primary btn-sm w-100 text-start {% if request.endpoint == 'main.config' %}active{% endif %}" href="{{ url_for('main.config') }}"><i class="fas fa-wrench me-2"></i>Game Config</a>
-                {% endif %}
-                <!-- Per-user settings (stored locally in the browser) -->
-                <a class="btn btn-outline-primary btn-sm w-100 text-start {% if request.endpoint == 'main.settings' %}active{% endif %}" href="{{ url_for('main.settings') }}"><i class="fas fa-cog me-2"></i>Settings</a>
-                <!-- Theme Settings removed: theme management is handled client-side -->
-                <button id="darkModeButton" class="btn btn-outline-secondary btn-sm rounded-pill-soft w-100 text-start" type="button">
-                    <i class="fas fa-moon me-2" id="darkModeIcon"></i><span id="darkModeLabel">Dark Mode</span>
-                </button>
-                {% if user_has_role('superadmin') and not use_postgres %}
-                <a class="btn btn-outline-secondary btn-sm w-100 text-start" href="{{ url_for('db_admin.database_status') }}"><i class="fas fa-database me-2"></i>DB Admin</a>
-                {% endif %}
-                <a class="btn btn-outline-danger btn-sm w-100 text-start" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a>
-            </div>
-        </div>
-        {% endif %}
+        
     </aside>
 
     <script>
@@ -1663,47 +1450,26 @@
         });
     })();
     </script>
-    {# Embedded site-wide notification banner placed directly under the navbar #}
-    {% include '_notification_banner.html' %}
+    
+    
 
-    {# Configuration load issues banner (shown to admins when a config file failed to parse) #}
-    {% include '_config_load_banner.html' %}
 
-    {# Teams configuration banner (shown to admins when teams config is missing or invalid) #}
-    {% include '_teams_config_banner.html' %}
 
-    {# API key configuration banner (shown to admins when API key is missing/placeholder) #}
-    {% include '_api_key_banner.html' %}
+    
+    
+
+
+    
+    
+
+
+    
+    
 
     <div class="toast-container position-fixed top-0 end-0 p-3">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    {# Normalize category values so templates can rely on Bootstrap color classes #}
-                    {% set normalized = category %}
-                    {# Map common non-Bootstrap category names to Bootstrap classes #}
-                    {% if not category or category == 'message' or category == 'info' or category == 'regular' or category == 'normal' %}
-                        {% set normalized = 'success' %}
-                    {% elif category == 'error' or category == 'err' %}
-                        {% set normalized = 'danger' %}
-                    {% elif category == 'warn' or category == 'warning' %}
-                        {% set normalized = 'warning' %}
-                    {% endif %}
-
-                    <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
-                        <div class="toast-header bg-{{ normalized }}{% if normalized in ['danger', 'success', 'primary'] %} text-white{% endif %}">
-                            <i class="fas {% if normalized == 'success' %}fa-check-circle{% elif normalized == 'danger' %}fa-exclamation-triangle{% elif normalized == 'warning' %}fa-exclamation-circle{% else %}fa-info-circle{% endif %} me-2"></i>
-                            <strong class="me-auto">Notification</strong>
-                            <small>Just now</small>
-                            <button type="button" class="btn-close {% if normalized in ['danger', 'success', 'primary'] %}btn-close-white{% endif %}" data-bs-dismiss="toast" aria-label="Close"></button>
-                        </div>
-                        <div class="toast-body">
-                            {{ message }}
-                        </div>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+        
+            
+        
     </div>
 
     <script>
@@ -1721,38 +1487,124 @@
     });
     </script>
 
-    {% block breadcrumb %}{% endblock %}
+    
 
     <main class="flex-shrink-0 py-4">
         <div class="container">
-            {% block content %}{% endblock %}
+            
+<div class="row">
+    <div class="col-md-12">
+    <!-- Team and Match Selection -->
+    <div class="card mb-4 navbar-glass">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Select Team and Match</h5>
+            </div>
+            <div class="card-body">
+                <form id="team-match-form" aria-label="Team and Match selection">
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <label for="match-selector" class="form-label">Select Match</label>
+                            <!-- Search input for matches -->
+                            <div class="input-group mb-1">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="search" id="match-search" class="form-control form-control-sm" placeholder="Search matches by type or number" aria-label="Search matches">
+                            </div>
+                            <select class="form-select" id="match-selector" name="match_id" required aria-required="true" aria-label="Match selector">
+                                <option value="">-- Select Match --</option>
+                                
+                            </select>
+                            <!-- Match navigation (+ / -) -->
+                            <div class="mt-2 d-flex gap-2" aria-hidden="false">
+                                <button type="button" id="match-decrement" class="btn btn-outline-secondary btn-sm" title="Previous match" aria-label="Previous match">&minus;</button>
+                                <button type="button" id="match-increment" class="btn btn-outline-secondary btn-sm" title="Next match" aria-label="Next match">+</button>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <label for="team-selector" class="form-label">Select Team</label>
+                            <!-- Search input for teams -->
+                            <div class="input-group mb-1">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="search" id="team-search" class="form-control form-control-sm" placeholder="Search teams by number or name" aria-label="Search teams">
+                            </div>
+                            <select class="form-select" id="team-selector" name="team_id" required aria-label="Team selector">
+                                <option value="">-- Select Team --</option>
+                                
+                            </select>
+                        </div>
+                        <!-- Quick prediction UI removed -->
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Form Content Container -->
+        <div id="form-content">
+            
+            <!-- Empty Form State -->
+            <div class="alert alert-info text-center py-4">
+                <i class="fas fa-info-circle fa-3x mb-3"></i>
+                <h4>Please select a team and match above</h4>
+                <p class="mb-0">The form will automatically update when both are selected.</p>
+            </div>
+            
+        </div>
+    </div>
+</div>
+
+<!-- QR Code Container (initially hidden) -->
+<div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-qrcode me-2"></i> QR Code for Match Data
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body qr-modal-body">
+                <div class="qr-container">
+                    <div id="qrcode"></div>
+                    <div id="qrDownloadContainer" class="text-center d-none">
+                        <button type="button" class="btn btn-primary">
+                            <i class="fas fa-download me-2"></i> Download QR Code
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Toast Container -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <!-- Toasts will be inserted here dynamically -->
+</div>
+
         </div>
     </main>
 
     <footer class="footer mt-auto py-3">
         <div class="container">
             <div class="row align-items-center g-2">
-                {# If we're on the login page, center a single-brand label and hide the right column. #}
-                <div class="{% if request.endpoint == 'auth.login' %}col-12 text-center{% else %}col-md-6 text-center text-md-start{% endif %}">
-                    <div class="d-flex align-items-center justify-content-center {% if request.endpoint != 'auth.login' %}justify-content-md-start{% endif %}">
-                        <img src="{{ url_for('static', filename='obsidian-192.png') }}" class="brand-svg me-2 text-primary" aria-hidden="true" alt="" style="width:24px;height:24px;">
+                
+                <div class="col-md-6 text-center text-md-start">
+                    <div class="d-flex align-items-center justify-content-center justify-content-md-start">
+                        <img src="/static/obsidian-192.png" class="brand-svg me-2 text-primary" aria-hidden="true" alt="" style="width:24px;height:24px;">
                         <span class="fw-bold">ObsidianScout</span>
-                        {# On normal pages show a subtle secondary label; hide it on the login page to avoid duplication. #}
-                        {% if request.endpoint != 'auth.login' %}
+                        
+                        
                         <span class="text-muted mx-2">•</span>
                         <span class="small text-muted">ObsidianScout</span>
-                        {% endif %}
+                        
                     </div>
                 </div>
 
-                {% if request.endpoint != 'auth.login' %}
+                
                 <div class="col-md-6 text-center text-md-end">
                     <div class="small text-muted">
-                        {% if game_config %}
-                        <span>{{ game_config.game_name }} {{ game_config.season }}</span>
-                        {% else %}
+                        
                         <span>No active configuration</span>
-                        {% endif %}
+                        
                     </div>
                 <!--<div class="mt-2">
                         <a href="https://www.paypal.com" target="_blank" rel="noopener" class="btn btn-sm btn-warning d-inline-flex align-items-center">
@@ -1760,7 +1612,7 @@
                         </a>
                     </div> -->
                 </div>
-                {% endif %}
+                
             </div>
         </div>
     </footer>
@@ -1774,7 +1626,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/vendor/jquery-3.7.1.min.js') }}"></script>
+    <script src="/static/js/vendor/jquery-3.7.1.min.js"></script>
     <script>
         // Enhanced jQuery loading check with timeout
         (function() {
@@ -1796,7 +1648,7 @@
                     console.warn('jQuery failed to load from CDNs, loading local fallback');
                     const script = document.createElement('script');
                     // Fallback now points to local vendor file for offline use
-                    script.src = '{{ url_for('static', filename='js/vendor/jquery-3.7.1.min.js') }}';
+                    script.src = '/static/js/vendor/jquery-3.7.1.min.js';
                     script.integrity = 'sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs';
                     script.crossOrigin = 'anonymous';
                     document.head.appendChild(script);
@@ -1818,17 +1670,17 @@
         })();
     </script>
     
-    <script src="{{ url_for('static', filename='js/vendor/bootstrap.bundle.min.js') }}"></script>
+    <script src="/static/js/vendor/bootstrap.bundle.min.js"></script>
     
-    <script src="{{ url_for('static', filename='js/vendor/select2.min.js') }}"></script>
+    <script src="/static/js/vendor/select2.min.js"></script>
     
-    <script src="{{ url_for('static', filename='js/select2-mobile-fix.js') }}"></script>
+    <script src="/static/js/select2-mobile-fix.js"></script>
     
-    <script src="{{ url_for('static', filename='js/vendor/plotly-latest.min.js') }}"></script>
+    <script src="/static/js/vendor/plotly-latest.min.js"></script>
     
-    <script src="{{ url_for('static', filename='js/vendor/socket.io.js') }}"></script>
+    <script src="/static/js/vendor/socket.io.js"></script>
     
-    <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
+    <script src="/static/js/qrcode.min.js"></script>
     
     <!-- Gentle Mobile Scroll Protection -->
     <script>
@@ -1896,8 +1748,8 @@
     })();
     </script>
     
-    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/topbar-notifications.js') }}"></script>
+    <script src="/static/js/scripts.js"></script>
+    <script src="/static/js/topbar-notifications.js"></script>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -2061,7 +1913,7 @@
     </script>
     
     <!-- Dark mode handlers -->
-    <script src="{{ url_for('static', filename='js/dark-mode-handlers.js') }}"></script>
+    <script src="/static/js/dark-mode-handlers.js"></script>
     
     <!-- Team-number display preference helper (client-side, per-user) -->
     <script>
@@ -2410,8 +2262,2178 @@
         </script>
 
     
-    {% block scripts %}{% endblock %}
-    {% block extra_js %}{% endblock %}
+    
+    
+<!-- Cache bust: 2026-02-01-v4 -->
+<!-- Inject game config into page for offline use -->
+<script>;
+(function(){
+    // FORCE CACHE CLEAR - Remove old broken cached templates
+    try {
+        const oldVersion = localStorage.getItem('form_template_version');
+        if (oldVersion !== 'v4-2026-02-01') {
+            console.log('[Cache Clear] Clearing old cached form template');
+            localStorage.removeItem('scouting_form_html_template');
+            localStorage.setItem('form_template_version', 'v4-2026-02-01');
+        }
+    } catch (e) { console.warn('Could not clear cache:', e); }
+})();
+
+window.gameConfig = {};
+</script>
+
+<!-- Offline scouting form manager -->
+<script src="/static/js/scouting_form_offline.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load form offline using cached data
+        function loadFormOffline(offlineData, savedScrollY, savedActiveId) {
+            console.log('[Offline Mode] Loading form from cached data...');
+            
+            const formContent = document.getElementById('form-content');
+            const { team, match, html, cached, needsReset } = offlineData;
+            
+            // Update subheading (guarded)
+            try {
+                const _sub = document.getElementById('form-subheading');
+                if (_sub) {
+                    _sub.textContent = `${team.team_number} - ${team.team_name} | ${match.match_type} ${match.match_number}`;
+                }
+            } catch (e) { /* ignore if DOM not ready */ }
+            
+            let formHTML;
+            
+            // If we have cached server-rendered HTML, use it directly
+            if (cached && html) {
+                console.log('[Offline Mode] Using cached universal form template');
+                
+                // Add offline indicator banner
+                const offlineBanner = `
+                    <div class="alert alert-info alert-dismissible fade show mb-3">
+                        <i class="fas fa-wifi-slash me-2"></i>
+                        <strong>Offline Mode</strong> - Form loaded from cache. 
+                        Data will be saved locally and synced when connection is restored.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                `;
+                
+                formHTML = offlineBanner + html;
+            } else {
+                // Fallback: generate form from game config
+                console.log('[Offline Mode] Generating form from game config');
+                formHTML = generateOfflineFormHTML(team, match, offlineData.gameConfig);
+            }
+            
+            // Preserve current auto timer toggle state (if user toggled before load) so it isn't lost when we overwrite the form
+            try {
+                const existingToggle = document.getElementById('auto_period_timer_enabled');
+                if (existingToggle) {
+                    // Use the same key as the main scripts to keep behavior consistent
+                    localStorage.setItem('auto_period_timer_enabled', existingToggle.checked ? 'true' : 'false');
+                    console.log('[Offline Mode] Preserved existing auto timer toggle state before injecting form HTML');
+                }
+            } catch (e) {
+                // ignore
+            }
+
+            // Preserve spinning counter toggle state as well (if present)
+            try {
+                const existingSpinToggle = document.getElementById('spinningCountersToggle');
+                if (existingSpinToggle) {
+                    localStorage.setItem('spinning_counters_enabled', existingSpinToggle.checked ? 'true' : 'false');
+                    console.log('[Offline Mode] Preserved existing spinning counter toggle state before injecting form HTML');
+                }
+            } catch (e) {
+                // ignore
+            }
+
+            formContent.innerHTML = formHTML;
+            
+            // Debug: Check if rating containers exist in DOM
+            const ratingContainersInDOM = document.querySelectorAll('.rating-container');
+            console.log('[After HTML Injection] Rating containers in DOM:', ratingContainersInDOM.length);
+            if (ratingContainersInDOM.length > 0) {
+                ratingContainersInDOM.forEach((container, idx) => {
+                    console.log(`[Rating Container ${idx}]`, {
+                        elementId: container.dataset.elementId,
+                        starCount: container.querySelectorAll('.rating-star').length,
+                        html: container.innerHTML.substring(0, 200)
+                    });
+                });
+            }
+            
+            // Determine alliance color from match schedule
+            const alliance = determineAlliance(team.team_number, match);
+            console.log('[Offline Mode] Determined alliance:', alliance);
+            
+            // Update alliance indicator
+            updateAllianceIndicator(alliance, team, match);
+            
+            // Update hidden fields with correct team/match data
+            const scoutingForm = document.getElementById('scouting-form');
+            if (scoutingForm) {
+                scoutingForm.dataset.offline = 'true';
+                
+                // Update or create hidden fields
+                updateOrCreateHiddenField(scoutingForm, 'team_id', team.id);
+                updateOrCreateHiddenField(scoutingForm, 'match_id', match.id);
+                updateOrCreateHiddenField(scoutingForm, 'team_number', team.team_number);
+                updateOrCreateHiddenField(scoutingForm, 'match_number', match.match_number);
+                updateOrCreateHiddenField(scoutingForm, 'match_type', match.match_type);
+                updateOrCreateHiddenField(scoutingForm, 'alliance', alliance);
+            }
+            
+            // Initialize form components immediately after DOM update
+            setTimeout(() => {
+                initializeFormComponents();
+
+                // once components are ready attach autosave handlers and rehydrate draft
+                try { setupAutosave(); } catch (e) { console.warn('[Offline Mode] setupAutosave failed', e); }
+                try { loadAutosaveData(); } catch (e) { console.warn('[Offline Mode] loadAutosaveData failed', e); }
+
+                // reset values to defaults when using cached template
+                if (needsReset) {
+                    console.log('[Offline Mode] Resetting form values to defaults');
+                    resetFormToDefaults();
+                }
+
+                // wire up autosave so that offline users also benefit from live caching
+                try { setupAutosave(); } catch (e) { /* ignore */ }
+                try { loadAutosaveData(); } catch (e) { /* ignore */ }
+
+                // Ensure the auto-period-timer toggle is restored and persists across loads
+                try {
+                    setupAutoTimerTogglePersistence();
+                } catch (e) {
+                    console.warn('Could not setup auto timer toggle persistence', e);
+                }
+
+                // Ensure spinning counters toggle is present and persists across loads
+                try {
+                    setupSpinningCountersTogglePersistence();
+                } catch (e) {
+                    console.warn('Could not setup spinning counters toggle persistence', e);
+                }
+
+                // Enable save button in offline mode
+                const saveBtn = document.getElementById('save-button');
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                }
+
+                // Restore scroll and focus
+                try {
+                    if (typeof window.safeRestoreScroll === 'function') {
+                        window.safeRestoreScroll(savedScrollY, { behavior: 'auto', timeout: 300 });
+                    }
+                } catch (e) {
+                    console.warn('Could not restore scroll position', e);
+                }
+
+                if (savedActiveId) {
+                    try {
+                        const prev = document.getElementById(savedActiveId);
+                        if (prev && typeof prev.focus === 'function') {
+                            prev.focus({ preventScroll: true });
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+            }, 50);
+        }
+        
+        // Helper function to update or create hidden field
+        function updateOrCreateHiddenField(form, name, value) {
+            let field = form.querySelector(`input[name="${name}"]`);
+            if (!field) {
+                field = document.createElement('input');
+                field.type = 'hidden';
+                field.name = name;
+                form.appendChild(field);
+            }
+            field.value = value;
+        }
+        
+        // Determine alliance color from match schedule data
+        function determineAlliance(teamNumber, match) {
+            const teamNumStr = String(teamNumber);
+            
+            // Check red alliance
+            if (match.red_alliance) {
+                const redTeams = match.red_alliance.split(',').map(t => t.trim());
+                if (redTeams.includes(teamNumStr)) {
+                    return 'red';
+                }
+            }
+            
+            // Check blue alliance
+            if (match.blue_alliance) {
+                const blueTeams = match.blue_alliance.split(',').map(t => t.trim());
+                if (blueTeams.includes(teamNumStr)) {
+                    return 'blue';
+                }
+            }
+            
+            return 'unknown';
+        }
+        
+        // Update the alliance indicator UI
+        function updateAllianceIndicator(alliance, team, match) {
+            const indicator = document.querySelector('.alliance-indicator');
+            if (!indicator) return;
+            
+            // Remove existing alliance classes
+            indicator.classList.remove('bg-danger', 'bg-primary', 'bg-warning', 'alliance-unknown');
+            
+            // Set alliance-specific styling
+            if (alliance === 'red') {
+                indicator.classList.add('bg-danger');
+                indicator.querySelector('.alliance-icon i')?.classList.remove('fa-tint');
+                indicator.querySelector('.alliance-icon i')?.classList.add('fa-fire');
+                const _h_red = indicator.querySelector('.alliance-details h4');
+                if (_h_red) _h_red.textContent = 'Red Alliance';
+                
+                // Update text colors for red alliance
+                const h4_red = indicator.querySelector('.alliance-details h4');
+                const teamDiv_red = indicator.querySelector('.alliance-details > div:last-child');
+                if (h4_red) h4_red.classList.add('text-white');
+                if (teamDiv_red) {
+                    teamDiv_red.classList.remove('text-muted', 'text-dark');
+                    teamDiv_red.classList.add('text-white-50');
+                }
+                indicator.querySelector('.alliance-icon i')?.classList.add('text-white');
+            } else if (alliance === 'blue') {
+                indicator.classList.add('bg-primary');
+                indicator.querySelector('.alliance-icon i')?.classList.remove('fa-fire');
+                indicator.querySelector('.alliance-icon i')?.classList.add('fa-tint');
+                const _h_blue = indicator.querySelector('.alliance-details h4');
+                if (_h_blue) _h_blue.textContent = 'Blue Alliance';
+                
+                // Update text colors for blue alliance
+                const h4_blue = indicator.querySelector('.alliance-details h4');
+                const teamDiv_blue = indicator.querySelector('.alliance-details > div:last-child');
+                if (h4_blue) h4_blue.classList.add('text-white');
+                if (teamDiv_blue) {
+                    teamDiv_blue.classList.remove('text-muted', 'text-dark');
+                    teamDiv_blue.classList.add('text-white-50');
+                }
+                indicator.querySelector('.alliance-icon i')?.classList.add('text-white');
+            } else {
+                indicator.classList.add('bg-warning', 'alliance-unknown');
+                indicator.querySelector('.alliance-icon i')?.classList.remove('fa-fire');
+                indicator.querySelector('.alliance-icon i')?.classList.add('fa-tint');
+                const _h_unknown = indicator.querySelector('.alliance-details h4');
+                if (_h_unknown) _h_unknown.textContent = 'Unknown Alliance';
+                
+                // Update text colors for unknown alliance
+                const h4_unknown = indicator.querySelector('.alliance-details h4');
+                const teamDiv_unknown = indicator.querySelector('.alliance-details > div:last-child');
+                if (h4_unknown) h4_unknown.classList.add('text-dark');
+                if (teamDiv_unknown) {
+                    teamDiv_unknown.classList.remove('text-white-50');
+                    teamDiv_unknown.classList.add('text-muted');
+                }
+                indicator.querySelector('.alliance-icon i')?.classList.add('text-dark');
+            }
+            
+            // Update team info
+                const teamInfoDiv = indicator.querySelector('.alliance-details > div:last-child');
+                if (teamInfoDiv) {
+                    teamInfoDiv.innerHTML = `Team <span class="team-number" data-team-num="${team.team_number}">${team.team_number}</span> - ${team.team_name}`;
+                }
+            
+            console.log('[Offline Mode] Alliance indicator updated to:', alliance);
+        }
+
+        // Ensure auto-period-timer toggle state persists across form injections
+        function setupAutoTimerTogglePersistence() {
+            const toggle = document.getElementById('auto_period_timer_enabled');
+            if (!toggle) return;
+
+            // Restore state from localStorage if present (use same key as scripts.js)
+            const saved = localStorage.getItem('auto_period_timer_enabled');
+            if (saved !== null) {
+                toggle.checked = (saved === 'true');
+            }
+
+            // Attach listener to persist user changes if scripts.js didn't already; avoid duplicates
+            if (!toggle._scoutingAutoTimerListenerAttached) {
+                toggle.addEventListener('change', function() {
+                    try {
+                        localStorage.setItem('auto_period_timer_enabled', toggle.checked ? 'true' : 'false');
+                        console.log('[Offline Mode] Auto timer toggle state saved:', toggle.checked);
+                    } catch (e) {
+                        console.warn('Could not persist auto timer toggle state', e);
+                    }
+                });
+                toggle._scoutingAutoTimerListenerAttached = true;
+            }
+        }
+
+        // Ensure spinning counters toggle state persists across form injections
+        function setupSpinningCountersTogglePersistence() {
+            const toggle = document.getElementById('spinningCountersToggle');
+            if (!toggle) return;
+
+            // Restore state from localStorage if present (use same key as settings.js); default to true to match Settings
+            const saved = localStorage.getItem('spinning_counters_enabled');
+            if (saved === null) {
+                // Default to enabled (same UX as settings page default)
+                toggle.checked = true;
+                try { initializeSpinningCounters(); } catch (e) { console.warn('Could not initialize spinning counters on load', e); }
+            } else {
+                toggle.checked = (saved === 'true' || saved === '1');
+                // Apply saved preference immediately so UI reflects the setting right away
+                if (toggle.checked) {
+                    try { initializeSpinningCounters(); } catch (e) { console.warn('Could not initialize spinning counters on load', e); }
+                } else {
+                    try { teardownSpinningCounters(); } catch (e) { console.warn('Could not teardown spinning counters on load', e); }
+                }
+            }
+
+            // Attach listener to persist user changes and trigger init/teardown
+            if (!toggle._scoutingSpinListenerAttached) {
+                toggle.addEventListener('change', function() {
+                    try {
+                        localStorage.setItem('spinning_counters_enabled', toggle.checked ? 'true' : 'false');
+                        console.log('[Offline Mode] Spinning counters preference saved:', toggle.checked);
+                        if (toggle.checked) {
+                            try { initializeSpinningCounters(); } catch (e) { console.warn('Could not initialize spinning counters', e); }
+                        } else {
+                            try { teardownSpinningCounters(); } catch (e) { console.warn('Could not teardown spinning counters', e); }
+                        }
+                    } catch (e) {
+                        console.warn('Could not persist spinning counters preference', e);
+                    }
+                });
+                toggle._scoutingSpinListenerAttached = true;
+            }
+        }
+        
+        // Reset form to default values
+        function resetFormToDefaults() {
+            const form = document.getElementById('scouting-form');
+            if (!form) return;
+            
+            // Read saved auto timer state from localStorage (use same key as scripts.js)
+            const savedAutoTimerState = (localStorage.getItem('auto_period_timer_enabled') === 'true');
+            
+            // Reset all inputs to their default values
+            const inputs = form.querySelectorAll('input:not([type="hidden"]), select, textarea');
+            inputs.forEach(input => {
+                // Skip the auto period timer toggle
+                if (input.id === 'auto_period_timer_enabled') {
+                    return;
+                }
+                
+                if (input.type === 'checkbox' || input.type === 'radio') {
+                    input.checked = false;
+                } else if (input.type === 'number' || input.classList.contains('counter-input')) {
+                    input.value = 0;
+                } else if (input.tagName === 'SELECT') {
+                    input.selectedIndex = 0;
+                } else {
+                    input.value = '';
+                }
+            });
+            
+            // Restore the auto period timer toggle state
+            const autoTimerToggle = document.getElementById('auto_period_timer_enabled');
+            if (autoTimerToggle) {
+                autoTimerToggle.checked = savedAutoTimerState;
+            }
+
+            // Restore spinning counters toggle state
+            try {
+                const savedSpinState = (localStorage.getItem('spinning_counters_enabled') === 'true');
+                const spinToggle = document.getElementById('spinningCountersToggle');
+                if (spinToggle) {
+                    spinToggle.checked = savedSpinState;
+                    // Initialize or teardown based on saved state
+                    if (savedSpinState) {
+                        try { initializeSpinningCounters(); } catch(e) { console.warn('Error initializing spinning counters on reset', e); }
+                    } else {
+                        try { teardownSpinningCounters(); } catch(e) { console.warn('Error tearing down spinning counters on reset', e); }
+                    }
+                }
+            } catch (e) {}
+
+
+            
+            // Update points displays to 0
+            const pointsDisplays = form.querySelectorAll('.points-display .points-value');
+            pointsDisplays.forEach(display => {
+                display.textContent = '0';
+            });
+            
+            // Clear scout name but keep it enabled
+            const scoutNameInput = form.querySelector('#scout_name, input[name="scout_name"]');
+            if (scoutNameInput) {
+                scoutNameInput.value = '';
+            }
+            
+            console.log('[Offline Mode] Form reset to default values (auto timer toggle preserved)');
+        }
+        
+        // Generate complete offline form HTML matching online structure
+        function generateOfflineFormHTML(team, match, gameConfig) {
+            let html = '';
+            html += '<!-- Offline Mode Indicator -->';
+            html += '<div class="alert alert-info alert-dismissible fade show mb-3">';
+            html += '<i class="fas fa-wifi-slash me-2"></i>';
+            html += '<strong>Offline Mode</strong> - Form loaded from cached data. ';
+            html += 'Data will be saved locally and synced when connection is restored.';
+            html += '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+            html += '</div>';
+            html += '<!-- Scouting Form -->';
+            html += '<form id="scouting-form" class="scouting-form" data-offline="true">';
+            html += `<input type="hidden" name="team_id" value="${team.id}">`;
+            html += `<input type="hidden" name="match_id" value="${match.id}">`;
+            html += `<input type="hidden" name="team_number" value="${team.team_number}">`;
+            html += `<input type="hidden" name="match_number" value="${match.match_number}">`;
+            html += `<input type="hidden" name="match_type" value="${match.match_type}">`;
+            html += generateFormFieldsFromConfig(gameConfig);
+            html += '<div class="form-check form-switch mt-2">';
+            html += '<input class="form-check-input" type="checkbox" id="spinningCountersToggle" role="switch" aria-label="Enable spinning counters (per-device)">';
+            html += '<label class="form-check-label" for="spinningCountersToggle">';
+            html += 'Enable spinning counters (per-device) <i class="fas fa-question-circle ms-2"';
+            html += ' title="Enable the spinning counter UI on this device. Each 0.125 rotation (45°) increments the count by one. This preference is stored locally and does not require admin approval."></i>';
+            html += '</label>';
+            html += '</div>';
+            html += '<!-- Action Buttons -->';
+            html += '<div class="form-section mb-4">';
+            html += '<div class="d-grid gap-2">';
+            html += '<button type="button" id="save-button" class="btn btn-primary btn-lg">';
+            html += '<i class="fas fa-save me-2"></i>Save Offline';
+            html += '</button>';
+            html += '<button type="button" id="generateQR" class="btn btn-success btn-lg">';
+            html += '<i class="fas fa-qrcode me-2"></i>Generate QR Code';
+            html += '</button>';
+            html += '<button type="button" id="export-json-button" class="btn btn-info btn-lg">';
+            html += '<i class="fas fa-file-export me-2"></i>Export JSON';
+            html += '</button>';
+            html += '<button type="button" id="reset-form" class="btn btn-outline-secondary">';
+            html += '<i class="fas fa-redo me-2"></i>Reset Form';
+            html += '</button>';
+            html += '</div>';
+            html += '<div class="mt-2 text-center small text-muted">';
+            html += '<i class="fas fa-info-circle me-1"></i>';
+            html += 'Offline mode: Data will be saved locally';
+            html += '</div>';
+            html += '</div>';
+            html += '</form>';
+            return html;
+        }
+        
+        // Generate form fields from game config - matches online structure
+        function generateFormFieldsFromConfig(config) {
+            if (!config) return '<div class="alert alert-warning">No game configuration available</div>';
+            
+            let html = '';
+            
+            // Scout info section
+            html += `
+                <div class="card mb-3 navbar-glass">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Scout Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="scout_name" class="form-label">Scout Name</label>
+                            <input type="text" class="form-control" id="scout_name" name="scout_name" 
+                                   placeholder="Enter your name" required>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Generate match period tabs
+            const periods = [
+                { key: 'auto_period', icon: 'robot', color: 'primary' },
+                { key: 'teleop_period', icon: 'gamepad', color: 'success' },
+                { key: 'endgame_period', icon: 'flag-checkered', color: 'warning' }
+            ];
+            
+            const availablePeriods = periods.filter(p => config[p.key] && config[p.key].scoring_elements && config[p.key].scoring_elements.length > 0);
+            
+            if (availablePeriods.length > 0) {
+                // Tab navigation
+                html += `
+                    <ul class="nav nav-tabs mb-3" role="tablist">
+                `;
+                
+                availablePeriods.forEach((period, index) => {
+                    const periodData = config[period.key];
+                    const periodName = periodData.name || period.key.replace('_period', '').replace('_', ' ');
+                    const isActive = index === 0 ? 'active' : '';
+                    
+                    html += `
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link ${isActive}" id="${period.key}-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#${period.key}" type="button" role="tab">
+                                <i class="fas fa-${period.icon} me-2"></i>${periodName}
+                            </button>
+                        </li>
+                    `;
+                });
+                
+                html += `</ul>`;
+                
+                // Tab content
+                html += `<div class="tab-content">`;
+                
+                availablePeriods.forEach((period, index) => {
+                    const periodData = config[period.key];
+                    const isActive = index === 0 ? 'show active' : '';
+                    
+                    html += `
+                        <div class="tab-pane fade ${isActive}" id="${period.key}" role="tabpanel">
+                            <div class="card mb-3 navbar-glass">
+                                <div class="card-body">
+                    `;
+                    
+                    // Generate scoring elements for this period
+                    if (periodData.scoring_elements && periodData.scoring_elements.length > 0) {
+                        periodData.scoring_elements.forEach(element => {
+                            html += generateFormElement(element, period.key);
+                        });
+                    }
+                    
+                    html += `
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `</div>`;
+            }
+            
+            // Post-match section
+            if (config.post_match) {
+                html += `
+                    <div class="card mb-3 navbar-glass">
+                        <div class="card-header bg-secondary text-white">
+                            <h5 class="mb-0"><i class="fas fa-clipboard-check me-2"></i>Post-Match</h5>
+                        </div>
+                        <div class="card-body">
+                `;
+                
+                // Rating elements
+                if (config.post_match.rating_elements && config.post_match.rating_elements.length > 0) {
+                    config.post_match.rating_elements.forEach(element => {
+                        html += generateFormElement(element, 'post_match');
+                    });
+                }
+                
+                // Text elements
+                if (config.post_match.text_elements && config.post_match.text_elements.length > 0) {
+                    config.post_match.text_elements.forEach(element => {
+                        html += generateFormElement(element, 'post_match');
+                    });
+                }
+                
+                // Boolean elements
+                if (config.post_match.boolean_elements && config.post_match.boolean_elements.length > 0) {
+                    config.post_match.boolean_elements.forEach(element => {
+                        html += generateFormElement(element, 'post_match');
+                    });
+                }
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return html;
+        }
+        
+        // Generate individual form element matching online styling
+        function generateFormElement(element, periodKey) {
+            console.log('[Generate Element]', { id: element.id, type: element.type, periodKey: periodKey });
+            
+            const id = element.id || element.name || 'element_' + Math.random();
+            const label = element.name || element.label || id;
+            const type = element.type || 'text';
+            const defaultValue = element.default !== undefined ? element.default : '';
+            const description = element.description || '';
+            
+            let html = `<div class="mb-4 form-element" data-element-type="${type}" data-period="${periodKey}">`;
+            
+            switch (type) {
+                case 'counter': {
+                    const pointsValue = element.points_value || 0;
+                    html += `
+                        <label class="form-label fw-bold">${label}</label>
+                        ${description ? `<div class="form-text mb-2">${description}</div>` : ''}
+                        <div class="input-group counter-control">
+                            <button type="button" class="btn btn-outline-danger counter-btn" data-action="decrement" data-target="${id}">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <input type="number" class="form-control counter-input text-center fs-4 fw-bold" 
+                                   id="${id}" name="${id}" value="${defaultValue}" min="0" 
+                                   data-points="${pointsValue}">
+                            <button type="button" class="btn btn-outline-success counter-btn" data-action="increment" data-target="${id}">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    `;
+                    if (pointsValue > 0) {
+                        html += `
+                            <div class="points-display mt-2 text-end small text-muted" data-metric-id="${id}">
+                                <span class="points-value">0</span> points (${pointsValue} each)
+                            </div>
+                        `;
+                    }
+                    break;
+                }
+                    
+                case 'boolean':
+                case 'checkbox':
+                    html += `
+                        <div class="form-check form-switch">
+                            <input type="checkbox" class="form-check-input" id="${id}" name="${id}" 
+                                   role="switch" ${defaultValue ? 'checked' : ''}>
+                            <label class="form-check-label fw-bold" for="${id}">${label}</label>
+                            ${description ? `<div class="form-text">${description}</div>` : ''}
+                        </div>
+                    `;
+                    break;
+                    
+                case 'select':
+                case 'dropdown':
+                    html += `
+                        <label for="${id}" class="form-label fw-bold">${label}</label>
+                        ${description ? `<div class="form-text mb-2">${description}</div>` : ''}
+                        <select class="form-select" id="${id}" name="${id}">
+                    `;
+                    if (element.options && element.options.length > 0) {
+                        element.options.forEach(option => {
+                            const value = typeof option === 'object' ? (option.value || option) : option;
+                            const optionLabel = typeof option === 'object' ? (option.label || value) : option;
+                            html += `<option value="${value}" ${value == defaultValue ? 'selected' : ''}>${optionLabel}</option>`;
+                        });
+                    }
+                    html += `</select>`;
+                    break;
+                    
+                case 'rating': {
+                    // Generate stars based on min/max values, default to 1-5 if not specified
+                    const minRating = element.min || 1;
+                    const maxRating = element.max || 5;
+                    const currentRating = parseInt(defaultValue) || minRating;
+                    
+                    console.log('[Rating HTML Gen]', {
+                        id: id,
+                        label: label,
+                        minRating: minRating,
+                        maxRating: maxRating,
+                        currentRating: currentRating
+                    });
+                    
+                    html += `
+                        <div class="card mb-3">
+                            <div class="card-body text-center">
+                                <label class="form-label fw-bold">${label}</label>
+                                ${description ? `<div class="form-text mb-3">${description}</div>` : ''}
+                                <div class="rating-container mb-2" data-element-id="${id}">
+                    `;
+                    
+                    for (let i = minRating; i <= maxRating; i++) {
+                        const isActive = i <= currentRating ? 'active' : '';
+                        html += `<i class="rating-star fas fa-star ${isActive}" data-value="${i}" data-rating-id="${id}" role="button" tabindex="0" aria-label="Rate ${i}"></i>`;
+                    }
+                    html += `
+                                </div>
+                                <input type="hidden" name="${id}" id="${id}" value="${currentRating}">
+                                <div class="small text-muted mt-2">Click a star to rate (${minRating}-${maxRating})</div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                }
+                    
+                case 'textarea':
+                    html += `
+                        <label for="${id}" class="form-label fw-bold">${label}</label>
+                        ${description ? `<div class="form-text mb-2">${description}</div>` : ''}
+                        <textarea class="form-control" id="${id}" name="${id}" rows="3">${defaultValue}</textarea>
+                    `;
+                    break;
+                    
+                case 'text':
+                default:
+                    html += `
+                        <label for="${id}" class="form-label fw-bold">${label}</label>
+                        ${description ? `<div class="form-text mb-2">${description}</div>` : ''}
+                        <input type="text" class="form-control" id="${id}" name="${id}" value="${defaultValue}">
+                    `;
+                    break;
+            }
+            
+            html += `</div>`;
+            return html;
+        }
+
+        // Initialize form components in one place for easier updates
+        function initializeFormComponents() {
+            // wire up autosave listeners and restore any saved draft immediately
+            try { setupAutosave(); } catch (e) { console.warn('setupAutosave failed', e); }
+            try { loadAutosaveData(); } catch (e) { console.warn('loadAutosaveData failed', e); }
+
+            // Show QR code in modal when generated
+            const generateQRButton = document.getElementById('generateQR');
+            if (generateQRButton) {
+                const qrModalElement = document.getElementById('qrModal');
+                if (qrModalElement) {
+                    const qrModal = new bootstrap.Modal(qrModalElement);
+                    
+                    // Remove any existing event listener first
+                    generateQRButton.removeEventListener('click', showQRModal);
+                    
+                    // Add new event listener
+                    generateQRButton.addEventListener('click', showQRModal);
+                    
+                    function showQRModal() {
+                        try {
+                            // Show modal first, then generate QR code
+                            qrModal.show();
+                            if (typeof generateQRCode === 'function') {
+                                generateQRCode(); // This function is defined in scripts.js
+                            }
+                        } catch (error) {
+                            console.error('Error showing QR modal:', error);
+                        }
+                    }
+                } else {
+                    console.warn('QR Modal element not found');
+                }
+            } else {
+                console.warn('Generate QR Button not found');
+            }
+            
+            // Initialize counters (needed for points calculation)
+            initializeCounters();
+            
+            // Initialize star rating system
+            initializeRatings();
+            
+            // Initialize match period tabs
+            initializeMatchPeriodTabs();
+            
+            // Initialize auto period timer
+            initializeAutoPeriodTimer();
+            
+            // Initialize points calculation
+            initializePointsCalculation();
+
+            // Form reset button
+            initializeResetButton();
+
+            // Setup save button with enhanced functionality
+            setupSaveButton();
+            
+            // Setup export JSON button
+            setupExportJsonButton();
+
+            // Setup save locally handler (if scripts.js provided it)
+            if (typeof setupSaveLocally === 'function') {
+                try { setupSaveLocally(); } catch (e) { /* ignore */ }
+            }
+
+            // Make sure points are calculated on page load
+            updatePointsCalculation();
+        }
+        
+        // Function to show toast notifications
+        function showToast(message, type = 'info') {
+            const toastContainer = document.querySelector('.toast-container');
+            if (!toastContainer) return;
+            
+            const toast = document.createElement('div');
+            toast.classList.add('toast', 'align-items-center', 'border-0');
+            toast.classList.add(`bg-${type === 'error' ? 'danger' : type}`);
+            if (type === 'error' || type === 'success') {
+                toast.classList.add('text-white');
+            }
+            toast.setAttribute('role', 'alert');
+            toast.setAttribute('aria-live', 'assertive');
+            toast.setAttribute('aria-atomic', 'true');
+            
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            `;
+            
+            toastContainer.appendChild(toast);
+            
+            const bsToast = new bootstrap.Toast(toast, {
+                delay: 5000
+            });
+            
+            bsToast.show();
+            
+            // Remove toast from DOM after it's been hidden
+            toast.addEventListener('hidden.bs.toast', function() {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            });
+        }
+        
+        // Set up Save button handler
+        function setupSaveButton() {
+            const saveBtn = document.getElementById('save-button');
+            if (!saveBtn) return;
+            
+            saveBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                const form = document.getElementById('scouting-form');
+                if (!form) return;
+                
+                // Validate form
+                if (!validateForm(form)) {
+                    showToast('Please fill in all required fields', 'error');
+                    return;
+                }
+                
+                // Visual feedback - change button state
+                const originalText = saveBtn.innerHTML;
+                saveBtn.disabled = true;
+                
+                // Check if we're in offline mode
+                const isOfflineForm = form.dataset.offline === 'true';
+                const isOffline = !navigator.onLine;
+                
+                if (isOffline || isOfflineForm) {
+                    // Save offline
+                    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving Offline...';
+                    
+                    try {
+                        // Collect form data
+                        const formData = new FormData(form);
+                        const formObj = {};
+                        
+                        formData.forEach((value, key) => {
+                            const element = form.elements[key];
+                            
+                            // Handle checkboxes
+                            if (element && element.type === 'checkbox') {
+                                formObj[key] = element.checked;
+                                return;
+                            }
+                            
+                            // Handle numbers
+                            if (element && (element.type === 'number' || element.classList.contains('counter-input'))) {
+                                formObj[key] = value === '' ? 0 : Number(value);
+                                return;
+                            }
+                            
+                            // Handle everything else
+                            formObj[key] = value;
+                        });
+                        
+                        // Add timestamp
+                        formObj.timestamp = new Date().toISOString();
+                        formObj.offline = true;
+                        
+                        // Save using offline manager
+                        if (window.ScoutingOfflineManager) {
+                            const saved = window.ScoutingOfflineManager.saveFormOffline(formObj);
+                            
+                            if (saved) {
+                                saveBtn.disabled = false;
+                                saveBtn.innerHTML = originalText;
+                                
+                                showToast('Data saved offline successfully! Will sync when connection is restored. You can also manage unsynced entries on the Offline Data page.', 'success');
+                                // clear any autosaved draft now that we have persisted
+                                try { clearAutosaveForForm(); } catch (e) {}
+                                
+                                // Add save indicator
+                                const saveTimeIndicator = document.createElement('div');
+                                saveTimeIndicator.className = 'save-indicator';
+                                saveTimeIndicator.innerHTML = `
+                                    <div class="small text-success mt-2 text-end">
+                                        <i class="fas fa-check-circle me-1"></i>
+                                        Saved offline at ${new Date().toLocaleTimeString()}
+                                    </div>
+                                `;
+                                
+                                const existingIndicator = document.querySelector('.save-indicator');
+                                if (existingIndicator) {
+                                    existingIndicator.replaceWith(saveTimeIndicator);
+                                } else {
+                                    const buttonContainer = saveBtn.closest('.form-section');
+                                    if (buttonContainer) {
+                                        buttonContainer.appendChild(saveTimeIndicator);
+                                    }
+                                }
+                            } else {
+                                throw new Error('Failed to save offline');
+                            }
+                        } else {
+                            throw new Error('Offline manager not available');
+                        }
+                    } catch (error) {
+                        console.error('Error saving offline:', error);
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = originalText;
+                        showToast('Error saving offline. Try generating a QR code instead.', 'error');
+                    }
+                    
+                    return;
+                }
+                
+                // Online save
+                saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
+                
+                // Get the form data
+                const formData = new FormData(form);
+                
+                // Submit form via AJAX
+                fetch('/scouting/api_save', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok: ' + response.statusText);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Save response:', data);
+                    
+                    // Reset button state
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = originalText;
+                    
+                    if (data.success) {
+                        // clear any autosaved draft since server has stored the submission
+                        try { clearAutosaveForForm(); } catch (e) {}
+                        // Show success message with some feedback about what was saved
+                        showToast(`Data for Team ${data.team_number} in ${data.match_type} ${data.match_number} ${data.action} successfully!`, 'success');
+                        
+                        // Instead of redirecting, show a success indicator on the form
+                        const formContainer = document.querySelector('.scouting-form');
+                        if (formContainer) {
+                            // Add visual success indicator to the form
+                            formContainer.classList.add('form-saved');
+                            setTimeout(() => {
+                                formContainer.classList.remove('form-saved');
+                            }, 2000);
+                        }
+                        
+                        // Add a small badge showing when saved
+                        const saveTimeIndicator = document.createElement('div');
+                        saveTimeIndicator.className = 'save-indicator';
+                        saveTimeIndicator.innerHTML = `
+                            <div class="small text-success mt-2 text-end">
+                                <i class="fas fa-check-circle me-1"></i>
+                                Last saved at ${data.timestamp}
+                            </div>
+                        `;
+                        
+                        // Replace existing indicator or add new one
+                        const existingIndicator = document.querySelector('.save-indicator');
+                        if (existingIndicator) {
+                            existingIndicator.replaceWith(saveTimeIndicator);
+                        } else {
+                            const buttonContainer = saveBtn.closest('.form-section');
+                            if (buttonContainer) {
+                                buttonContainer.appendChild(saveTimeIndicator);
+                            }
+                        }
+                    } else {
+                        showToast('Error: ' + (data.message || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error saving data:', error);
+                    
+                    // If it's a network error, save offline instead
+                    if (error.message.includes('Network') || error.message.includes('Failed to fetch')) {
+                        console.log('Network error, falling back to offline save...');
+                        
+                        // Reset button and try offline save
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = originalText;
+                        
+                        // Mark form as offline and trigger save again
+                        form.dataset.offline = 'true';
+                        saveBtn.click();
+                        return;
+                    }
+                    
+                    // Reset button state
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = originalText;
+                    
+                    // Handle error
+                    showToast('Error saving data. Please try again or generate a QR code instead.', 'error');
+                    
+                    // If offline or connection error, suggest QR code
+                    if (!navigator.onLine) {
+                        showToast('You appear to be offline. Try generating a QR code instead.', 'info');
+                    }
+                });
+            });
+        }
+        
+        // Set up Export JSON button handler
+        function setupExportJsonButton() {
+            const exportBtn = document.getElementById('export-json-button');
+            if (!exportBtn) return;
+            
+            exportBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                const form = document.getElementById('scouting-form');
+                if (!form) return;
+                
+                // Visual feedback - change button state
+                const originalText = exportBtn.innerHTML;
+                exportBtn.disabled = true;
+                exportBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Exporting...';
+                
+                try {
+                    // Build the same flat JSON object as used for QR codes
+                    const formData = new FormData(form);
+                    const jsonObj = {};
+
+                    // Process form entries preserving booleans and numbers
+                    formData.forEach((value, key) => {
+                        const element = form.elements[key];
+
+                        // Handle checkboxes (use checked boolean)
+                        if (element && element.type === 'checkbox') {
+                            jsonObj[key] = element.checked;
+                            return;
+                        }
+
+                        // If the element is a number input, convert to Number
+                        if (element && element.type === 'number') {
+                            jsonObj[key] = value === '' ? 0 : Number(value);
+                            return;
+                        }
+
+                        // If value looks numeric, convert to Number
+                        if (value !== '' && !isNaN(value)) {
+                            // But preserve arrays and multiple-valued inputs below
+                            jsonObj[key] = Number(value);
+                            return;
+                        }
+
+                        // Handle multiple values (checkbox groups, multi-selects)
+                        if (jsonObj.hasOwnProperty(key)) {
+                            if (Array.isArray(jsonObj[key])) jsonObj[key].push(value);
+                            else jsonObj[key] = [jsonObj[key], value];
+                        } else {
+                            jsonObj[key] = value;
+                        }
+                    });
+
+                    // Ensure unchecked checkboxes are present with false (use id if available)
+                    const allCheckboxes = form.querySelectorAll('input[type="checkbox"]');
+                    allCheckboxes.forEach(cb => {
+                        const key = cb.name || cb.id || null;
+                        if (!key) return;
+                        if (!jsonObj.hasOwnProperty(key)) {
+                            jsonObj[key] = false;
+                        }
+                    });
+
+                    // Add calculated points similar to QR logic
+                    const pointsElements = document.querySelectorAll('.points-display');
+                    pointsElements.forEach(element => {
+                        const metricId = element.dataset.metricId;
+                        if (metricId) {
+                            const pointsValue = element.querySelector('.points-value');
+                            if (pointsValue) {
+                                jsonObj[metricId + '_points'] = parseInt(pointsValue.textContent || '0');
+                            }
+                        }
+                    });
+
+                    // Ensure scout_name fallback
+                    try {
+                        const scoutField = form.elements['scout_name'] || document.getElementById('scout_name');
+                        const fallbackScout = (scoutField && scoutField.placeholder) ? scoutField.placeholder : (scoutField && scoutField.value) ? scoutField.value : 'unknown';
+                        if (!jsonObj.scout_name || (typeof jsonObj.scout_name === 'string' && jsonObj.scout_name.trim() === '')) {
+                            jsonObj.scout_name = fallbackScout;
+                        }
+                    } catch (e) { /* ignore */ }
+
+                    // Add generated_at and offline_generated to match QR payload
+                    jsonObj.generated_at = new Date().toISOString();
+                    jsonObj.offline_generated = true;
+
+                    // Create and download flat JSON file
+                    const jsonString = JSON.stringify(jsonObj, null, 2);
+                    const blob = new Blob([jsonString], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+
+                    const a = document.createElement('a');
+                    a.href = url;
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0];
+                    const teamPart = (jsonObj.team_id || jsonObj.team_number || 'unknown');
+                    const matchPart = (jsonObj.match_id || jsonObj.match_number || 'unknown');
+                    a.download = `scouting-data-team-${teamPart}-match-${matchPart}-${timestamp}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    // Reset button state
+                    exportBtn.disabled = false;
+                    exportBtn.innerHTML = originalText;
+
+                    showToast('Scouting data exported successfully!', 'success');
+
+                } catch (error) {
+                    console.error('Error exporting data:', error);
+
+                    // Reset button state
+                    exportBtn.disabled = false;
+                    exportBtn.innerHTML = originalText;
+
+                    showToast('Error exporting data. Please try again.', 'error');
+                }
+            });
+        }
+        
+        // Form validation helper
+        function validateForm(form) {
+            const requiredFields = form.querySelectorAll('[required]');
+            let valid = true;
+            
+            requiredFields.forEach(field => {
+                if (!field.value) {
+                    field.classList.add('is-invalid');
+                    valid = false;
+                    
+                    // Focus first invalid field
+                    if (valid === false && field === requiredFields[0]) {
+                        field.focus();
+                    }
+                } else {
+                    field.classList.remove('is-invalid');
+                }
+            });
+            
+            return valid;
+        }
+        
+        // Initialize form reset button
+        function initializeResetButton() {
+            const resetBtn = document.getElementById('reset-form');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', function() {
+                    if (confirm('Are you sure you want to reset all form fields?')) {
+                        const formInputs = document.querySelectorAll('#scouting-form input:not([type="hidden"]), #scouting-form select, #scouting-form textarea');
+                        formInputs.forEach(input => {
+                            if (input.type === 'checkbox') {
+                                input.checked = false;
+                            } else if (input.tagName === 'SELECT') {
+                                input.selectedIndex = 0;
+                            } else if (input.type === 'number' || input.classList.contains('counter-input')) {
+                                // Reset numeric counters to 0 (not empty). Empty/null breaks arithmetic with +/- handlers.
+                                try { input.value = 0; } catch (e) { input.value = '0'; }
+                            } else {
+                                input.value = '';
+                            }
+                        });
+                        
+                        // Update points after resetting form
+                        updatePointsCalculation();
+                        // clear any saved draft because the user intentionally reset
+                        try { clearAutosaveForForm(); } catch (e) {}
+                    }
+                });
+            }
+        }
+        
+        // Team and Match selection enhancements with auto-submit
+        const teamSelector = document.getElementById('team-selector');
+        const matchSelector = document.getElementById('match-selector');
+        const teamMatchForm = document.getElementById('team-match-form');
+        
+        if (teamSelector && matchSelector && teamMatchForm) {
+            // New: search inputs for filtering options
+            const teamSearch = document.getElementById('team-search');
+            const matchSearch = document.getElementById('match-search');
+
+            // Helper to normalize strings for comparison
+            function normalizeString(s) {
+                return (s || '').toString().toLowerCase().trim();
+            }
+
+            // Filter team options by team number or name
+            function filterTeamOptions() {
+                const query = normalizeString(teamSearch.value);
+                const options = Array.from(teamSelector.querySelectorAll('option'));
+
+                // Keep the empty placeholder visible
+                options.forEach(opt => {
+                    if (!opt.value) return; // placeholder
+
+                    const teamNumber = normalizeString(opt.getAttribute('data-team-number'));
+                    const teamName = normalizeString(opt.getAttribute('data-team-name'));
+                    const text = normalizeString(opt.textContent || opt.innerText);
+                    const match = !query || teamNumber.includes(query) || teamName.includes(query) || text.includes(query);
+
+                    opt.hidden = !match;
+                    opt.style.display = match ? '' : 'none';
+                });
+
+                // If the currently selected option is hidden by filter, reset selection to placeholder
+                const current = teamSelector.options[teamSelector.selectedIndex];
+                if (current && current.hidden) {
+                    teamSelector.value = '';
+                }
+
+                // Auto-select if there's exactly one visible non-placeholder option
+                const visibleOptions = options.filter(opt => opt.value && !opt.hidden);
+                if (visibleOptions.length === 1) {
+                    const only = visibleOptions[0];
+
+                    // For teams: prefer exact team number match OR if query-empty but only one option
+                    const teamNumberAttr = normalizeString(only.getAttribute('data-team-number'));
+                    const exactNumberMatch = query && teamNumberAttr === query;
+
+                    if (exactNumberMatch || query === '' || query.length > 0 && exactNumberMatch) {
+                        // Programmatically select and dispatch change
+                        teamSelector.value = only.value;
+                        teamSelector.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+                // Sync any custom select UI visibility if present
+                try { syncCustomSelectVisibility(teamSelector); } catch (e) { /* ignore if not present */ }
+            }
+
+            // Filter match options by match type or number, with shorthand parsing
+            function filterMatchOptions() {
+                const raw = normalizeString(matchSearch.value);
+                const options = Array.from(matchSelector.querySelectorAll('option'));
+
+                // Parse query into alpha and numeric parts (e.g., 'sf1' -> letters: 'sf', number: '1')
+                function parseMatchQuery(q) {
+                    if (!q) return { letters: '', number: '' };
+                    // remove extra spaces
+                    const compact = q.replace(/\s+/g, '');
+                    const numMatch = compact.match(/(\d+)/);
+                    const number = numMatch ? numMatch[1] : '';
+                    const letters = compact.replace(/\d+/g, '');
+                    return { letters: letters, number: number };
+                }
+
+                const q = parseMatchQuery(raw);
+
+                // Aliases for canonical match type words
+                const aliases = {
+                    qualification: ['q','qu','qual','qualification','qualif','qualifcation','qualifc'],
+                    practice: ['p','pr','practice','prac','pract','pm','pm1'],
+                    quarter: ['qf','quarter','quarterfinal','quarterfinals','quarter-final','quarter-finals','quarterfinals','qtr'],
+                    semi: ['sf','sem','semi','semifinal','semifinals','sf1','smf','smf1','semifinalmatch'],
+                    final: ['f','fin','final','finals','f1'],
+                    playoff: ['playoff','po','playoffs','pm','pm1']
+                };
+
+                // Determine which canonical types the letters token maps to
+                function candidateTypesFromLetters(letters) {
+                    if (!letters) return [];
+                    const res = [];
+                    for (const [canon, arr] of Object.entries(aliases)) {
+                        for (const a of arr) {
+                            if (letters === a || letters.startsWith(a) || a.startsWith(letters)) {
+                                res.push(canon);
+                                break;
+                            }
+                        }
+                    }
+                    return res;
+                }
+
+                const candidateTypes = candidateTypesFromLetters(q.letters);
+
+                // We'll compute a score for each option and use that to determine visibility and best match
+                const scored = [];
+                options.forEach(opt => {
+                    if (!opt.value) return; // placeholder
+
+                    const matchType = normalizeString(opt.getAttribute('data-match-type') || '');
+                    const matchNumber = normalizeString(opt.getAttribute('data-match-number') || '');
+                    const text = normalizeString(opt.textContent || opt.innerText || '');
+
+                    let score = 0;
+
+                    // Strong boost for exact number match
+                    if (q.number && matchNumber === q.number) score += 60;
+
+                    // Good boost if text contains the number
+                    if (q.number && text.includes(q.number)) score += 20;
+
+                    // Letters/type matching via canonical candidates
+                    if (q.letters && candidateTypes.length > 0) {
+                        for (const ct of candidateTypes) {
+                            if (matchType.includes(ct)) score += 40;
+                            if (text.includes(ct)) score += 25;
+                            if (ct.startsWith(q.letters) || q.letters.startsWith(ct)) score += 10;
+                        }
+                    }
+
+                    // Loose letter match against the displayed text
+                    if (q.letters && text.includes(q.letters)) score += 10;
+
+                    // Small boosts for startsWith matches
+                    if (raw && text.startsWith(raw)) score += 8;
+                    if (raw && matchType.startsWith(raw)) score += 6;
+
+                    // If no query, give minimal score so everything remains visible
+                    if (!q.letters && !q.number) score += 1;
+
+                    // Record
+                    scored.push({ opt, score, matchType, matchNumber, text });
+                });
+
+                // Decide visibility: show items with score > 0 (or all if query empty)
+                scored.forEach(s => {
+                    const visible = s.score > 0;
+                    s.opt.hidden = !visible;
+                    s.opt.style.display = visible ? '' : 'none';
+                });
+
+                // Find best-scoring candidate
+                scored.sort((a, b) => b.score - a.score);
+                const best = scored[0];
+                const second = scored[1];
+
+                // Selection logic: choose best if it's reasonably strong and unambiguous
+                if (best && best.score > 0) {
+                    const threshold = 40; // minimum score to consider auto-select
+                    const gap = (second ? best.score - second.score : best.score);
+
+                    if (best.score >= threshold && gap >= 20) {
+                        // auto-select best candidate
+                        matchSelector.value = best.opt.value;
+                        matchSelector.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+
+                const current = matchSelector.options[matchSelector.selectedIndex];
+                if (current && current.hidden) {
+                    matchSelector.value = '';
+                }
+
+                // Auto-select if there's exactly one visible non-placeholder match option
+                const visibleMatchOptions = options.filter(opt => opt.value && !opt.hidden);
+                if (visibleMatchOptions.length === 1) {
+                    const only = visibleMatchOptions[0];
+                    matchSelector.value = only.value;
+                    matchSelector.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                // Sync any custom select UI visibility if present
+                try { syncCustomSelectVisibility(matchSelector); } catch (e) { /* ignore if not present */ }
+            }
+
+            // Attach input listeners with debounce to avoid overfiring
+            function debounce(func, wait) {
+                let timeout;
+                return function(...args) {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => func.apply(this, args), wait);
+                };
+            }
+
+            if (teamSearch) teamSearch.addEventListener('input', debounce(filterTeamOptions, 150));
+            if (matchSearch) matchSearch.addEventListener('input', debounce(filterMatchOptions, 150));
+
+            // Ensure filters run on initial load (e.g., when localStorage preselects values)
+            try { filterTeamOptions(); filterMatchOptions(); } catch (e) { /* ignore */ }
+            // Style match type dropdown options
+            const matchOptions = matchSelector.querySelectorAll('option');
+            matchOptions.forEach(option => {
+                if (option.value) {
+                    const matchType = option.getAttribute('data-match-type');
+                    let textClass = '';
+                    
+                    if (matchType === 'Qualification') {
+                        textClass = 'text-primary';
+                    } else if (matchType === 'Playoff') {
+                        textClass = 'text-danger';
+                    } else if (matchType === 'Practice') {
+                        textClass = 'text-success';
+                    }
+                    
+                    if (textClass) {
+                        option.classList.add(textClass, 'fw-bold');
+                    }
+                }
+            });
+            
+            // Save form data for offline use (legacy)
+            function saveFormDataOffline(teamId, matchId) {
+                try {
+                    localStorage.setItem('last_team_id', teamId);
+                    localStorage.setItem('last_match_id', matchId);
+                } catch (e) {
+                    console.warn("Unable to save to localStorage:", e);
+                }
+            }
+
+            /**
+             * Autosave helpers - persist form contents periodically so a refresh
+             * does not wipe the work in progress. Keys are scoped by team/match so
+             * different entries do not collide.
+             */
+            function getAutosaveKey(teamId, matchId) {
+                return `scouting_autosave_${teamId}_${matchId}`;
+            }
+
+            function saveAutosaveData() {
+                try {
+                    const form = document.getElementById('scouting-form');
+                    if (!form) return;
+                    const teamId = form.elements['team_id'] && form.elements['team_id'].value;
+                    const matchId = form.elements['match_id'] && form.elements['match_id'].value;
+                    if (!teamId || !matchId) return;
+
+                    const formData = new FormData(form);
+                    const obj = {};
+                    formData.forEach((value, key) => {
+                        const element = form.elements[key];
+                        if (element && element.type === 'checkbox') {
+                            obj[key] = element.checked;
+                        } else if (element && element.type === 'radio') {
+                            obj[key] = value; // FormData already gives selected value
+                        } else if (element && element.type === 'number') {
+                            obj[key] = value === '' ? 0 : Number(value);
+                        } else {
+                            obj[key] = value;
+                        }
+                    });
+
+                    localStorage.setItem(getAutosaveKey(teamId, matchId), JSON.stringify(obj));
+                    console.log('[Autosave] saved data for', teamId, matchId);
+                } catch (e) {
+                    console.warn('[Autosave] error saving data', e);
+                }
+            }
+
+            function loadAutosaveData() {
+                try {
+                    const form = document.getElementById('scouting-form');
+                    if (!form) return;
+                    const teamId = form.elements['team_id'] && form.elements['team_id'].value;
+                    const matchId = form.elements['match_id'] && form.elements['match_id'].value;
+                console.log('[Autosave] attempting restore, teamId:', teamId, 'matchId:', matchId);
+                if (!teamId || !matchId) {
+                    console.log('[Autosave] cannot restore, missing team or match id');
+                    return;
+                }
+
+                const key = getAutosaveKey(teamId, matchId);
+                const saved = localStorage.getItem(key);
+                if (!saved) {
+                    console.log('[Autosave] no saved data for key', key);
+                    return;
+                }
+                        if (el.type === 'checkbox') {
+                            el.checked = data[k];
+                            restored = true;
+                        } else if (el.type === 'radio') {
+                            const radios = form.querySelectorAll(`input[name="${k}"]`);
+                            radios.forEach(r => { if (r.value == data[k]) r.checked = true; });
+                            restored = true;
+                        } else {
+                            el.value = data[k];
+                            restored = true;
+                        }
+                    });
+                    if (restored) {
+                        console.log('[Autosave] restored data for', teamId, matchId);
+                        showToast('Restored unsaved form data from previous session', 'info');
+                        // recalc points if any
+                        try { updatePointsCalculation(); } catch (e) {}
+
+                        // refresh components so values become visible immediately
+                        try { initializeRatings(); } catch(e) {}
+                        try { initializeCounters(); } catch(e) {}
+                        form.querySelectorAll('select').forEach(el => el.dispatchEvent(new Event('change')));
+                        // recalc once more now that widgets are set
+                        try { updatePointsCalculation(); } catch(e) {}
+                    }
+                } catch (e) {
+                    console.warn('[Autosave] error loading data', e);
+                }
+            }
+
+            function clearAutosaveForForm() {
+                try {
+                    const form = document.getElementById('scouting-form');
+                    if (!form) return;
+                    const teamId = form.elements['team_id'] && form.elements['team_id'].value;
+                    const matchId = form.elements['match_id'] && form.elements['match_id'].value;
+                    if (!teamId || !matchId) return;
+                    localStorage.removeItem(getAutosaveKey(teamId, matchId));
+                } catch (e) { }
+            }
+
+            // Wire up autosave listeners on the currently loaded form
+            function setupAutosave() {
+                const form = document.getElementById('scouting-form');
+                if (!form) return;
+                const debounced = debounce(saveAutosaveData, 500);
+                form.addEventListener('input', debounced);
+                form.addEventListener('change', debounced);
+            }
+
+            // if the form already exists (server-side render) make sure it's initialized and autosaved
+            try {
+                const existingForm = document.getElementById('scouting-form');
+                if (existingForm) {
+                    console.log('[Init] existing form present on load, initializing components and autosave');
+                    initializeFormComponents();
+                    try { setupAutosave(); } catch(e) { console.warn('setupAutosave initial load failed', e); }
+                    try { loadAutosaveData(); } catch(e) { console.warn('loadAutosaveData initial load failed', e); }
+                }
+            } catch(e) { /* ignore */ }
+
+            // Manual index helper used by offline manager if automatic sync fails
+            function saveToManualIndex(formData) {
+                try {
+                    const timestamp = new Date().toISOString();
+                    const storageKey = `offline_scouting_${Date.now()}`;
+                    localStorage.setItem(storageKey, JSON.stringify(formData));
+
+                    const teamNumber = formData.team_number || formData.team_id || '';
+                    const matchNumber = formData.match_number || formData.match_id || '';
+                    let index = JSON.parse(localStorage.getItem('offline_scouting_index') || '[]');
+                    index.push({
+                        storage_key: storageKey,
+                        team_number: teamNumber,
+                        match_number: matchNumber,
+                        timestamp: timestamp
+                    });
+                    localStorage.setItem('offline_scouting_index', JSON.stringify(index));
+                } catch (e) {
+                    console.warn('[Offline Manager] failed saving to manual index', e);
+                }
+            }
+            
+            // Load form when team and match are selected
+            function loadForm() {
+                const teamId = document.getElementById('team-selector').value;
+                const matchId = document.getElementById('match-selector').value;
+                
+                if (!teamId || !matchId) return;
+                
+                // Show loading indicator
+                const formContent = document.getElementById('form-content');
+                formContent.innerHTML = `
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-3">Loading scouting form...</p>
+                    </div>
+                `;
+                
+                // Save selected values in localStorage for offline use
+                try {
+                    localStorage.setItem('last_team_id', teamId);
+                    localStorage.setItem('last_match_id', matchId);
+                } catch (e) {
+                    console.warn("Unable to save to localStorage:", e);
+                }
+                
+                // Capture scroll/focus state before AJAX request so we can restore after DOM replacement
+                const __savedScrollY = window.scrollY || 0;
+                const __savedActiveId = (document.activeElement && document.activeElement.id) ? document.activeElement.id : null;
+
+                // Check if we're offline and should use cached data
+                if (!navigator.onLine && window.ScoutingOfflineManager) {
+                    console.log('[Offline Mode] Loading form from cache...');
+                    const offlineData = window.ScoutingOfflineManager.generateFormOffline(teamId, matchId);
+                    
+                    if (offlineData) {
+                        // Generate form using cached data
+                        loadFormOffline(offlineData, __savedScrollY, __savedActiveId);
+                        return;
+                    } else {
+                        formContent.innerHTML = `
+                            <div class="alert alert-warning">
+                                <i class="fas fa-wifi-slash me-2"></i>
+                                <strong>Offline Mode</strong><br>
+                                Unable to load form - no cached data available.
+                                Please connect to the internet to load the form for the first time.
+                            </div>
+                        `;
+                        return;
+                    }
+                }
+
+                // Create form data for the AJAX request
+                const formData = new FormData();
+                formData.append('team_id', teamId);
+                formData.append('match_id', matchId);
+
+                // Make AJAX request
+                fetch('/scouting/form', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    // Check if response is OK
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    // Check if response is JSON
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        throw new Error('Server returned non-JSON response');
+                    }
+                    
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Update form content
+                        formContent.innerHTML = data.html;
+                        
+                        // Cache this rendered HTML for offline use
+                        if (window._scoutingFormLoadHandler && typeof window._scoutingFormLoadHandler === 'function') {
+                            window._scoutingFormLoadHandler(data.team_id, data.match_id, data.html);
+                        }
+
+                        // Show warning if there was data corruption
+                        if (data.warning) {
+                            const warningAlert = document.createElement('div');
+                            warningAlert.className = 'alert alert-warning alert-dismissible fade show mb-3';
+                            warningAlert.innerHTML = `
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                ${data.warning}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            `;
+                            formContent.insertBefore(warningAlert, formContent.firstChild);
+                        }
+
+                        // Update subheading (guarded)
+                        try {
+                            const _sub = document.getElementById('form-subheading');
+                            if (_sub) {
+                                _sub.textContent = `${data.team_number} - ${data.team_name} | ${data.match_type} ${data.match_number}`;
+                            }
+                        } catch (e) { /* ignore if DOM not ready */ }
+
+                        // Initialize form components AFTER the form is loaded and restore previous scroll/focus
+                        setTimeout(() => {
+                            initializeFormComponents();
+
+                                // wire up autosave listeners and restore any saved draft
+                                try { setupAutosave(); } catch (e) { /* ignore */ }
+                                try { loadAutosaveData(); } catch (e) { /* ignore */ }
+
+                                // Ensure team-number display preference is applied after we inject/init the offline form
+                                try {
+                                    if (typeof window.applyTeamNumberDisplayPreference === 'function') {
+                                        window.applyTeamNumberDisplayPreference();
+                                    }
+                                } catch (e) { /* ignore */ }
+
+                            // final points recalculation to catch any restored values
+                            try { updatePointsCalculation(); } catch (e) { /* ignore */ }
+
+                            // Copy quick prediction (if set) into loaded form's predicted_winner input
+                            try {
+                                const quick = document.querySelector('input[name="predicted_winner_select"]:checked');
+                                if (quick) {
+                                    const val = quick.value;
+                                    // Find target radios in loaded form and set
+                                    const target = document.querySelector('#form-content input[name="predicted_winner"]');
+                                    if (target) {
+                                        // If the loaded form uses radios, set the matching one
+                                        const radios = document.querySelectorAll('#form-content input[name="predicted_winner"]');
+                                        radios.forEach(r => { r.checked = (r.value === val); });
+                                    }
+                                }
+                            } catch (e) { console.warn('Could not copy quick prediction into loaded form', e); }
+
+                            // Restore scroll position
+                                try {
+                                    if (typeof window.safeRestoreScroll === 'function') {
+                                        window.safeRestoreScroll(__savedScrollY, { behavior: 'auto', timeout: 300 });
+                                    } else {
+                                        // Fallback already handled; no-op here to avoid double-restores
+                                    }
+                                } catch (e) {
+                                    console.warn('Could not restore scroll position', e);
+                                }
+
+                            // Restore focus to previously focused element if it still exists
+                            if (__savedActiveId) {
+                                try {
+                                    const prev = document.getElementById(__savedActiveId);
+                                    if (prev && typeof prev.focus === 'function') {
+                                        prev.focus({ preventScroll: true });
+                                    }
+                                } catch (e) {
+                                    // ignore
+                                }
+                            }
+                        }, 100);
+                    } else {
+                        formContent.innerHTML = `
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-circle me-2"></i>
+                                ${data.message || 'An error occurred while loading the form.'}
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading form:', error);
+                    
+                    // If offline or network error, try to load from cache
+                    if (!navigator.onLine || error.message.includes('Network') || error.message.includes('Failed to fetch')) {
+                        console.log('[Offline Mode] Network error, attempting to load from cache...');
+                        
+                        if (window.ScoutingOfflineManager) {
+                            const offlineData = window.ScoutingOfflineManager.generateFormOffline(teamId, matchId);
+                            
+                            if (offlineData) {
+                                loadFormOffline(offlineData, __savedScrollY, __savedActiveId);
+                                return;
+                            }
+                        }
+                        
+                        formContent.innerHTML = `
+                            <div class="alert alert-warning">
+                                <i class="fas fa-wifi-slash me-2"></i>
+                                <strong>Offline Mode</strong><br>
+                                Unable to connect to server and no cached data available.
+                                Please connect to the internet or wait for the connection to be restored.
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    let errorMessage = 'Error loading form. Please try again.';
+                    
+                    if (error.message.includes('HTTP 500')) {
+                        errorMessage = 'Server error occurred. Please check the server logs or try again later.';
+                    } else if (error.message.includes('non-JSON response')) {
+                        errorMessage = 'Server returned an unexpected response. There may be a server error.';
+                    }
+                    
+                    formContent.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            ${errorMessage}
+                            <div class="mt-2 small text-muted">
+                                Technical details: ${error.message}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            // Auto-submit when both selections are made
+            function checkSelections() {
+                const teamId = teamSelector.value;
+                const matchId = matchSelector.value;
+                
+                if (teamId && matchId) {
+                    // Visual feedback
+                    teamSelector.classList.add('border-success');
+                    matchSelector.classList.add('border-success');
+                    
+                    loadForm();
+                } else {
+                    teamSelector.classList.remove('border-success');
+                    matchSelector.classList.remove('border-success');
+                }
+            }
+            
+            // Initialize from localStorage if available
+            try {
+                const lastTeamId = localStorage.getItem('last_team_id');
+                const lastMatchId = localStorage.getItem('last_match_id');
+                
+                // If we have stored values and no current selection, use them
+                if (lastTeamId && lastMatchId && !teamSelector.value && !matchSelector.value) {
+                    teamSelector.value = lastTeamId;
+                    matchSelector.value = lastMatchId;
+                    if (teamSelector.value && matchSelector.value) {
+                        checkSelections();
+                    }
+                }
+            } catch (e) {
+                console.warn("Unable to retrieve from localStorage:", e);
+            }
+            
+            // Attach event listeners
+            teamSelector.addEventListener('change', checkSelections);
+            matchSelector.addEventListener('change', checkSelections);
+
+            // Create custom dropdown wrappers for better styling and consistent appearance
+            function createCustomSelects() {
+                [teamSelector, matchSelector].forEach(function(sel) {
+                    if (!sel) return;
+
+                    // Avoid creating twice
+                    if (sel.dataset.custom === '1') return;
+                    sel.dataset.custom = '1';
+
+                    // Hide native select but keep it in DOM for form submission
+                    sel.style.display = 'none';
+
+                    // Create wrapper
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'custom-select-wrapper';
+                    wrapper.dataset.for = sel.id;
+
+                    const toggle = document.createElement('button');
+                    toggle.type = 'button';
+                    toggle.className = 'custom-select-toggle btn btn-outline-secondary w-100 text-start';
+                    toggle.setAttribute('aria-haspopup', 'listbox');
+                    toggle.setAttribute('aria-expanded', 'false');
+                    toggle.innerHTML = `<span class="custom-select-value">${sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : sel.querySelector('option')?.textContent}</span><span class="chev float-end">▾</span>`;
+
+                    const menu = document.createElement('div');
+                    menu.className = 'custom-select-menu shadow-sm';
+                    menu.setAttribute('role', 'listbox');
+                    menu.style.maxHeight = '40vh';
+                    menu.style.overflow = 'auto';
+                    menu.style.display = 'none';
+
+                    // Populate items and mark selected
+                    Array.from(sel.options).forEach(function(opt) {
+                        const item = document.createElement('div');
+                        item.className = 'custom-select-item p-2';
+                        item.setAttribute('role', 'option');
+                        item.dataset.value = opt.value;
+                        item.textContent = opt.textContent;
+                        if (opt.disabled) item.classList.add('disabled');
+                        if (opt.hidden) item.style.display = 'none';
+                        if (!opt.value) item.classList.add('placeholder');
+                        if (opt.selected) item.classList.add('selected');
+                        menu.appendChild(item);
+                    });
+
+                    // Insert wrapper before native select
+                    sel.parentNode.insertBefore(wrapper, sel);
+                    wrapper.appendChild(toggle);
+                    wrapper.appendChild(menu);
+
+                    // Toggle menu
+                    toggle.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const open = menu.style.display !== 'none';
+                        // close any other menus
+                        document.querySelectorAll('.custom-select-menu').forEach(m => { if (m !== menu) m.style.display = 'none'; m.previousSibling && m.previousSibling.setAttribute('aria-expanded','false'); });
+                        menu.style.display = open ? 'none' : 'block';
+                        toggle.setAttribute('aria-expanded', (!open).toString());
+                        // add open class to wrapper for styling
+                        if (!open) wrapper.classList.add('open'); else wrapper.classList.remove('open');
+                    });
+
+                    // Item click
+                    menu.addEventListener('click', function(e) {
+                        const it = e.target.closest('.custom-select-item');
+                        if (!it) return;
+                        if (it.classList.contains('disabled')) return;
+                        const value = it.dataset.value || '';
+                        sel.value = value;
+                        // sync toggle text
+                        const valueLabel = it.textContent;
+                        wrapper.querySelector('.custom-select-value').textContent = valueLabel;
+                        // mark selected visually
+                        menu.querySelectorAll('.custom-select-item').forEach(i => i.classList.remove('selected'));
+                        it.classList.add('selected');
+                        // close
+                        menu.style.display = 'none';
+                        toggle.setAttribute('aria-expanded','false');
+                        wrapper.classList.remove('open');
+                        sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+
+                    // Close on outside click
+                    document.addEventListener('click', function(ev) {
+                        if (!wrapper.contains(ev.target)) {
+                            menu.style.display = 'none';
+                            toggle.setAttribute('aria-expanded','false');
+                        }
+                    });
+
+                    // Store reference for syncing
+                    sel._customWrapper = wrapper;
+                });
+            }
+
+            // Sync visibility of custom menu items with native select options (used by filters)
+            function syncCustomSelectVisibility(sel) {
+                if (!sel || !sel._customWrapper) return;
+                const menu = sel._customWrapper.querySelector('.custom-select-menu');
+                const items = Array.from(menu.querySelectorAll('.custom-select-item'));
+                Array.from(sel.options).forEach(function(opt, idx) {
+                    const it = items[idx];
+                    if (!it) return;
+                    it.style.display = opt.hidden ? 'none' : '';
+                });
+            }
+
+            // Initialize custom selects after dom wiring
+            try { createCustomSelects(); syncCustomSelectVisibility(teamSelector); syncCustomSelectVisibility(matchSelector); } catch (e) { /* ignore */ }
+
+            // Match +/- navigation handlers: move to previous/next VISIBLE option and trigger change
+            try {
+                const matchDecr = document.getElementById('match-decrement');
+                const matchIncr = document.getElementById('match-increment');
+
+                function changeMatchBy(offset) {
+                    if (!matchSelector) return;
+                    const visibleOptions = Array.from(matchSelector.querySelectorAll('option'))
+                        .filter(opt => opt.value && !opt.hidden);
+                    if (visibleOptions.length === 0) return;
+
+                    const currentValue = matchSelector.value;
+                    let currentIndex = visibleOptions.findIndex(o => o.value === currentValue);
+                    if (currentIndex === -1) {
+                        // If nothing selected, pick first/last depending on direction
+                        currentIndex = offset > 0 ? -1 : 0;
+                    }
+
+                    let newIndex = Math.min(Math.max(currentIndex + offset, 0), visibleOptions.length - 1);
+                    const newOpt = visibleOptions[newIndex];
+                    if (!newOpt) return;
+
+                    matchSelector.value = newOpt.value;
+
+                    // If a custom wrapper exists, update its display text and selected classes
+                    try {
+                        if (matchSelector._customWrapper) {
+                            const wrapper = matchSelector._customWrapper;
+                            const valueLabel = wrapper.querySelector('.custom-select-value');
+                            if (valueLabel) valueLabel.textContent = newOpt.textContent;
+                            const items = wrapper.querySelectorAll('.custom-select-item');
+                            items.forEach(it => {
+                                try { it.classList.toggle('selected', it.dataset.value === newOpt.value); } catch (e) { /* ignore */ }
+                            });
+                        }
+                    } catch (e) { /* ignore */ }
+
+                    matchSelector.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                if (matchDecr) matchDecr.addEventListener('click', function() { changeMatchBy(-1); });
+                if (matchIncr) matchIncr.addEventListener('click', function() { changeMatchBy(1); });
+
+                // Keyboard support when focus is on the match selector: left/right or +/- keys
+                matchSelector.addEventListener('keydown', function(e) {
+                    if (e.key === 'ArrowLeft' || e.key === '-' || e.key === 'Subtract') {
+                        e.preventDefault(); changeMatchBy(-1);
+                    } else if (e.key === 'ArrowRight' || e.key === '+' || e.key === 'Add') {
+                        e.preventDefault(); changeMatchBy(1);
+                    }
+                });
+            } catch (e) {
+                // Non-fatal; don't break other behaviors
+                console.warn('Match navigation init failed', e);
+            }
+        }
+        
+        // Initialize existing form components if present on page load
+        initializeFormComponents();
+
+        // Ensure spinning counters toggle is wired on normal page load
+        try {
+            setupSpinningCountersTogglePersistence();
+            const spinToggle = document.getElementById('spinningCountersToggle');
+            if (spinToggle) {
+                const saved = localStorage.getItem('spinning_counters_enabled');
+                const enabled = (saved === null) ? true : (saved === 'true' || saved === '1');
+                spinToggle.checked = enabled;
+                if (enabled) {
+                    try { initializeSpinningCounters(); } catch (e) { console.warn('Could not initialize spinning counters on load', e); }
+                } else {
+                    try { teardownSpinningCounters(); } catch (e) { console.warn('Could not teardown spinning counters on load', e); }
+                }
+            }
+        } catch (e) { console.warn('Spinning counters setup failed', e); }
+        
+        // ======== REAL-TIME CONFIG UPDATE LISTENERS ========
+        
+        // Listen for game config updates
+        window.addEventListener('gameConfigUpdated', function(event) {
+            const newGameConfig = event.detail;
+            console.log('Game config updated in scouting form:', newGameConfig);
+            
+            // Show notification to user
+            showConfigUpdateNotification('Game configuration has been updated due to alliance mode change.');
+            
+            // Optionally reload form elements or show a reload prompt
+            if (confirm('The game configuration has been updated. Would you like to reload the form to use the new configuration?')) {
+                window.location.reload();
+            }
+        });
+        
+        // ======== GLOBAL CONFIG RELOAD HANDLER ========
+        // Listen for global config changes that require form reload
+        window.addEventListener('globalConfigReload', function(event) {
+            const configData = event.detail;
+            console.log('Global config reload in scouting form:', configData);
+            
+            // Show notification
+            showConfigUpdateNotification(`Configuration updated: ${configData.message}`);
+            
+            // Automatically reload the form content without full page reload
+            reloadFormWithNewConfig();
+        });
+        
+        // Function to reload form content with new configuration
+        window.reloadFormWithNewConfig = function() {
+            console.log('Reloading scouting form with new configuration...');
+            
+            // Get current form state
+            const currentTeamId = document.getElementById('team-selector')?.value;
+            const currentMatchId = document.getElementById('match-selector')?.value;
+            
+            if (!currentTeamId || !currentMatchId) {
+                console.log('No team/match selected, skipping form reload');
+                return;
+            }
+            
+            // Capture scroll/focus state before AJAX request so we can restore after DOM replacement
+            const __savedScrollY = window.scrollY || 0;
+            const __savedActiveId = (document.activeElement && document.activeElement.id) ? document.activeElement.id : null;
+
+            // Reload the form content via AJAX
+            fetch(window.location.pathname, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: new URLSearchParams({
+                    'team_id': currentTeamId,
+                    'match_id': currentMatchId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Replace the current form content
+                    const currentFormContent = document.getElementById('form-content');
+                    if (currentFormContent && data.html) {
+                        currentFormContent.innerHTML = data.html;
+                        
+                        // Show warning if there was data corruption
+                        if (data.warning) {
+                            const warningAlert = document.createElement('div');
+                            warningAlert.className = 'alert alert-warning alert-dismissible fade show mb-3';
+                            warningAlert.innerHTML = `
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                ${data.warning}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            `;
+                            currentFormContent.insertBefore(warningAlert, currentFormContent.firstChild);
+                        }
+                        
+                        // Reinitialize form components
+                        initializeFormComponents();
+
+                        // Restore scroll position
+                        try {
+                            if (typeof window.safeRestoreScroll === 'function') {
+                                window.safeRestoreScroll(__savedScrollY, { behavior: 'auto', timeout: 300 });
+                            } else {
+                                // Fallback already handled; no-op here to avoid double-restores
+                            }
+                        } catch (e) { /* ignore */ }
+
+                        // Restore focus to previously focused element if it still exists
+                        if (__savedActiveId) {
+                            try {
+                                const prev = document.getElementById(__savedActiveId);
+                                if (prev && typeof prev.focus === 'function') prev.focus({ preventScroll: true });
+                            } catch (e) { /* ignore */ }
+                        }
+
+                        console.log('Form reloaded successfully with new configuration');
+                        showConfigUpdateNotification('Form updated with new configuration');
+                    }
+                } else {
+                    console.error('Error reloading form:', data.message);
+                    showConfigUpdateNotification('Error reloading form: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error reloading form:', error);
+                showConfigUpdateNotification('Error reloading form. Please refresh the page.', 'error');
+            });
+        };
+        
+        // Listen for alliance status changes
+        window.addEventListener('allianceStatusUpdated', function(event) {
+            const allianceStatus = event.detail;
+            console.log('Alliance status updated in scouting form:', allianceStatus);
+            
+            if (allianceStatus.is_active) {
+                showConfigUpdateNotification(`Alliance mode activated. Now using shared configuration from ${allianceStatus.alliance_info?.alliance_name || 'alliance'}.`);
+            } else {
+                showConfigUpdateNotification('Alliance mode deactivated. Now using individual team configuration.');
+            }
+        });
+        
+        // Function to show config update notifications
+        function showConfigUpdateNotification(message, type = 'info') {
+            // Normalize type
+            let normalizedType = type;
+            if (!type || type === 'info' || type === 'message' || type === 'default') normalizedType = 'success';
+            if (type === 'error' || type === 'err') normalizedType = 'danger';
+            if (type === 'warn') normalizedType = 'warning';
+
+            // Create a notification banner
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${normalizedType} alert-dismissible fade show position-fixed`;
+            notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+            notification.innerHTML = `
+                <i class="fas fa-sync-alt me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 10000);
+        }
+    });
+</script>
+<link rel="stylesheet" href="/static/css/scale-ui.css">
+<script src="/static/js/scale-ui.js"></script>
+
 
     <script>
     // Ensure service worker is registered at root (/sw.js) so PWABuilder and other tools can detect it
@@ -2844,20 +4866,16 @@
     })();
     </script>
 
-    {# Add a floating button for the assistant modal #}
-    {# Remove the floating assistant button:
-    <button id="openAssistantModalBtn" class="btn btn-primary rounded-circle shadow position-fixed assistant-fab">
-        <i class="fas fa-robot fa-lg"></i>
-    </button>
-    #}
+    
+    
 
-    {# Assistant Chat Modal #}
-    {# Remove the Assistant Chat Modal HTML and its script block. #}
+    
+    
 
-    {# Add a Chat tab to the navbar #}
-    {# This <li> is now inside the navbar <ul> #}
+    
+    
 
-    {# Add the Chat Modal with tabs for DMs, Assistant, and Groups #}
+    
     <div class="modal fade" id="chatModal" tabindex="-1" aria-labelledby="chatModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -3348,7 +5366,7 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Expose current user's username to client-side scripts for local checks
         try {
-            window.CURRENT_USERNAME = {% if current_user.is_authenticated and current_user.username %}{{ current_user.username|tojson }}{% else %}null{% endif %};
+            window.CURRENT_USERNAME = null;
         } catch (e) { window.CURRENT_USERNAME = null; }
 
         async function updateChatUnreadBadge() {
@@ -3372,10 +5390,10 @@
                         if (openUnreadChatLink && data.lastSource) {
                             try {
                                 const s = encodeURIComponent(JSON.stringify(data.lastSource));
-                                openUnreadChatLink.href = `{{ url_for('main.chat_page') }}?focus=${s}`;
+                                openUnreadChatLink.href = `/chat?focus=${s}`;
                             } catch(e) {}
                         } else if (openUnreadChatLink) {
-                            openUnreadChatLink.href = `{{ url_for('main.chat_page') }}`;
+                            openUnreadChatLink.href = `/chat`;
                         }
                     } else {
                         badge.style.display = 'none';
@@ -3417,7 +5435,7 @@
                         }
 
                         const chatItemHtml = `
-                            <a id="notif-chat-unread-item" href="{{ url_for('main.chat_page') }}${focusParam}" class="list-group-item list-group-item-action d-flex align-items-start">
+                            <a id="notif-chat-unread-item" href="/chat${focusParam}" class="list-group-item list-group-item-action d-flex align-items-start">
                                 <div class="me-2">
                                     <i class="fas fa-comment-alt fa-lg text-primary"></i>
                                 </div>
@@ -3604,10 +5622,7 @@
             window.socket.on('connect', function() {
                 console.log('Socket.IO connected, joining team room...');
                 // always join team room if a team number exists (allow 0)
-                {% if current_user.is_authenticated and current_user.scouting_team_number is not none %}
-                    window.socket.emit('join_team_room');
-                    console.log('Joined team room for team {{ current_user.scouting_team_number }}');
-                {% endif %}
+                
 
                 // also join alliance room if alliance mode is active
                 fetchCurrentConfig().then(cfg => {
@@ -5263,7 +7278,7 @@
         }
     }
     </script>
-    <script src="{{ url_for('static', filename='js/countup-site.js') }}"></script>
+    <script src="/static/js/countup-site.js"></script>
         <script>
         // Mobile viewport-height helper: write a --vh CSS variable that equals 1% of
         // the current window.innerHeight. This avoids layout clipping caused by

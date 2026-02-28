@@ -10,7 +10,9 @@
   <div class="mb-3">
     <div class="btn-group" role="group" aria-label="Sort leaderboard">
       <a href="{{ url_for('graphs.scout_leaderboard', sort='total') }}" class="btn btn-sm {% if sort_mode != 'accuracy' %}btn-primary{% else %}btn-outline-primary{% endif %}">Most Matches Scouted</a>
+      {% if leaderboard_accuracy_visible %}
       <a href="{{ url_for('graphs.scout_leaderboard', sort='accuracy') }}" class="btn btn-sm {% if sort_mode == 'accuracy' %}btn-primary{% else %}btn-outline-primary{% endif %}">Prediction Accuracy</a>
+      {% endif %}
     </div>
   </div>
 
@@ -21,9 +23,11 @@
           <th>Rank</th>
           <th>Scout</th>
           <th class="text-end">Total Scouted</th>
+          {% if leaderboard_accuracy_visible %}
           <th class="text-end">Predictions</th>
           <th class="text-end">Correct</th>
           <th class="text-end">Accuracy</th>
+          {% endif %}
           <th>Last Scouted</th>
         </tr>
       </thead>
@@ -33,6 +37,7 @@
           <td><span class="badge bg-{{ 'warning' if s.rank <= 3 else 'secondary' }}">{{ s.rank }}</span></td>
           <td>{{ s.scout_name }}{% if s.scout_id %} <small class="text-muted">(#{{ s.scout_id }})</small>{% endif %}</td>
           <td class="text-end">{{ s.total }}</td>
+          {% if leaderboard_accuracy_visible %}
           <td class="text-end">{{ s.evaluated if s.evaluated else '-' }}</td>
           <td class="text-end">{{ s.correct if s.correct else '-' }}</td>
           <td class="text-end">
@@ -42,6 +47,7 @@
               -
             {% endif %}
           </td>
+          {% endif %}
           <td>{% if s.last_scouted %}{{ s.last_scouted.strftime('%Y-%m-%d %H:%M') }}{% else %}-{% endif %}</td>
         </tr>
         {% else %}
@@ -53,7 +59,10 @@
     </table>
   </div>
   
-  {% if leaders %}
+  {% if not leaderboard_accuracy_visible %}
+  <div class="alert alert-info">Prediction accuracy has been disabled by your administrator.</div>
+  {% endif %}
+  {% if leaders and leaderboard_accuracy_visible %}
   <div class="card mt-3">
     <div class="card-body">
       <small class="text-muted">

@@ -672,6 +672,14 @@ def scout_leaderboard():
     # Respect team isolation (use current user's scouting_team_number)
     scouting_team_number = getattr(current_user, 'scouting_team_number', None)
 
+    # load team settings so we can check prediction/leaderboard toggles
+    from app.models import ScoutingTeamSettings
+    team_settings = None
+    if scouting_team_number is not None:
+        team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=scouting_team_number).first()
+    predictions_allowed = bool(team_settings and getattr(team_settings, 'predictions_enabled', True))
+    leaderboard_accuracy_visible = bool(team_settings and getattr(team_settings, 'leaderboard_accuracy_visible', True))
+
     q = ScoutingData.query
     if scouting_team_number is not None:
         q = q.filter_by(scouting_team_number=scouting_team_number)
@@ -916,6 +924,10 @@ def scout_leaderboard():
         if not rec['last_scouted'] or (e.timestamp and e.timestamp > rec['last_scouted']):
             rec['last_scouted'] = e.timestamp
 
+        # if leaderboard accuracy has been disabled, skip all prediction evaluation
+        if not leaderboard_accuracy_visible:
+            continue
+
         # Get the match
         match = None
         try:
@@ -958,14 +970,14 @@ def scout_leaderboard():
                 break
 
         norm = normalize_pred(pred_val, match)
-        if norm is not None:
+        if predictions_allowed and norm is not None:
             # Explicit prediction found
             scout_evaluated_matches[key].add(match.id)
             rec['evaluated'] += 1
             if norm == actual_winner:
                 rec['correct'] += 1
         else:
-            # METHOD 2: Use scouted points-based prediction
+            # METHOD 2: Use scouted points-based prediction (always allowed)
             prediction = predict_match_from_scouted(match, total_metric_id)
             if prediction and prediction.get('predicted_winner'):
                 scout_evaluated_matches[key].add(match.id)
@@ -975,6 +987,8 @@ def scout_leaderboard():
 
     # Determine sort mode from query parameter. Supported: 'total' (matches scouted) or 'accuracy'
     sort_mode = request.args.get('sort', 'total') or 'total'
+    if sort_mode == 'accuracy' and not leaderboard_accuracy_visible:
+        sort_mode = 'total'
 
     leader_list = list(leaders.values())
     if sort_mode == 'accuracy':
@@ -1001,7 +1015,10 @@ def scout_leaderboard():
         })
         rank += 1
 
-    return render_template('graphs/scout_leaderboard.html', leaders=ranked, sort_mode=sort_mode, **get_theme_context())
+    return render_template('graphs/scout_leaderboard.html', leaders=ranked, sort_mode=sort_mode,
+                           leaderboard_accuracy_visible=leaderboard_accuracy_visible,
+                           predictions_enabled=predictions_allowed,
+                           **get_theme_context())
 
 @bp.route('/data')
 @analytics_required

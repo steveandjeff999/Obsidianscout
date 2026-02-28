@@ -32,6 +32,9 @@
         // Cache data on page load if online
         if (navigator.onLine) {
             cacheScoutingData();
+
+            // try syncing any previously saved offline forms right away
+            syncOfflineForms();
             
             // Start pre-caching forms after initial data is cached
             setTimeout(() => {
@@ -448,6 +451,36 @@
     }
 
     /**
+     * Helper to duplicate a form entry into the generic "save locally" index used by
+     * the offline data management page.  This ensures that users can always see their
+     * unsynced forms in the offline data UI, regardless of whether the automatic
+     * sync routine picks them up.
+     */
+    function saveToManualIndex(formData) {
+        try {
+            const timestamp = new Date().toISOString();
+            const storageKey = `offline_scouting_${Date.now()}`;
+
+            // extract team/match identifiers if available
+            const teamNumber = formData.team_number || formData.team_id || '';
+            const matchNumber = formData.match_number || formData.match_id || '';
+
+            localStorage.setItem(storageKey, JSON.stringify(formData));
+
+            let index = JSON.parse(localStorage.getItem('offline_scouting_index') || '[]');
+            index.push({
+                storage_key: storageKey,
+                team_number: teamNumber,
+                match_number: matchNumber,
+                timestamp: timestamp
+            });
+            localStorage.setItem('offline_scouting_index', JSON.stringify(index));
+        } catch (e) {
+            console.warn('[Offline Manager] Could not add form to manual offline index:', e);
+        }
+    }
+
+    /**
      * Save form data offline
      */
     function saveFormOffline(formData) {
@@ -464,6 +497,9 @@
             offlineForms.push(formEntry);
             localStorage.setItem(CACHE_KEYS.OFFLINE_FORMS, JSON.stringify(offlineForms));
             
+            // also make a copy available via the general offline-data page
+            saveToManualIndex(formData);
+
             console.log('[Offline Manager] Form saved offline:', formEntry.id);
             return formEntry;
         } catch (e) {
@@ -488,9 +524,11 @@
             console.log(`[Offline Manager] Syncing ${unsyncedForms.length} offline forms...`);
             
             let syncedCount = 0;
+            // prefer explicit path to real api_save route; not the incorrect "api/save" used previously
+            const saveUrl = '/scouting/api_save';
             for (const form of unsyncedForms) {
                 try {
-                    const response = await fetch('/scouting/api/save', {
+                    const response = await fetch(saveUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -505,9 +543,13 @@
                         console.log(`[Offline Manager] Synced form ${form.id}`);
                     } else {
                         console.error(`[Offline Manager] Failed to sync form ${form.id}:`, response.statusText);
+                        // if the sync failed for some other reason, save a copy to the manual offline index so the user
+                        // can recover it via the Offline Data page
+                        saveToManualIndex(form.data);
                     }
                 } catch (e) {
                     console.error(`[Offline Manager] Error syncing form ${form.id}:`, e);
+                    saveToManualIndex(form.data);
                 }
             }
 

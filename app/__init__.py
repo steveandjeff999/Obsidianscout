@@ -1209,11 +1209,14 @@ def create_app(test_config=None, use_postgres=False):
                 team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
                 return {
                     'liquid_glass_buttons_enabled': bool(team_settings and getattr(team_settings, 'liquid_glass_buttons', False)),
-                    'spinning_counters_enabled': bool(team_settings and getattr(team_settings, 'spinning_counters_enabled', False))
+                    'spinning_counters_enabled': bool(team_settings and getattr(team_settings, 'spinning_counters_enabled', False)),
+                    'predictions_enabled': bool(team_settings and getattr(team_settings, 'predictions_enabled', True)),
+                    'leaderboard_accuracy_visible': bool(team_settings and getattr(team_settings, 'leaderboard_accuracy_visible', True))
                 }
         except Exception:
             pass
-        return {'liquid_glass_buttons_enabled': False, 'spinning_counters_enabled': False}
+        return {'liquid_glass_buttons_enabled': False, 'spinning_counters_enabled': False,
+                'predictions_enabled': True, 'leaderboard_accuracy_visible': True}
 
     # Inject hidden sidebar nav items so base.html can conditionally skip them.
     @app.context_processor

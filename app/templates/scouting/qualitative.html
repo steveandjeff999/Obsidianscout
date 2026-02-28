@@ -406,6 +406,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const matchSelector = document.getElementById('match-selector');
     const allianceRadios = document.querySelectorAll('input[name="alliance"]');
     const scoutModeRadios = document.querySelectorAll('input[name="scout-mode"]');
+
     // ==== GLOBAL CLIMB VISIBILITY STATE ====
     var showEndgameClimb = false;
     var showAutoClimb = false;
@@ -432,6 +433,281 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentEntryId = null;
     let matchesCache = {};
     let currentScoutMode = 'match'; // 'match' or 'team'
+
+    // helper to temporarily suppress autosave while we're restoring state
+    let qualAutosaveSuppress = false;
+
+    // ---------- selection persistence ----------
+    function restoreQualSelections() {
+        try {
+            const mode = localStorage.getItem('last_qual_mode');
+            if (mode) {
+                const radio = document.getElementById('mode-' + mode);
+                if (radio) {
+                    radio.checked = true;
+                    currentScoutMode = mode;
+                    // fire the change so listeners update UI
+                    radio.dispatchEvent(new Event('change'));
+                }
+            }
+            const mid = localStorage.getItem('last_qual_match_id');
+            if (mid) {
+                if (currentScoutMode === 'team' && indivMatchSelector) {
+                    indivMatchSelector.value = mid;
+                } else if (matchSelector) {
+                    matchSelector.value = mid;
+                }
+            }
+            const alli = localStorage.getItem('last_qual_alliance');
+            if (alli) {
+                const ar = document.querySelector('input[name="alliance"][value="' + alli + '"]');
+                if (ar) ar.checked = true;
+            }
+            const tid = localStorage.getItem('last_qual_team_id');
+            // fire change events to rebuild UI
+            if (currentScoutMode === 'team') {
+                if (indivMatchSelector) indivMatchSelector.dispatchEvent(new Event('change'));
+                // once teams are populated, apply saved team
+                if (tid && indivTeamSelector) {
+                    indivTeamSelector.value = tid;
+                    indivTeamSelector.dispatchEvent(new Event('change'));
+                }
+            } else {
+                if (matchSelector) matchSelector.dispatchEvent(new Event('change'));
+                const a = document.querySelector('input[name="alliance"]:checked');
+                if (a) a.dispatchEvent(new Event('change'));
+            }
+        } catch (e) {
+            console.warn('Could not restore qualitative selections', e);
+        }
+        // load autosaved field values once selections/UI built
+        try { loadAutosaveDataQual(); } catch(e) { console.warn('autosave restore failed', e); }
+    }
+
+    // restore scroll and focus
+    try {
+        const y = localStorage.getItem('qual_last_scroll');
+        if (y) window.scrollTo(0, parseInt(y));
+    } catch(e) {}
+    try {
+        const aid = localStorage.getItem('qual_last_active');
+        if (aid) {
+            const el = document.getElementById(aid);
+            if (el && typeof el.focus === 'function') el.focus({preventScroll:true});
+        }
+    } catch(e) {}
+
+    // ensure the individual team selector text is fixed once the page is shown
+    window.addEventListener('pageshow', function(ev) {
+        fixIndivTeamOptionText();
+    });
+    // also schedule a delayed fix in case the browser restores form state after our init
+    window.addEventListener('load', function() {
+        setTimeout(fixIndivTeamOptionText, 0);
+    });
+
+    // ---------- autosave helpers ----------
+    function getQualAutosaveKey() {
+        const mode = currentScoutMode || 'match';
+        const m = mode === 'team' ? (indivMatchSelector ? indivMatchSelector.value : '') : (matchSelector ? matchSelector.value : '');
+        const a = mode === 'match' ? (document.querySelector('input[name="alliance"]:checked')||{}).value || '' : '';
+        const t = mode === 'team' ? (indivTeamSelector ? indivTeamSelector.value : '') : '';
+        return `qual_autosave_${mode}_${m}_${a}_${t}`;
+    }
+
+    function saveAutosaveDataQual() {
+        try {
+            if (qualAutosaveSuppress) {
+                console.log('[Autosave:qual] suppressed save (restoring)');
+                return; // skip writes during restore phase
+            }
+            if (!form) return;
+            const key = getQualAutosaveKey();
+            const obj = {};
+
+            // first, store any normal form fields (if any exist — mostly selectors)
+            const formData = new FormData(form);
+            formData.forEach((v,k) => { obj[k] = v; });
+
+            // then walk every team card and capture its widgets
+            document.querySelectorAll('.team-card').forEach(card => {
+                const team = card.querySelector('.team-notes')?.dataset.team;
+                const alliance = card.querySelector('.team-notes')?.dataset.alliance;
+                if (!team || !alliance) return;
+                const prefix = `team_${alliance}_${team}`;
+
+                // overall rating button
+                const orBtn = card.querySelector('.overall-rating-btn.active');
+                if (orBtn) obj[`${prefix}_overall`] = orBtn.dataset.rating;
+
+                // ranking
+                const rankBtn = card.querySelector('.ranking-btn.active');
+                if (rankBtn) obj[`${prefix}_rank`] = rankBtn.dataset.ranking;
+
+                // any checkboxes with data-role, data-feeder, data-traversal
+                card.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    if (cb.dataset.role) {
+                        obj[`${prefix}_role_${cb.dataset.role}`] = cb.checked;
+                    } else if (cb.dataset.feeder) {
+                        obj[`${prefix}_feeder_${cb.dataset.feeder}`] = cb.checked;
+                    } else if (cb.dataset.traversal) {
+                        obj[`${prefix}_traversal_${cb.dataset.traversal}`] = cb.checked;
+                    } else if (cb.classList.contains('got-beached-check')) {
+                        // skip global beached toggles
+                    }
+                });
+
+                // radio groups: endgame and autoclimb
+                const eg = card.querySelector('input.endgame-result-radio:checked');
+                if (eg) obj[`${prefix}_endgame`] = eg.value;
+                const egLevel = card.querySelector('.endgame-level-select');
+                if (egLevel && egLevel.value) obj[`${prefix}_endgame_level`] = egLevel.value;
+                const ac = card.querySelector('input.auto-result-radio:checked');
+                if (ac) obj[`${prefix}_autoclimb`] = ac.value;
+
+                // selects: driver, defense, shot, robot
+                ['driver-rating-sel','defense-eff-sel','shot-acc-sel','robot-rating-sel'].forEach(cls => {
+                    const sel = card.querySelector(`.${cls}`);
+                    if (sel && sel.value) obj[`${prefix}_${cls}`] = sel.value;
+                });
+
+                // notes textarea
+                const ta = card.querySelector('textarea.team-notes');
+                if (ta) obj[`${prefix}_notes`] = ta.value;
+            });
+
+            // only save when there is something to remember; avoid wiping good data
+            const keys = Object.keys(obj);
+            if (keys.length === 0) {
+                console.log('[Autosave:qual] no data to save for', key, '- skipping');
+            } else if (keys.length === 1 && keys[0] === 'alliance') {
+                // don't persist if only alliance radio is set – cards not built yet
+                console.log('[Autosave:qual] alliance-only save for', key, '- skipping');
+            } else {
+                localStorage.setItem(key, JSON.stringify(obj));
+                console.log('[Autosave:qual] saved', key, obj);
+            }
+        } catch (e) { console.warn('[Autosave:qual] save failed', e); }
+    }
+
+    function loadAutosaveDataQual() {
+        try {
+            const key = getQualAutosaveKey();
+            const raw = localStorage.getItem(key);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            let restored = false;
+
+            // first apply any straightforward named fields
+            Object.keys(data).forEach(k => {
+                const el = form.elements[k] || document.querySelector(`[name="${k}"]`);
+                if (el) {
+                    if (el.type === 'checkbox') { el.checked = data[k]; restored = true; }
+                    else if (el.type === 'radio') {
+                        const r = document.querySelector(`input[name="${k}"][value="${data[k]}"]`);
+                        if (r) { r.checked = true; restored = true; }
+                    } else { el.value = data[k]; restored = true; }
+                }
+            });
+
+            // now walk team cards and load by our custom key pattern
+            document.querySelectorAll('.team-card').forEach(card => {
+                const team = card.querySelector('.team-notes')?.dataset.team;
+                const alliance = card.querySelector('.team-notes')?.dataset.alliance;
+                if (!team || !alliance) return;
+                const prefix = `team_${alliance}_${team}`;
+
+                // overall
+                if (data[`${prefix}_overall`]) {
+                    const val = data[`${prefix}_overall`];
+                    const btn = card.querySelector(`.overall-rating-btn[data-rating="${val}"]`);
+                    if (btn) { btn.classList.add('active'); restored = true; }
+                }
+                // rank
+                if (data[`${prefix}_rank`]) {
+                    const val = data[`${prefix}_rank`];
+                    const btn = card.querySelector(`.ranking-btn[data-ranking="${val}"]`);
+                    if (btn) { btn.classList.add('active'); restored = true; }
+                }
+                // roles/feeder/traversal
+                ['role','feeder','traversal'].forEach(type => {
+                    for (const key in data) {
+                        if (key.startsWith(`${prefix}_${type}_`)) {
+                            const sub = key.split(`${prefix}_${type}_`)[1];
+                            const cb = card.querySelector(`input[data-team="${team}"][data-alliance="${alliance}"][data-${type}="${sub}"]`);
+                            if (cb) { cb.checked = data[key]; restored = true; }
+                        }
+                    }
+                });
+                // endgame/auto
+                if (data[`${prefix}_endgame`]) {
+                    const val = data[`${prefix}_endgame`];
+                    const r = card.querySelector(`input.endgame-result-radio[value="${val}"]`);
+                    if (r) { r.checked = true; restored = true; }
+                }
+                if (data[`${prefix}_endgame_level`]) {
+                    const sel = card.querySelector('.endgame-level-select');
+                    if (sel) { sel.value = data[`${prefix}_endgame_level`]; restored = true; }
+                }
+                if (data[`${prefix}_autoclimb`]) {
+                    const val = data[`${prefix}_autoclimb`];
+                    const r = card.querySelector(`input.auto-result-radio[value="${val}"]`);
+                    if (r) { r.checked = true; restored = true; }
+                }
+                // select fields
+                ['driver-rating-sel','defense-eff-sel','shot-acc-sel','robot-rating-sel'].forEach(cls => {
+                    const sel = card.querySelector(`.${cls}`);
+                    if (sel && data[`${prefix}_${cls}`]) { sel.value = data[`${prefix}_${cls}`]; restored = true; }
+                });
+                // notes
+                if (data[`${prefix}_notes`]) {
+                    const ta = card.querySelector('textarea.team-notes');
+                    if (ta) { ta.value = data[`${prefix}_notes`]; restored = true; }
+                }
+            });
+
+            if (restored) {
+                console.log('[Autosave:qual] restored', key, data);
+            } else {
+                console.log('[Autosave:qual] nothing to restore for', key);
+            }
+            // after restoring, make sure individual-team dropdown shows numbers correctly
+            fixIndivTeamOptionText();
+        } catch (e) { console.warn('[Autosave:qual] load failed', e); }
+    }
+
+    function setupQualAutosave() {
+        if (!form) return;
+        const deb = debounce(saveAutosaveDataQual, 500);
+        form.addEventListener('input', deb);
+        form.addEventListener('change', deb);
+        window.addEventListener('beforeunload', () => { try{ saveAutosaveDataQual(); }catch(e){} });
+    }
+
+    function debounce(fn, wait) {
+        let t;
+        return function() {
+            // never even queue a save while suppression active
+            if (qualAutosaveSuppress) {
+                clearTimeout(t);
+                return;
+            }
+            clearTimeout(t);
+            t = setTimeout(() => {
+                if (!qualAutosaveSuppress) {
+                    fn.apply(this, arguments);
+                } else {
+                    console.log('[Autosave:qual] debounced call suppressed');
+                }
+            }, wait);
+        };
+    }
+
+    // track scroll/active element to restore after refresh
+    window.addEventListener('beforeunload', function() {
+        try { localStorage.setItem('qual_last_scroll', window.scrollY); } catch(e) {}
+        try { const a = document.activeElement; if (a && a.id) localStorage.setItem('qual_last_active', a.id); } catch(e) {}
+    });
 
     // ==== GLOBAL CLIMB VISIBILITY TOGGLE HANDLERS ====
     var endgameToggleEl = document.getElementById('toggle-endgame-climb');
@@ -623,6 +899,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 var siblings = this.parentElement.querySelectorAll('.ranking-btn');
                 siblings.forEach(function(s) { s.classList.remove('active'); s.setAttribute('aria-pressed', 'false'); });
                 this.classList.add('active'); this.setAttribute('aria-pressed', 'true');
+                saveAutosaveDataQual();
             });
         });
         // Overall rating buttons only (others are now selects)
@@ -631,6 +908,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 var siblings = this.parentElement.querySelectorAll('.overall-rating-btn');
                 siblings.forEach(function(s) { s.classList.remove('active'); });
                 this.classList.add('active');
+                saveAutosaveDataQual();
             });
         });
         // Show feeder type section when Feeding role is checked
@@ -638,6 +916,7 @@ document.addEventListener('DOMContentLoaded', function() {
             cb.addEventListener('change', function() {
                 var feederSection = document.getElementById('feeder-section-' + this.dataset.alliance + '-' + this.dataset.team);
                 if (feederSection) feederSection.style.display = this.checked ? '' : 'none';
+                saveAutosaveDataQual();
             });
         });
     }
@@ -646,6 +925,9 @@ document.addEventListener('DOMContentLoaded', function() {
     scoutModeRadios.forEach(function(radio) {
         radio.addEventListener('change', function() {
             currentScoutMode = this.value;
+            try { localStorage.setItem('last_qual_mode', this.value); } catch(e) {}
+            saveAutosaveDataQual();
+            try { loadAutosaveDataQual(); } catch(e) {}
             
             if (currentScoutMode === 'match') {
                 matchScoutingSection.style.display = 'block';
@@ -686,6 +968,10 @@ document.addEventListener('DOMContentLoaded', function() {
         saveBtn.disabled = true;
         qrBtn.disabled = true;
         
+        // remember selection and autosave
+        try { localStorage.setItem('last_qual_match_id', matchId); } catch(e) {}
+        saveAutosaveDataQual();
+        
         if (!matchId) return;
         
         // Get teams from the match (red + blue combined)
@@ -724,6 +1010,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         indivTeamSelector.disabled = false;
+    // ensure option labels always include the team number (workaround for occasional text loss after restore)
+    fixIndivTeamOptionText();
         
         // Also fetch full match data for later use
         fetch('{{ url_for("scouting.get_match_teams", match_id=0) }}'.replace('0', matchId))
@@ -750,19 +1038,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Handle individual team selection -> show team card
     indivTeamSelector.addEventListener('change', function() {
+        // also repair labels when selection changes
+        fixIndivTeamOptionText();
         const teamNum = this.value;
-        
+        try { localStorage.setItem('last_qual_team_id', teamNum); } catch(e) {}
         if (teamNum) {
             createIndividualTeamCard(teamNum);
             individualTeamSection.style.display = 'block';
             saveBtn.disabled = false;
             qrBtn.disabled = false;
+            try { loadAutosaveDataQual(); } catch(e) {}
         } else {
             individualTeamSection.style.display = 'none';
             individualTeamContainer.innerHTML = '';
             saveBtn.disabled = true;
             qrBtn.disabled = true;
+            try { loadAutosaveDataQual(); } catch(e) {}
         }
+        // after card creation/restoration, persist current state
+        saveAutosaveDataQual();
     });
     
     // Create card for individual team scouting
@@ -817,20 +1111,90 @@ document.addEventListener('DOMContentLoaded', function() {
         return false;
     }
     
+    // helper to keep individual-team dropdown labels sane
+    function fixIndivTeamOptionText() {
+        if (!indivTeamSelector) return;
+        const opts = Array.from(indivTeamSelector.options);
+        console.log('[Autosave:qual] fixing team option text, options before:', opts.map(o=>o.textContent));
+        opts.forEach(opt => {
+            if (opt.value && opt.textContent.trim().indexOf('Team') === 0) {
+                // always prefix with 'Team ' and value (value may be blank for placeholder)
+                opt.textContent = 'Team ' + opt.value;
+            }
+        });
+        console.log('[Autosave:qual] options after fix:', opts.map(o=>o.textContent));
+    }
+
     // Initialize offline cache
     cacheMatchesData();
     loadCachedMatches();
+
+    // set up autosave
+    setupQualAutosave();
+
+    // restore selections and draft AFTER all listeners defined
+    qualAutosaveSuppress = true;
+    restoreQualSelections();
+    // ensure fields inside form are filled
+    try { loadAutosaveDataQual(); } catch(e) {}
+    qualAutosaveSuppress = false;
+
     
     // Handle match selection
     matchSelector.addEventListener('change', function() {
         const matchId = this.value;
+        try { localStorage.setItem('last_qual_match_id', matchId); } catch(e) {}
+        // suppress any autosave while we rebuild the UI (including async fetch)
+        qualAutosaveSuppress = true;
+
         if (!matchId) {
             redSection.style.display = 'none';
             blueSection.style.display = 'none';
             saveBtn.disabled = true;
             qrBtn.disabled = true;
+            // clear form cards when no match
+            loadAutosaveDataQual(); // ensure blank
+            qualAutosaveSuppress = false;
+            saveAutosaveDataQual();
             return;
         }
+        
+        // Try online fetch first, fallback to cache if offline
+        fetch('{{ url_for("scouting.get_match_teams", match_id=0) }}'.replace('0', matchId))
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.success) {
+                    currentMatchData = data;
+                    updateAllianceDisplay();
+                }
+                // done building, allow autosaves again
+                qualAutosaveSuppress = false;
+                saveAutosaveDataQual();
+            })
+            .catch(function(error) {
+                console.warn('Online fetch failed, using cached data:', error);
+                
+                // Fallback to cached data
+                if (matchesCache[matchId]) {
+                    const cachedMatch = matchesCache[matchId];
+                    currentMatchData = {
+                        success: true,
+                        match: {
+                            id: cachedMatch.id,
+                            match_number: extractMatchNumber(cachedMatch.text),
+                            match_type: extractMatchType(cachedMatch.text),
+                            event_code: extractEventCode(cachedMatch.text),
+                            red_teams: cachedMatch.red_teams,
+                            blue_teams: cachedMatch.blue_teams
+                        }
+                    };
+                    updateAllianceDisplay();
+                }
+                qualAutosaveSuppress = false;
+                saveAutosaveDataQual();
+            });
         
         // Try online fetch first, fallback to cache if offline
         fetch('{{ url_for("scouting.get_match_teams", match_id=0) }}'.replace('0', matchId))
@@ -890,21 +1254,30 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Handle alliance selection
     allianceRadios.forEach(function(radio) {
-        radio.addEventListener('change', updateAllianceDisplay);
+        radio.addEventListener('change', function() {
+            updateAllianceDisplay();
+            try { localStorage.setItem('last_qual_alliance', this.value); } catch(e) {}
+            saveAutosaveDataQual();
+        });
     });
     
     function updateAllianceDisplay() {
         if (!currentMatchData) return;
-        
+        const prevSuppress = qualAutosaveSuppress;
+        qualAutosaveSuppress = true;                      // block autosaves during rebuild
+
         const selectedAlliance = document.querySelector('input[name="alliance"]:checked');
-        if (!selectedAlliance) return;
-        
+        if (!selectedAlliance) {
+            qualAutosaveSuppress = prevSuppress;
+            return;
+        }
+
         const allianceValue = selectedAlliance.value;
-        
+
         // Clear containers
         redContainer.innerHTML = '';
         blueContainer.innerHTML = '';
-        
+
         // Show/hide sections based on selection
         if (allianceValue === 'red' || allianceValue === 'both') {
             redSection.style.display = 'block';
@@ -912,23 +1285,28 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             redSection.style.display = 'none';
         }
-        
+
         if (allianceValue === 'blue' || allianceValue === 'both') {
             blueSection.style.display = 'block';
             createTeamCards(currentMatchData.match.blue_teams, blueContainer, 'blue');
         } else {
             blueSection.style.display = 'none';
         }
-        
+
+        // after rebuilding cards restore any autosaved answers
+        try { loadAutosaveDataQual(); } catch(e) {}
+
         // Load existing data if available
         if (currentMatchData.existing_data) {
             loadExistingData(currentMatchData.existing_data);
             currentEntryId = currentMatchData.existing_data.id;
         }
-        
+
         // Enable buttons when alliance is selected
         saveBtn.disabled = false;
         qrBtn.disabled = false;
+
+        qualAutosaveSuppress = prevSuppress;            // restore previous flag
     }
     
     function createTeamCards(teams, container, alliance) {
@@ -1232,6 +1610,9 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(function(data) {
             if (data.success) {
                 alert('Qualitative scouting data saved successfully!');
+
+                // remove any autosaved draft for this form
+                try { localStorage.removeItem(getQualAutosaveKey()); } catch(e) {}
                 
                 // Store entry ID for future reference
                 if (data.entry_id) {
@@ -1419,6 +1800,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, 100);
     }
+    // final restore to ensure mode/match/alliance/team applied after ALL handlers attached
+    restoreQualSelections();
 });
 </script>
 {% endblock %}

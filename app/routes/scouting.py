@@ -681,12 +681,18 @@ def scouting_form():
         
         # Build data dictionary from form
         data = {}
+        # determine prediction allowance (admin setting)
+        from app.models import ScoutingTeamSettings
+        ts = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+        predictions_allowed = bool(ts and getattr(ts, 'predictions_enabled', True))
         
         # Process all form fields dynamically based on their element type
         id_map = get_id_to_perm_id_mapping()
         for key, value in request.form.items():
             # Skip non-data fields
             if key in ['csrf_token', 'scout_name', 'scouting_station', 'team_id', 'match_id', 'alliance']:
+                continue
+            if not predictions_allowed and key == 'predicted_winner':
                 continue
                 
             # Find the element in the game config to determine its type

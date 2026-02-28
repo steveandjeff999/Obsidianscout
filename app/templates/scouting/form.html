@@ -138,6 +138,7 @@
             
             const formContent = document.getElementById('form-content');
             const { team, match, html, cached, needsReset } = offlineData;
+            console.log('[Offline Mode] about to inject HTML into form-content');
             
             // Update subheading (guarded)
             try {
@@ -194,6 +195,8 @@
             }
 
             formContent.innerHTML = formHTML;
+            // attempt to wire autosave immediately in case the later timeout is skipped
+            try { setupAutosave(); loadAutosaveData(); } catch(e){ console.warn('[Offline Mode] early autosave init failed', e); }
             
             // Debug: Check if rating containers exist in DOM
             const ratingContainersInDOM = document.querySelectorAll('.rating-container');
@@ -278,6 +281,9 @@
                         // ignore
                     }
                 }
+
+                // final points calculation in case something changed during restore
+                try { updatePointsCalculation(); } catch (e) { /* ignore */ }
             }, 50);
         }
         
@@ -292,6 +298,23 @@
             }
             field.value = value;
         }
+
+        // watch for dynamically inserted forms and wire up autosave immediately
+        (function(){
+            const container = document.getElementById('form-content');
+            if (!container) return;
+            const mo = new MutationObserver(muts => {
+                muts.forEach(m => {
+                    m.addedNodes.forEach(node => {
+                        if(node.nodeType === 1 && node.id === 'scouting-form') {
+                            console.log('[Autosave Observer] new form detected');
+                            try { setupAutosave(); loadAutosaveData(); } catch(e){ console.warn('autosave observer error', e); }
+                        }
+                    });
+                });
+            });
+            mo.observe(container, { childList: true, subtree: true });
+        })();
         
         // Determine alliance color from match schedule data
         function determineAlliance(teamNumber, match) {
@@ -516,53 +539,61 @@
         
         // Generate complete offline form HTML matching online structure
         function generateOfflineFormHTML(team, match, gameConfig) {
-            return `
-                <!-- Offline Mode Indicator -->
-                <div class="alert alert-info alert-dismissible fade show mb-3">
-                    <i class="fas fa-wifi-slash me-2"></i>
-                    <strong>Offline Mode</strong> - Form loaded from cached data. 
-                    Data will be saved locally and synced when connection is restored.
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-                
-                <!-- Scouting Form -->
-                <form id="scouting-form" class="scouting-form" data-offline="true">
-                    <input type="hidden" name="team_id" value="${team.id}">
-                    <input type="hidden" name="match_id" value="${match.id}">
-                    <input type="hidden" name="team_number" value="${team.team_number}">
-                    <input type="hidden" name="match_number" value="${match.match_number}">
-                    <input type="hidden" name="match_type" value="${match.match_type}">
-                    
-                    ${generateFormFieldsFromConfig(gameConfig)}
+            // build string piecewise to avoid any parser confusion from large
+            // template literals containing HTML tags
+            let html = '';
 
-                    <div class="form-check form-switch mt-2">
-                        <input class="form-check-input" type="checkbox" id="spinningCountersToggle" role="switch" aria-label="Enable spinning counters (per-device)">
-                        <label class="form-check-label" for="spinningCountersToggle">Enable spinning counters (per-device) <i class="fas fa-question-circle ms-2" title="Enable the spinning counter UI on this device. Each 0.125 rotation (45°) increments the count by one. This preference is stored locally and does not require admin approval."></i></label>
-                    </div>
+            html += '<!-- Offline Mode Indicator -->';
+            html += '<div class="alert alert-info alert-dismissible fade show mb-3">';
+            html += '<i class="fas fa-wifi-slash me-2"></i>';
+            html += '<strong>Offline Mode</strong> - Form loaded from cached data. ';
+            html += 'Data will be saved locally and synced when connection is restored.';
+            html += '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+            html += '</div>';
 
-                    <!-- Action Buttons -->
-                    <div class="form-section mb-4">
-                        <div class="d-grid gap-2">
-                            <button type="button" id="save-button" class="btn btn-primary btn-lg">
-                                <i class="fas fa-save me-2"></i>Save Offline
-                            </button>
-                            <button type="button" id="generateQR" class="btn btn-success btn-lg">
-                                <i class="fas fa-qrcode me-2"></i>Generate QR Code
-                            </button>
-                            <button type="button" id="export-json-button" class="btn btn-info btn-lg">
-                                <i class="fas fa-file-export me-2"></i>Export JSON
-                            </button>
-                            <button type="button" id="reset-form" class="btn btn-outline-secondary">
-                                <i class="fas fa-redo me-2"></i>Reset Form
-                            </button>
-                        </div>
-                        <div class="mt-2 text-center small text-muted">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Offline mode: Data will be saved locally
-                        </div>
-                    </div>
-                </form>
-            `;
+            html += '<!-- Scouting Form -->';
+            html += '<form id="scouting-form" class="scouting-form" data-offline="true">';
+            html += `<input type="hidden" name="team_id" value="${team.id}">`;
+            html += `<input type="hidden" name="match_id" value="${match.id}">`;
+            html += `<input type="hidden" name="team_number" value="${team.team_number}">`;
+            html += `<input type="hidden" name="match_number" value="${match.match_number}">`;
+            html += `<input type="hidden" name="match_type" value="${match.match_type}">`;
+
+            // insert fields generated from config (may be large)
+            html += generateFormFieldsFromConfig(gameConfig);
+
+            html += '<div class="form-check form-switch mt-2">';
+            html += '<input class="form-check-input" type="checkbox" id="spinningCountersToggle" role="switch" aria-label="Enable spinning counters (per-device)">';
+            html += '<label class="form-check-label" for="spinningCountersToggle">';
+            html += 'Enable spinning counters (per-device) <i class="fas fa-question-circle ms-2"';
+            html += ' title="Enable the spinning counter UI on this device. Each 0.125 rotation (45°) increments the count by one. This preference is stored locally and does not require admin approval."></i>';
+            html += '</label>';
+            html += '</div>';
+
+            html += '<!-- Action Buttons -->';
+            html += '<div class="form-section mb-4">';
+            html += '<div class="d-grid gap-2">';
+            html += '<button type="button" id="save-button" class="btn btn-primary btn-lg">';
+            html += '<i class="fas fa-save me-2"></i>Save Offline';
+            html += '</button>';
+            html += '<button type="button" id="generateQR" class="btn btn-success btn-lg">';
+            html += '<i class="fas fa-qrcode me-2"></i>Generate QR Code';
+            html += '</button>';
+            html += '<button type="button" id="export-json-button" class="btn btn-info btn-lg">';
+            html += '<i class="fas fa-file-export me-2"></i>Export JSON';
+            html += '</button>';
+            html += '<button type="button" id="reset-form" class="btn btn-outline-secondary">';
+            html += '<i class="fas fa-redo me-2"></i>Reset Form';
+            html += '</button>';
+            html += '</div>';
+            html += '<div class="mt-2 text-center small text-muted">';
+            html += '<i class="fas fa-info-circle me-1"></i>';
+            html += 'Offline mode: Data will be saved locally';
+            html += '</div>';
+            html += '</div>';
+            html += '</form>';
+
+            return html;
         }
         
         // Generate form fields from game config - matches online structure
@@ -880,6 +911,9 @@
 
             // Make sure points are calculated on page load
             updatePointsCalculation();
+
+            // Setup autosave so entries persist across refreshes
+            try { setupAutosave(); loadAutosaveData(); } catch (e) { console.warn('autosave init failed', e); }
         }
         
         // Function to show toast notifications
@@ -890,7 +924,10 @@
             const toast = document.createElement('div');
             toast.classList.add('toast', 'align-items-center', 'border-0');
             toast.classList.add(`bg-${type === 'error' ? 'danger' : type}`);
-            toast.classList.add(type === 'error' || type === 'success' ? 'text-white' : '');
+            // only add text-white when we actually need it (avoid empty token error)
+            if (type === 'error' || type === 'success') {
+                toast.classList.add('text-white');
+            }
             toast.setAttribute('role', 'alert');
             toast.setAttribute('aria-live', 'assertive');
             toast.setAttribute('aria-atomic', 'true');
@@ -986,7 +1023,9 @@
                                 saveBtn.disabled = false;
                                 saveBtn.innerHTML = originalText;
                                 
-                                showToast('Data saved offline successfully! Will sync when connection is restored.', 'success');
+                                showToast('Data saved offline successfully! Will sync when connection is restored. You can also manage unsynced entries on the Offline Data page.', 'success');
+                                // clear any autosaved draft now that the entry is persisted
+                                try { clearAutosaveForForm(); } catch (e) { }
                                 
                                 // Add save indicator
                                 const saveTimeIndicator = document.createElement('div');
@@ -1084,6 +1123,8 @@
                                 buttonContainer.appendChild(saveTimeIndicator);
                             }
                         }
+                        // clear any autosaved draft now that the form has been successfully saved
+                        try { clearAutosaveForForm(); } catch (e) { }
                     } else {
                         showToast('Error: ' + (data.message || 'Unknown error'), 'error');
                     }
@@ -1286,6 +1327,8 @@
                         
                         // Update points after resetting form
                         updatePointsCalculation();
+                        // also clear any autosaved draft since user intentionally reset
+                        try { clearAutosaveForForm(); } catch (e) { }
                     }
                 });
             }
@@ -1296,6 +1339,123 @@
         const matchSelector = document.getElementById('match-selector');
         const teamMatchForm = document.getElementById('team-match-form');
         
+        // autosave helpers - defined outside of condition so they are always available
+        function getAutosaveKey(teamId, matchId) {
+            return `scouting_autosave_${teamId}_${matchId}`;
+        }
+
+        function saveAutosaveData() {
+            try {
+                console.log('[Autosave] saveAutosaveData called');
+                const form = document.getElementById('scouting-form');
+                if (!form) return;
+                const teamId = form.elements['team_id'] && form.elements['team_id'].value;
+                const matchId = form.elements['match_id'] && form.elements['match_id'].value;
+                if (!teamId || !matchId) return;
+
+                const formData = new FormData(form);
+                const obj = {};
+                formData.forEach((value, key) => {
+                    const element = form.elements[key];
+                    if (element && element.type === 'checkbox') {
+                        obj[key] = element.checked;
+                    } else if (element && element.type === 'radio') {
+                        obj[key] = value; // FormData already gives selected value
+                    } else if (element && element.type === 'number') {
+                        obj[key] = value === '' ? 0 : Number(value);
+                    } else {
+                        obj[key] = value;
+                    }
+                });
+
+                localStorage.setItem(getAutosaveKey(teamId, matchId), JSON.stringify(obj));
+                console.log('[Autosave] saved data for', teamId, matchId);
+            } catch (e) {
+                console.warn('[Autosave] error saving data', e);
+            }
+        }
+
+        function loadAutosaveData() {
+            try {
+                const form = document.getElementById('scouting-form');
+                if (!form) return;
+                const teamId = form.elements['team_id'] && form.elements['team_id'].value;
+                const matchId = form.elements['match_id'] && form.elements['match_id'].value;
+                console.log('[Autosave] attempting restore, teamId:', teamId, 'matchId:', matchId);
+                if (!teamId || !matchId) {
+                    console.log('[Autosave] cannot restore, missing team or match id');
+                    return;
+                }
+
+                const key = getAutosaveKey(teamId, matchId);
+                const saved = localStorage.getItem(key);
+                if (!saved) {
+                    console.log('[Autosave] no saved data for key', key);
+                    return;
+                }
+
+                const data = JSON.parse(saved);
+                let restored = false;
+                Object.keys(data).forEach(k => {
+                    const el = form.elements[k];
+                    if (!el) return;
+                    if (el.type === 'checkbox') {
+                        el.checked = data[k];
+                        restored = true;
+                    } else if (el.type === 'radio') {
+                        const radios = form.querySelectorAll(`input[name="${k}"]`);
+                        radios.forEach(r => { if (r.value == data[k]) r.checked = true; });
+                        restored = true;
+                    } else {
+                        el.value = data[k];
+                        restored = true;
+                    }
+                });
+                if (restored) {
+                    console.log('[Autosave] restored data for', teamId, matchId);
+                    showToast('Restored unsaved form data from previous session', 'info');
+                    // recalc points if any
+                    try { updatePointsCalculation(); } catch (e) {}
+
+                    // some widgets need to be refreshed to reflect new values
+                    try { initializeRatings(); } catch(e) {}
+                    try { initializeCounters(); } catch(e) {}
+                    // trigger change on selects (select2, etc.)
+                    form.querySelectorAll('select').forEach(el => el.dispatchEvent(new Event('change')));
+
+                    // final recalc after widgets have been refreshed
+                    try { updatePointsCalculation(); } catch(e) {}
+                }
+            } catch (e) {
+                console.warn('[Autosave] error loading data', e);
+            }
+        }
+
+        function clearAutosaveForForm() {
+            try {
+                const form = document.getElementById('scouting-form');
+                if (!form) return;
+                const teamId = form.elements['team_id'] && form.elements['team_id'].value;
+                const matchId = form.elements['match_id'] && form.elements['match_id'].value;
+                if (!teamId || !matchId) return;
+                localStorage.removeItem(getAutosaveKey(teamId, matchId));
+            } catch (e) { }
+        }
+
+        function setupAutosave() {
+            console.log('[Autosave] setupAutosave invoked');
+            const form = document.getElementById('scouting-form');
+            if (!form) return;
+            const debounced = debounce(saveAutosaveData, 500);
+            form.addEventListener('input', debounced);
+            form.addEventListener('change', debounced);
+
+            // ensure any pending autosave is flushed when navigating away
+            window.addEventListener('beforeunload', () => {
+                try { saveAutosaveData(); } catch (e) { console.warn('[Autosave] flush on unload failed', e); }
+            });
+        }
+
         if (teamSelector && matchSelector && teamMatchForm) {
             // New: search inputs for filtering options
             const teamSearch = document.getElementById('team-search');
@@ -1638,6 +1798,7 @@
                                     }
                                 } catch (e) { /* ignore */ }
 
+                            {% if predictions_enabled %}
                             // Copy quick prediction (if set) into loaded form's predicted_winner input
                             try {
                                 const quick = document.querySelector('input[name="predicted_winner_select"]:checked');
@@ -1652,6 +1813,7 @@
                                     }
                                 }
                             } catch (e) { console.warn('Could not copy quick prediction into loaded form', e); }
+                            {% endif %}
 
                             // Restore scroll position
                                 try {

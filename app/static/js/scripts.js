@@ -3829,7 +3829,7 @@ function initScoutingForm() {
         // Get form data
         const formData = new FormData(form);
 
-        const doFetch = () => fetch('/scouting/api/save', { method: 'POST', body: formData });
+        const doFetch = () => fetch('/scouting/api_save', { method: 'POST', body: formData });
 
         // Attempt save, then retry once on failure if still online
         doFetch()

@@ -109,6 +109,26 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-chart-pie"></i> Prediction Settings {{ help.help_icon('Control form predictions and leaderboard accuracy for your team.', 'Prediction settings') }}</h5></div>
+                                <div class="card-body d-flex flex-column">
+                                    <p class="mb-3">Show a prediction selector on the scouting form and optionally display accuracy on the scout leaderboard.</p>
+                                    <div class="mt-auto">
+                                        <form method="POST" action="{{ url_for('auth.toggle_predictions') }}" class="d-inline mb-2">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button id="predictionsBtn" type="submit" class="btn btn-secondary"><i id="predictionsIcon" class="fas fa-spinner fa-spin"></i> <span id="predictionsText">Loading...</span></button>
+                                            <p id="predictionsStatus" class="mt-2 small text-muted">Checking server...</p>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('auth.toggle_leaderboard_accuracy') }}" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button id="leaderboardBtn" type="submit" class="btn btn-secondary"><i id="leaderboardIcon" class="fas fa-spinner fa-spin"></i> <span id="leaderboardText">Loading...</span></button>
+                                            <p id="leaderboardStatus" class="mt-2 small text-muted">Checking server...</p>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -512,6 +532,82 @@ document.addEventListener('DOMContentLoaded', function() {
 
     refreshSpinningCounterStatus();
     setInterval(refreshSpinningCounterStatus, 10000);
+
+    // Prediction toggle status
+    async function refreshPredictionStatus() {
+        try {
+            const resp = await fetch("{{ url_for('auth.predictions_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
+            const data = await resp.json();
+            const enabled = !!data.enabled;
+            const btn = document.getElementById('predictionsBtn');
+            const icon = document.getElementById('predictionsIcon');
+            const text = document.getElementById('predictionsText');
+            const statusEl = document.getElementById('predictionsStatus');
+            if (enabled) {
+                btn.className = 'btn btn-success';
+                icon.className = 'fas fa-toggle-on';
+                text.textContent = 'Disable Form Predictions';
+                statusEl.className = 'mt-2 small text-success';
+                statusEl.textContent = 'Predictions are ENABLED on the scouting form';
+            } else {
+                btn.className = 'btn btn-secondary';
+                icon.className = 'fas fa-toggle-off';
+                text.textContent = 'Enable Form Predictions';
+                statusEl.className = 'mt-2 small text-muted';
+                statusEl.textContent = 'Predictions are DISABLED on the scouting form';
+            }
+        } catch (e) {
+            const statusEl = document.getElementById('predictionsStatus');
+            const btn = document.getElementById('predictionsBtn');
+            const icon = document.getElementById('predictionsIcon');
+            const text = document.getElementById('predictionsText');
+            statusEl.className = 'mt-2 small text-muted';
+            statusEl.textContent = 'Could not fetch server status';
+            btn.className = 'btn btn-secondary';
+            icon.className = 'fas fa-exclamation-triangle';
+            text.textContent = 'Retry';
+        }
+    }
+    refreshPredictionStatus();
+    setInterval(refreshPredictionStatus, 10000);
+
+    // Leaderboard accuracy toggle status
+    async function refreshLeaderboardStatus() {
+        try {
+            const resp = await fetch("{{ url_for('auth.leaderboard_accuracy_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
+            const data = await resp.json();
+            const enabled = !!data.enabled;
+            const btn = document.getElementById('leaderboardBtn');
+            const icon = document.getElementById('leaderboardIcon');
+            const text = document.getElementById('leaderboardText');
+            const statusEl = document.getElementById('leaderboardStatus');
+            if (enabled) {
+                btn.className = 'btn btn-success';
+                icon.className = 'fas fa-toggle-on';
+                text.textContent = 'Hide Leaderboard Accuracy';
+                statusEl.className = 'mt-2 small text-success';
+                statusEl.textContent = 'Leaderboard accuracy is VISIBLE for your team';
+            } else {
+                btn.className = 'btn btn-secondary';
+                icon.className = 'fas fa-toggle-off';
+                text.textContent = 'Show Leaderboard Accuracy';
+                statusEl.className = 'mt-2 small text-muted';
+                statusEl.textContent = 'Leaderboard accuracy is HIDDEN for your team';
+            }
+        } catch (e) {
+            const statusEl = document.getElementById('leaderboardStatus');
+            const btn = document.getElementById('leaderboardBtn');
+            const icon = document.getElementById('leaderboardIcon');
+            const text = document.getElementById('leaderboardText');
+            statusEl.className = 'mt-2 small text-muted';
+            statusEl.textContent = 'Could not fetch server status';
+            btn.className = 'btn btn-secondary';
+            icon.className = 'fas fa-exclamation-triangle';
+            text.textContent = 'Retry';
+        }
+    }
+    refreshLeaderboardStatus();
+    setInterval(refreshLeaderboardStatus, 10000);
 
     // --- EPA quick-status badge on admin page ---
     async function refreshEpaQuickStatus() {

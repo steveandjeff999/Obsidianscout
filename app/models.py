@@ -146,6 +146,14 @@ class ScoutingTeamSettings(db.Model):
     liquid_glass_buttons = db.Column(db.Boolean, default=False, nullable=False)
     # If true, allow spinning/rotating counters on the scouting form (admin-controlled)
     spinning_counters_enabled = db.Column(db.Boolean, default=False, nullable=False)
+    # Whether scouts can make a winner prediction on the scouting form.  When
+    # disabled the radio buttons are hidden and predictions are ignored when
+    # evaluating accuracy.
+    predictions_enabled = db.Column(db.Boolean, default=True, nullable=False)
+    # Whether the scout leaderboard should include prediction accuracy and allow
+    # sorting by it.  Administrators may turn this off if they don't want team
+    # members to see or use the accuracy metrics.
+    leaderboard_accuracy_visible = db.Column(db.Boolean, default=True, nullable=False)
     # EPA data source for graphs/predictions:
     #   'scouted_only'             – use only locally scouted data (default)
     #   'scouted_with_statbotics'  – use scouted data, fill gaps with Statbotics EPA
