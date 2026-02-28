@@ -68,6 +68,26 @@
                     </div>
                     
                     <form id="qualitative-form" novalidate>
+                        {% if predictions_enabled %}
+                        <div class="row mb-3" id="prediction-row">
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Predicted Winner</label>
+                                <div class="d-flex gap-2 flex-wrap" role="group" aria-label="Predicted winner">
+                                    <input type="radio" class="btn-check" name="predicted_winner" id="qual_pred_red" value="red" autocomplete="off">
+                                    <label class="btn btn-outline-danger btn-sm" for="qual_pred_red">Red Alliance</label>
+
+                                    <input type="radio" class="btn-check" name="predicted_winner" id="qual_pred_blue" value="blue" autocomplete="off">
+                                    <label class="btn btn-outline-primary btn-sm" for="qual_pred_blue">Blue Alliance</label>
+
+                                    <input type="radio" class="btn-check" name="predicted_winner" id="qual_pred_tie" value="tie" autocomplete="off">
+                                    <label class="btn btn-outline-secondary btn-sm" for="qual_pred_tie">Tie</label>
+
+                                    <input type="radio" class="btn-check" name="predicted_winner" id="qual_pred_none" value="" autocomplete="off" checked>
+                                    <label class="btn btn-outline-secondary btn-sm" for="qual_pred_none">No Prediction</label>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
                         <!-- Match-based scouting section -->
                         <div id="match-scouting-section">
                             <div class="row mb-3">
@@ -1321,6 +1341,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function loadExistingData(existingData) {
         var data = existingData.data;
+        // restore prediction if present
+        try {
+            if (data._match_summary && data._match_summary.predicted_winner) {
+                var val = data._match_summary.predicted_winner;
+                var radio = document.querySelector('input[name="predicted_winner"][value="' + val + '"]');
+                if (radio) radio.checked = true;
+            }
+        } catch (e) { /* ignore */ }
+
         ['red', 'blue'].forEach(function(al) {
             if (!data[al]) return;
             Object.keys(data[al]).forEach(function(teamKey) {
@@ -1492,6 +1521,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 else if (localStorage.getItem('scout_name')) scoutName = localStorage.getItem('scout_name');
             } catch(e) {}
 
+            
+            // gather any match-summary info (prediction)
+            var matchSummary = {};
+            {% if predictions_enabled %}
+            var pred = document.querySelector('input[name="predicted_winner"]:checked');
+            if (pred && pred.value) {
+                matchSummary.predicted_winner = pred.value;
+            }
+            {% endif %}
+
             return {
                 qualitative: true,
                 individual_team: true,
@@ -1505,7 +1544,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 show_endgame_climb: showEndgameClimb,
                 scout_name: scoutName,
                 timestamp: new Date().toISOString(),
-                offline_generated: true
+                offline_generated: true,
+                match_summary: matchSummary
             };
         } else {
             // Match-based scouting mode
@@ -1544,6 +1584,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 else if (localStorage.getItem('scout_name')) scoutName = localStorage.getItem('scout_name');
             } catch(e) {}
 
+            
+            // gather match-summary information
+            var matchSummary = {};
+            {% if predictions_enabled %}
+            var pred = document.querySelector('input[name="predicted_winner"]:checked');
+            if (pred && pred.value) {
+                matchSummary.predicted_winner = pred.value;
+            }
+            {% endif %}
+
             return {
                 qualitative: true,
                 match_id: parseInt(matchId),
@@ -1556,7 +1606,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 show_endgame_climb: showEndgameClimb,
                 scout_name: scoutName,
                 timestamp: new Date().toISOString(),
-                offline_generated: true
+                offline_generated: true,
+                match_summary: matchSummary
             };
         }
     }
@@ -1595,6 +1646,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 show_auto_climb: formData.show_auto_climb,
                 show_endgame_climb: formData.show_endgame_climb
             };
+        }
+        // propagate any match_summary (predictions) if collected
+        if (formData.match_summary) {
+            savePayload.match_summary = formData.match_summary;
         }
         
         fetch('{{ url_for("scouting.save_qualitative_scouting") }}', {

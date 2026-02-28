@@ -223,10 +223,15 @@ def filter_events_by_scouting_team(query=None):
             # Use DISTINCT on uppercase code to prevent duplicate events
             upper_codes = [code.upper() for code in shared_event_codes]
             alliance_team_numbers = get_alliance_team_numbers()
+            # Use DISTINCT ON upper(Event.code) to dedupe events by code. Postgres
+            # requires that the DISTINCT ON expression(s) match the leading
+            # ORDER BY expressions, so we add an ordering by the same expression
+            # here.  Callers may append additional ORDER BY clauses (e.g. name,
+            # year) and those will simply follow the forced prefix.
             return query.filter(
                 func.upper(Event.code).in_(upper_codes),
                 Event.scouting_team_number.in_(alliance_team_numbers)
-            ).distinct(func.upper(Event.code))
+            ).distinct(func.upper(Event.code)).order_by(func.upper(Event.code))
         else:
             # Show only current team's events
             return query.filter(Event.scouting_team_number == scouting_team_number)

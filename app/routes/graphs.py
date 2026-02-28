@@ -694,6 +694,14 @@ def scout_leaderboard():
     )
 
     entries = q.all()
+    # also include qualitative scouting entries so their predictions contribute
+    from app.models import QualitativeScoutingData
+    qual_q = QualitativeScoutingData.query
+    if scouting_team_number is not None:
+        qual_q = qual_q.filter_by(scouting_team_number=scouting_team_number)
+    # exclude alliance-copied qualitative entries if desired (similar to scouting data)
+    qual_entries = qual_q.all()
+    entries.extend(qual_entries)
 
     # Aggregate per-scout
     leaders = {}
@@ -947,13 +955,14 @@ def scout_leaderboard():
         if match.id in scout_evaluated_matches[key]:
             continue
 
-        # METHOD 1: Check explicit prediction in scouting data
+        # METHOD 1: Check explicit prediction in scouting data (including nested _match_summary)
         data = {}
         try:
             data = e.data or {}
         except Exception:
             data = {}
 
+        # top-level candidates
         pred_candidates = [
             data.get('predicted_winner'),
             data.get('prediction'),
@@ -962,6 +971,17 @@ def scout_leaderboard():
             data.get('predicted_winner_choice'),
             data.get('predicted_winner_team'),
         ]
+        # also look inside match_summary if present
+        ms = data.get('_match_summary') or {}
+        if isinstance(ms, dict):
+            pred_candidates.extend([
+                ms.get('predicted_winner'),
+                ms.get('prediction'),
+                ms.get('predicted'),
+                ms.get('winner_prediction'),
+                ms.get('predicted_winner_choice'),
+                ms.get('predicted_winner_team'),
+            ])
 
         pred_val = None
         for p in pred_candidates:
