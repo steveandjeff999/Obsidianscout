@@ -6,6 +6,11 @@
 {% block heading %}Qualitative Scouting Leaderboard{% endblock %}
 
 {% block content %}
+<style>
+    /* bronze and silver text colors used for leaderboard medals */
+    .text-silver { color: #c0c0c0; }
+    .text-bronze { color: #cd7f32; }
+</style>
 <div class="container-fluid">
     <div class="d-flex align-items-center justify-content-between mb-4">
         <div>
@@ -146,7 +151,13 @@
                                 {% if loop.index <= 3 %}
                                 <span class="badge {% if loop.index == 1 %}bg-warning text-dark{% elif loop.index == 2 %}bg-secondary{% else %}bg-danger{% endif %} fs-5">
                                     #<span class="rank-num">{{ loop.index }}</span>
-                                    {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% endif %}
+                                    {% if loop.index == 1 %}
+                                        <i class="fas fa-medal text-warning ms-1" title="1st place"></i>
+                                    {% elif loop.index == 2 %}
+                                        <i class="fas fa-medal text-secondary ms-1" title="2nd place"></i>
+                                    {% elif loop.index == 3 %}
+                                        <i class="fas fa-medal text-bronze ms-1" title="3rd place"></i>
+                                    {% endif %}
                                 </span>
                                 {% else %}
                                 <span class="badge bg-dark fs-6">#<span class="rank-num">{{ loop.index }}</span></span>

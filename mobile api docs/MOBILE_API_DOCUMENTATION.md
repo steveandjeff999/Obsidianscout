@@ -1153,6 +1153,28 @@ Content-Type: application/json
 }
 ```
 
+> **Qualitative payloads:**
+> To submit a qualitative scouting form you may instead POST a JSON object
+> containing `"qualitative": true`. The structure should mirror the web QR
+> export (see web UI source); the server will automatically sort the
+> `team_data` sections by ranking and perform the same validation rules as
+> the browser form. Example qualitative request:
+>
+> ```json
+> {
+>   "qualitative": true,
+>   "match_id": 5,
+>   "alliance_scouted": "red",
+>   "team_data": {
+>     "red": {
+>       "team_222": {"ranking": 2},
+>       "team_111": {"ranking": 1}
+>     }
+>   }
+> }
+> ```
+> 
+> The server responds with `qualitative_id` in place of `scouting_id`.
 **Success Response (201):**
 ```json
 {

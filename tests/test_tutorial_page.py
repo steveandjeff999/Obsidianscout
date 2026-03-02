@@ -17,6 +17,17 @@ def test_scout_tutorial_renders(client):
     assert b'Show Scouting' in body
     assert b'Start Scouting' in body
     assert b'Practice' in body
+    # verify that all tutorial steps exist in the markup
+    assert b'id="s-step-2"' in body
+    assert b'id="s-step-3"' in body
+    assert b'id="s-step-4"' in body
+    assert b'id="s-step-5"' in body
+    # script should declare the expected number of steps
+    assert b'const sSteps = 5' in body
+    # preview code should include heading used by the new renderer
+    assert b'Scouting Sample' in body
+    # pit scouting dropdown should no longer offer swerve-lite
+    assert b'Swerve Lite' not in body
 
 
 def test_analytics_tutorial_renders(client):

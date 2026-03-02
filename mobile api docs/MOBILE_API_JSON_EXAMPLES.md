@@ -1222,8 +1222,42 @@ Content-Type: application/json
     "teleop_trap_scored": 1,
     "endgame_climbed": "success",
     "endgame_harmony": true,
-    "defense_rating": 4,
-    "driver_skill": 5,
+    "defense_rating": 4
+  }
+}
+```
+
+```json
+{
+  "qualitative": true,
+  "match_id": 42,
+  "alliance_scouted": "red",
+  "team_data": {
+    "red": {
+      "team_222": {"ranking": 2},
+      "team_111": {"ranking": 1}
+    }
+  }
+}
+``````
+
+To submit a qualitative form the body should include the `qualitative` flag
+and the nested `team_data` structure.  Teams will be automatically sorted by
+ranking on the server, so the order you send them does not matter:
+
+```json
+{
+  "qualitative": true,
+  "match_id": 42,
+  "alliance_scouted": "red",
+  "team_data": {
+    "red": {
+      "team_222": {"ranking": 2},
+      "team_111": {"ranking": 1}
+    }
+  }
+}
+```    "driver_skill": 5,
     "notes": "Very strong match, good driving"
   }
 }

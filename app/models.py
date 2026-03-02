@@ -154,6 +154,11 @@ class ScoutingTeamSettings(db.Model):
     # sorting by it.  Administrators may turn this off if they don't want team
     # members to see or use the accuracy metrics.
     leaderboard_accuracy_visible = db.Column(db.Boolean, default=True, nullable=False)
+    # Qualitative form visibility flags for the team; these were previously
+    # controlled in localStorage per user.  Administrators can now enable or
+    # disable the auto-climb and endgame-climb sections for the whole team.
+    qual_show_auto_climb = db.Column(db.Boolean, default=False, nullable=False)
+    qual_show_endgame_climb = db.Column(db.Boolean, default=False, nullable=False)
     # EPA data source for graphs/predictions:
     #   'scouted_only'             – use only locally scouted data (default)
     #   'scouted_with_statbotics'  – use scouted data, fill gaps with Statbotics EPA
@@ -1480,11 +1485,22 @@ class QualitativeScoutingData(db.Model):
     
     @property
     def data(self):
-        """Get data as a Python dictionary"""
+        """Get data as a Python dictionary.
+
+        Historically the mobile API erroneously wrapped the real team map in
+        ``{'team_data': {...}}``.  When reading such legacy rows we unwrap the
+        envelope so templates can continue to access ``entry.data.red`` etc.
+        """
         try:
-            return json.loads(self.data_json)
+            d = json.loads(self.data_json)
         except (json.JSONDecodeError, TypeError):
             return {}
+        if isinstance(d, dict) and 'team_data' in d:
+            inner = d.get('team_data') or {}
+            if '_match_summary' in d:
+                inner['_match_summary'] = d['_match_summary']
+            return inner
+        return d
     
     @data.setter
     def data(self, value):

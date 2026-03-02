@@ -1,6 +1,78 @@
 <!DOCTYPE html>
-<html lang="en" class="h-100">
+{#
+    If the server already knows the current theme is a dark variant, add
+    `dark-mode` class (and some inline background color) to the <html> element
+    so the browser paints correctly before any scripts run.  This covers the
+    common case where users have saved a dark theme as their preference.
+#}
+<html lang="en" class="h-100{% if current_theme_id and ('dark' in current_theme_id) %} dark-mode{% endif %}"{% if current_theme_id and ('dark' in current_theme_id) %} style="background:#0b0b0d;color:#e6e6e6;"{% endif %}>
+<script>
+    // **extremely early** theme detection executed before any styles are parsed.
+    // This handles client-side darkMode preference stored in localStorage
+    // when the OS preference is light and the server had no knowledge yet.
+    // Running this script here ensures the `.dark-mode` class is present prior
+    // to the browser's first paint, eliminating the flash of light layout.
+    (function(){
+        try {
+            var stored = null;
+            try { stored = localStorage.getItem('darkMode'); } catch(e) { stored = null; }
+            var prefers = false;
+            try { prefers = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; } catch(e) { prefers = false; }
+            var useDark = null;
+            if (stored === 'true') useDark = true;
+            else if (stored === 'false') useDark = false;
+            else useDark = prefers;
+            if (useDark) {
+                document.documentElement.classList.add('dark-mode');
+                // inline background ensures any unthemed elements start dark
+                document.documentElement.style.background = '#0b0b0d';
+                document.documentElement.style.color = '#e6e6e6';
+            }
+        } catch(e) { /* ignore */ }
+    })();
+</script>
 <head>
+    <!-- Tell the browser we support both light and dark so it chooses appropriate defaults -->
+    <meta name="color-scheme" content="light dark">
+    <!-- If the operating system prefers dark, have CSS set a dark background immediately
+         before any scripts run.  This catches the initial paint even on first visit. -->
+    <style>
+        @media (prefers-color-scheme: dark) {
+            html, body { background: #0b0b0d !important; color: #e6e6e6 !important; }
+        }
+    </style>
+    <!-- Additional generic dark-mode rules that apply either when the user has explicitly
+         enabled dark mode via localStorage or when the OS prefers dark.  Placing this
+         style here ensures the browser already knows to render cards, alerts, navbars,
+         etc. with dark backgrounds before any external CSS loads or JS runs. -->
+    <style id="early-dark-rules">
+        @media (prefers-color-scheme: dark), .dark-mode {
+            html, body,
+            .card, .card-body, .card-header,
+            .navbar, .modal,
+            .bg-white, .bg-light,
+            .alert, .dropdown-menu, .list-group-item,
+            table, th, td,
+            .form-control, .btn, .badge {
+                background-color: #2d3338 !important;
+                color: #e6e6e6 !important;
+                border-color: #444 !important;
+            }
+            .navbar, .modal {
+                background-color: #252a30 !important;
+            }
+        }
+    </style>
+    <!-- ensure the full dark-theme CSS is available immediately on first paint
+         instead of waiting for the JavaScript loader.  Using media queries means
+         the file is still downloaded early but only applied when appropriate. -->
+    <link rel="preload" href="{{ url_for('static', filename='css/dark-mode-force.css') }}" as="style">
+    <link rel="preload" href="{{ url_for('static', filename='css/dark-theme-modern.css') }}" as="style">
+    <!-- always load the dark-mode CSS; it targets .dark-mode selectors internally
+         so it won’t affect light themes but will be available the instant the class is
+         added by the script above. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-force.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-theme-modern.css') }}">
     <!-- Early theme detection: apply dark-mode class to <html> before CSS loads to prevent white flash -->
     <script>
         // Server-side indication whether liquid glass buttons are allowed for this team.
@@ -24,14 +96,47 @@
                 if (useDark) {
                     // Apply to documentElement so early CSS can target html.dark-mode or body.dark-mode
                     document.documentElement.classList.add('dark-mode');
-                    // Also set a small inline style to ensure background is dark immediately
-                    var css = 'html.dark-mode, html.dark-mode body { background: #0b0b0d; color: #e6e6e6; }';
+                    // Also set a small inline style to ensure background is dark immediately and
+                    // to keep some common components from showing up white while the full
+                    // stylesheet is still downloading.  The rules here mirror a tiny subset
+                    // of what dark-mode-force.css provides.
+                    var css = '' +
+                        'html.dark-mode, html.dark-mode body { background: #0b0b0d; color: #e6e6e6; }' +
+                        ' html.dark-mode .card, html.dark-mode .card .card-body, html.dark-mode .card .card-header,' +
+                        ' html.dark-mode .bg-white, html.dark-mode .bg-light,' +
+                        ' html.dark-mode .alert { background-color: #2d3338 !important; color: #e6e6e6 !important; border-color: #444 !important; }' +
+                        ' html.dark-mode .navbar, html.dark-mode .modal { background-color: #252a30 !important; }';
                     var s = document.createElement('style');
                     s.setAttribute('data-ob-theme','early');
                     s.appendChild(document.createTextNode(css));
                     // Insert before other head children
                     var head = document.getElementsByTagName('head')[0];
                     if (head) head.insertBefore(s, head.firstChild);
+
+                    // kick off loading of the main dark-theme styles as soon as possible so that
+                    // when the rest of the page renders we already have the real rules available
+                    // instead of waiting for the normal <link> tags further down the head.
+                    // if an early dark-mode stylesheet already exists (e.g. injected by the
+                    // <link ... media="(prefers-color-scheme: dark)" ...> above) we don't need
+                    // to insert duplicates.  skip insertion when a dark-mode-force.css link is
+                    // already present anywhere in the head.
+                    if (!head.querySelector('link[href*="dark-mode-force.css"]')) {
+                        var darkFiles = [
+                            '{{ url_for("static", filename="css/dark-mode-force.css") }}',
+                            '{{ url_for("static", filename="css/dark-theme-modern.css") }}',
+                            '{{ url_for("static", filename="css/theme-overrides.css") }}'
+                        ];
+                        darkFiles.forEach(function(href) {
+                            try {
+                                var link = document.createElement('link');
+                                link.rel = 'stylesheet';
+                                link.href = href;
+                                link.setAttribute('data-ob-theme','early');
+                                // insert before any other stylesheet so it has high priority
+                                head.insertBefore(link, head.firstChild);
+                            } catch(e) {}
+                        });
+                    }
                 }
             } catch (e) { /* fail silently - don't block page */ }
         })();
@@ -1031,7 +1136,7 @@
     When true we omit the sidebar/topbar helper classes so related JS/CSS
     won't add overlays or offsets on mobile which can cause tap/click
     coordinate mismatches. #}
-<body class="d-flex flex-column h-100 modern-layout {% if not no_chrome %}with-sidebar topbar-fixed{% endif %} {% if liquid_glass_buttons_enabled %}liquid-glass-buttons{% endif %} {% if spinning_counters_enabled %}spinning-counters{% endif %}">
+<body class="d-flex flex-column h-100 modern-layout {% if not no_chrome %}with-sidebar topbar-fixed{% endif %} {% if liquid_glass_buttons_enabled %}liquid-glass-buttons{% endif %} {% if spinning_counters_enabled %}spinning-counters{% endif %}{% if current_theme_id and ('dark' in current_theme_id) %} dark-mode{% endif %}"{% if current_theme_id and ('dark' in current_theme_id) %} style="background:#0b0b0d;color:#e6e6e6;"{% endif %}>
     <!-- Global Top Bar (search + user) -->
     <div class="topbar glass navbar-glass d-flex align-items-center gap-2 px-3 py-2 shadow-sm" role="banner">
         <div class="d-flex align-items-center gap-2 flex-shrink-0">
@@ -1202,6 +1307,9 @@
                 {% if 'trends' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('team_trends') %}active{% endif %}" href="{{ url_for('team_trends.index') }}"><i class="fas fa-chart-line"></i><span>Trends</span></a>{% endif %}
                 {% if 'data' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" href="{{ url_for('data.index') }}"><i class="fas fa-database"></i><span>Data</span></a>{% endif %}
                 {% if 'simulations' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('simulations') %}active{% endif %}" href="{{ url_for('simulations.index') }}"><i class="fas fa-dice"></i><span>Simulations</span></a>{% endif %}
+                {% if 'import_qr' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'data.import_qr' %}active{% endif %}" href="{{ url_for('data.import_qr') }}"><i class="fas fa-camera"></i><span>Scan / Paste QR</span></a>{% endif %}
+                {# Use the real events UI rather than the JSON API route; key renamed so hidden-nav setting feels natural #}
+                {% if 'events' not in hidden_nav_items and 'data_events' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('events') %}active{% endif %}" href="{{ url_for('events.index') }}"><i class="fas fa-calendar-alt"></i><span>Events</span></a>{% endif %}
                 </div>
             </div>
             {% endif %}

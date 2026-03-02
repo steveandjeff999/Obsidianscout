@@ -30,24 +30,6 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <!-- Global Visibility Settings -->
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <div class="p-2 border rounded" style="background:rgba(0,0,0,0.03);">
-                                <div class="d-flex flex-wrap gap-4 align-items-center">
-                                    <span class="fw-bold small"><i class="fas fa-eye me-1"></i>Show Sections:</span>
-                                    <div class="form-check form-switch mb-0">
-                                        <input class="form-check-input" type="checkbox" id="toggle-endgame-climb">
-                                        <label class="form-check-label small" for="toggle-endgame-climb">Endgame Climb</label>
-                                    </div>
-                                    <div class="form-check form-switch mb-0">
-                                        <input class="form-check-input" type="checkbox" id="toggle-auto-climb">
-                                        <label class="form-check-label small" for="toggle-auto-climb">Auto Climb</label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
                     <!-- Scout Mode Toggle -->
                     <div class="row mb-4">
@@ -427,13 +409,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const allianceRadios = document.querySelectorAll('input[name="alliance"]');
     const scoutModeRadios = document.querySelectorAll('input[name="scout-mode"]');
 
-    // ==== GLOBAL CLIMB VISIBILITY STATE ====
-    var showEndgameClimb = false;
-    var showAutoClimb = false;
-    try {
-        showEndgameClimb = localStorage.getItem('qual_show_endgame_climb') === 'true';
-        showAutoClimb = localStorage.getItem('qual_show_auto_climb') === 'true';
-    } catch(e) {}
+    // ==== GLOBAL CLIMB VISIBILITY STATE (controlled by team settings) ====
+    var showEndgameClimb = {{ 'true' if qual_show_endgame_climb else 'false' }};
+    var showAutoClimb = {{ 'true' if qual_show_auto_climb else 'false' }};
     const matchScoutingSection = document.getElementById('match-scouting-section');
     const teamScoutingSection = document.getElementById('team-scouting-section');
     const individualTeamSection = document.getElementById('individual-team-section');
@@ -729,12 +707,7 @@ document.addEventListener('DOMContentLoaded', function() {
         try { const a = document.activeElement; if (a && a.id) localStorage.setItem('qual_last_active', a.id); } catch(e) {}
     });
 
-    // ==== GLOBAL CLIMB VISIBILITY TOGGLE HANDLERS ====
-    var endgameToggleEl = document.getElementById('toggle-endgame-climb');
-    var autoToggleEl = document.getElementById('toggle-auto-climb');
-    if (endgameToggleEl) endgameToggleEl.checked = showEndgameClimb;
-    if (autoToggleEl) autoToggleEl.checked = showAutoClimb;
-
+// ==== CLIMB VISIBILITY (team-wide, server-controlled) ====
     function updateClimbVisibility() {
         document.querySelectorAll('.climb-endgame-section').forEach(function(el) {
             el.style.display = showEndgameClimb ? '' : 'none';
@@ -742,23 +715,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.climb-auto-section').forEach(function(el) {
             el.style.display = showAutoClimb ? '' : 'none';
         });
-        try {
-            localStorage.setItem('qual_show_endgame_climb', showEndgameClimb ? 'true' : 'false');
-            localStorage.setItem('qual_show_auto_climb', showAutoClimb ? 'true' : 'false');
-        } catch(e) {}
     }
-    if (endgameToggleEl) {
-        endgameToggleEl.addEventListener('change', function() {
-            showEndgameClimb = this.checked;
-            updateClimbVisibility();
-        });
-    }
-    if (autoToggleEl) {
-        autoToggleEl.addEventListener('change', function() {
-            showAutoClimb = this.checked;
-            updateClimbVisibility();
-        });
-    }
+    updateClimbVisibility();
 
     // ==== TEAM CARD BUILDER HELPERS ====
     function mkRole(teamNum, alliance, role, label) {

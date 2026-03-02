@@ -11,7 +11,8 @@ def test_add_column_postgres_type_mapping(monkeypatch, tmp_path):
     # create an in-memory SQLite engine for simplicity
     engine = create_engine('sqlite:///:memory:')
     # create a minimal table
-    engine.execute(text('CREATE TABLE foo (id INTEGER PRIMARY KEY)'))
+    with engine.connect() as conn:
+        conn.execute(text('CREATE TABLE foo (id INTEGER PRIMARY KEY)'))
     # force dialect name to look like Postgres
     monkeypatch.setattr(engine.dialect, 'name', 'postgresql')
 
@@ -57,3 +58,5 @@ def test_run_all_migrations_creates_offset_column(tmp_path):
         cols2 = [c['name'] for c in inspect(engine).get_columns('scouting_team_settings')]
         assert 'predictions_enabled' in cols2
         assert 'leaderboard_accuracy_visible' in cols2
+        assert 'qual_show_auto_climb' in cols2
+        assert 'qual_show_endgame_climb' in cols2

@@ -160,6 +160,9 @@ MIGRATIONS = [
     ('scouting_team_settings', 'predictions_enabled', 'BOOLEAN DEFAULT 1', None),
     # Show/hide prediction accuracy on the scout leaderboard
     ('scouting_team_settings', 'leaderboard_accuracy_visible', 'BOOLEAN DEFAULT 1', None),
+    # Qualitative form auto/endgame climb visibility (team-wide)
+    ('scouting_team_settings', 'qual_show_auto_climb', 'BOOLEAN DEFAULT 0', None),
+    ('scouting_team_settings', 'qual_show_endgame_climb', 'BOOLEAN DEFAULT 0', None),
     ('scouting_team_settings', 'epa_source', "VARCHAR(30) DEFAULT 'scouted_only'", None),
     ('scouting_team_settings', 'locked_by_user_id', 'INTEGER', None),
     ('scouting_team_settings', 'locked_at', 'DATETIME', None),

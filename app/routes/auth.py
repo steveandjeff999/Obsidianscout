@@ -1731,6 +1731,72 @@ def leaderboard_accuracy_status():
     enabled = team_settings.leaderboard_accuracy_visible if team_settings else True
     return jsonify({'enabled': bool(enabled)})
 
+# -------------------------------------------------------------------------
+# Qualitative form climb visibility toggles (team-wide)
+# -------------------------------------------------------------------------
+
+@bp.route('/admin/toggle-qual-auto', methods=['POST'])
+@admin_required
+def toggle_qual_auto():
+    """Toggle visibility of the Auto Climb section on the qualitative form."""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.admin_settings'))
+    from app.models import ScoutingTeamSettings
+
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    if not team_settings:
+        team_settings = ScoutingTeamSettings(scouting_team_number=current_user.scouting_team_number)
+        db.session.add(team_settings)
+
+    team_settings.qual_show_auto_climb = not team_settings.qual_show_auto_climb
+    team_settings.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    status = "enabled" if team_settings.qual_show_auto_climb else "disabled"
+    flash(f'Auto climb section has been {status} for your team.', 'success')
+    return redirect(url_for('auth.admin_settings'))
+
+@bp.route('/admin/qual-auto-status', methods=['GET'])
+def qual_auto_status():
+    """Return JSON with current auto-climb visibility for the user's team"""
+    if not current_user.is_authenticated:
+        return jsonify({'enabled': False})
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    enabled = team_settings.qual_show_auto_climb if team_settings else False
+    return jsonify({'enabled': bool(enabled)})
+
+@bp.route('/admin/toggle-qual-endgame', methods=['POST'])
+@admin_required
+def toggle_qual_endgame():
+    """Toggle visibility of the Endgame Climb section on the qualitative form."""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.admin_settings'))
+    from app.models import ScoutingTeamSettings
+
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    if not team_settings:
+        team_settings = ScoutingTeamSettings(scouting_team_number=current_user.scouting_team_number)
+        db.session.add(team_settings)
+
+    team_settings.qual_show_endgame_climb = not team_settings.qual_show_endgame_climb
+    team_settings.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    status = "enabled" if team_settings.qual_show_endgame_climb else "disabled"
+    flash(f'Endgame climb section has been {status} for your team.', 'success')
+    return redirect(url_for('auth.admin_settings'))
+
+@bp.route('/admin/qual-endgame-status', methods=['GET'])
+def qual_endgame_status():
+    """Return JSON with current endgame-climb visibility for the user's team"""
+    if not current_user.is_authenticated:
+        return jsonify({'enabled': False})
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    enabled = team_settings.qual_show_endgame_climb if team_settings else False
+    return jsonify({'enabled': bool(enabled)})
+
 @bp.route('/admin/toggle-account-lock', methods=['POST'])
 @admin_required
 def toggle_account_lock():
