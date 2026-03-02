@@ -2920,6 +2920,128 @@ def get_matches_current():
 # SCOUTING DATA ENDPOINTS
 # ============================================================================
 
+
+# Qualitative helpers used by both web and mobile upload paths
+# -------------------------------------------------------------------------
+
+def _sort_qualitative_team_data(team_data):
+    """Return a new dict whose keys are ordered by ranking/overall_rating.
+
+    Mobile clients may upload entries in arbitrary order; the QR/web UI
+    normally persists them sorted by the scout's ranking.  To reproduce that
+    behaviour for mobile uploads we sort the data server-side before saving.
+    """
+    try:
+        items = list(team_data.items())
+        def _sort_key(pair):
+            td = pair[1] or {}
+            return (td.get('ranking') or td.get('overall_rating') or 0, pair[0])
+        items.sort(key=_sort_key)
+        return {k: v for k, v in items}
+    except Exception:
+        return team_data
+
+
+def _process_qualitative_entry(entry, user, team_number):
+    """Convert a qualitative upload payload into a QualitativeScoutingData row.
+
+    Returns ``(success, message, entry_id)`` where entry_id is the new record's
+    id when success is True.
+    """
+    from app.models import QualitativeScoutingData, ScoutingTeamSettings
+    from app.routes.scouting import auto_sync_alliance_qualitative_data
+    try:
+        ts = ScoutingTeamSettings.query.filter_by(scouting_team_number=team_number).first()
+        predictions_allowed = bool(ts and getattr(ts, 'predictions_enabled', True))
+        show_auto = bool(ts and getattr(ts, 'qual_show_auto_climb', False))
+        show_endgame = bool(ts and getattr(ts, 'qual_show_endgame_climb', False))
+
+        match_summary = entry.get('match_summary') or {}
+        if not predictions_allowed and 'predicted_winner' in match_summary:
+            match_summary.pop('predicted_winner', None)
+
+        individual_team = entry.get('individual_team', False)
+        if individual_team:
+            team_number_val = entry.get('team_number') or team_number
+            match_id = entry.get('match_id')
+            team_data = entry.get('team_data', {})
+            if isinstance(team_data, dict) and team_data.get('individual'):
+                team_data['individual'] = _sort_qualitative_team_data(team_data['individual'])
+            if not team_number_val or not match_id:
+                return False, 'Missing team number or match', None
+            indiv_block = team_data.get('individual', {})
+            team_key = f'team_{team_number_val}'
+            indiv_entry = indiv_block.get(team_key)
+            if not indiv_entry:
+                return False, f'No data found for {team_key} in individual block', None
+            # Ranking is preferred but mobile uploads may omit it; do not hard-reject null.
+            if show_auto and not (indiv_entry and indiv_entry.get('auto_climb_result')):
+                return False, 'Auto climb required when Auto Climb is visible', None
+            if show_endgame and not (indiv_entry and indiv_entry.get('endgame_climb_result')):
+                return False, 'Endgame climb result required when Endgame Climb is visible', None
+            store_obj = {'individual': team_data.get('individual', {}), 'team_number': team_number_val}
+            if match_summary:
+                store_obj['_match_summary'] = match_summary
+            qualitative_data = QualitativeScoutingData(
+                match_id=match_id,
+                scouting_team_number=team_number,
+                scout_name=user.username,
+                scout_id=user.id,
+                alliance_scouted=team_key,
+                data_json=json.dumps(store_obj)
+            )
+        else:
+            match_id = entry.get('match_id')
+            alliance_scouted = entry.get('alliance_scouted')
+            team_data = entry.get('team_data', {})
+            if isinstance(team_data, dict):
+                # sort red/blue sides or full map
+                if alliance_scouted in ('red','blue','both'):
+                    if isinstance(team_data.get('red'), dict):
+                        team_data['red'] = _sort_qualitative_team_data(team_data['red'])
+                    if isinstance(team_data.get('blue'), dict):
+                        team_data['blue'] = _sort_qualitative_team_data(team_data['blue'])
+                else:
+                    team_data = _sort_qualitative_team_data(team_data)
+            if not match_id or not alliance_scouted:
+                return False, 'Missing required fields', None
+            if show_auto:
+                # ensure at least one team has auto result when visible
+                has = any(v.get('auto_climb_result') for v in (team_data.get('red') or {}).values() if v) or \
+                      any(v.get('auto_climb_result') for v in (team_data.get('blue') or {}).values() if v)
+                if not has:
+                    return False, 'Auto climb required when Auto Climb is visible', None
+            if show_endgame:
+                has = any(v.get('endgame_climb_result') for v in (team_data.get('red') or {}).values() if v) or \
+                      any(v.get('endgame_climb_result') for v in (team_data.get('blue') or {}).values() if v)
+                if not has:
+                    return False, 'Endgame climb result required when Endgame Climb is visible', None
+            # In web code the stored JSON is *just* the team_data map
+            # with _match_summary injected if present.  Do not wrap it inside a
+            # "team_data" key, because templates assume ``entry.data`` is the
+            # map itself (so you can do ``entry.data.red`` etc).
+            if match_summary:
+                # mutate team_data in-place, same as web
+                team_data['_match_summary'] = match_summary
+            qualitative_data = QualitativeScoutingData(
+                match_id=match_id,
+                scouting_team_number=team_number,
+                scout_name=user.username,
+                scout_id=user.id,
+                alliance_scouted=alliance_scouted,
+                data_json=json.dumps(team_data)
+            )
+        db.session.add(qualitative_data)
+        db.session.commit()
+        try:
+            auto_sync_alliance_qualitative_data(qualitative_data)
+        except Exception:
+            pass
+        return True, 'Saved', qualitative_data.id
+    except Exception as e:
+        current_app.logger.error(f"Error processing qualitative entry: {e}")
+        return False, str(e), None
+
 @mobile_api.route('/scouting/submit', methods=['POST'])
 @token_required
 def submit_scouting_data():
@@ -2957,8 +3079,24 @@ def submit_scouting_data():
                 'error': 'No data provided',
                 'error_code': 'MISSING_DATA'
             }), 400
+
+        # handle qualitative-style payloads specially.
+        # The mobile app wraps the payload in the standard envelope:
+        #   {"team_id":..., "match_id":..., "data":{"qualitative":true, ...}, "offline_id":...}
+        # so we check both the top-level and the nested "data" key.
+        _qual_payload = None
+        if data.get('qualitative'):
+            _qual_payload = data
+        elif isinstance(data.get('data'), dict) and data['data'].get('qualitative'):
+            _qual_payload = data['data']
+        if _qual_payload is not None:
+            ok, msg, qid = _process_qualitative_entry(_qual_payload, user, team_number)
+            if ok:
+                return jsonify({'success': True, 'qualitative_id': qid}), 201
+            else:
+                return jsonify({'success': False, 'error': msg}), 400
         
-        # Validate required fields
+        # Validate required fields for normal entries
         required_fields = ['team_id', 'match_id', 'data']
         for field in required_fields:
             if field not in data:
@@ -2986,10 +3124,6 @@ def submit_scouting_data():
             }), 404
         
         # Create scouting data entry
-        # The ScoutingData model exposes scout_name and scout_id columns.
-        # The `scout` @property is a read-only accessor that returns a User
-        # object and therefore cannot be assigned to. Set scout_name and
-        # scout_id instead.
         scouting_data = ScoutingData(
             team_id=data['team_id'],
             match_id=data['match_id'],
@@ -3011,7 +3145,7 @@ def submit_scouting_data():
             'success': True,
             'scouting_id': scouting_data.id,
             'message': 'Scouting data submitted successfully',
-            'offline_id': data.get('offline_id')  # Echo back for sync tracking
+            'offline_id': data.get('offline_id')
         }), 201
         
     except Exception as e:
@@ -3070,6 +3204,24 @@ def bulk_submit_scouting_data():
         
         for entry in data['entries']:
             try:
+                # Qualitative upload handling.
+                # Support both direct format (entry has qualitative:true at top level)
+                # and the standard wrapped envelope (qualitative:true is inside entry["data"]).
+                _eq_payload = None
+                if entry.get('qualitative'):
+                    _eq_payload = entry
+                elif isinstance(entry.get('data'), dict) and entry['data'].get('qualitative'):
+                    _eq_payload = entry['data']
+                if _eq_payload is not None:
+                    ok, msg, qid = _process_qualitative_entry(_eq_payload, user, team_number)
+                    if ok:
+                        results.append({'offline_id': entry.get('offline_id'), 'success': True, 'qualitative_id': qid})
+                        submitted_count += 1
+                    else:
+                        results.append({'offline_id': entry.get('offline_id'), 'success': False, 'error': msg})
+                        failed_count += 1
+                    continue
+
                 # Validate entry
                 if not all(k in entry for k in ['team_id', 'match_id', 'data']):
                     results.append({

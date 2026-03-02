@@ -169,7 +169,11 @@ def test_mobile_history_filters_by_scout_id_and_team():
         assert sd1.id not in ids2
 
 
-def test_mobile_alliance_mode_filters_events_teams_matches():
+
+
+def test_mobile_qualitative_upload_sorts_entries():
+    # uploading a qualitative payload should create a QualitativeScoutingData row
+    # with its team_data ordered by ranking (mimicking QR/web behaviour).
     app = create_app()
     with app.app_context():
         try:
@@ -178,29 +182,76 @@ def test_mobile_alliance_mode_filters_events_teams_matches():
             pass
 
         client = app.test_client()
-        # Create two scouting teams (1111 and 2222) and their related data
-        u1 = User(username='team1_user', scouting_team_number=1111)
-        u1.set_password('pass')
-        db.session.add(u1)
-
-        u2 = User(username='team2_user', scouting_team_number=2222)
-        u2.set_password('pass')
-        db.session.add(u2)
-
-        teamA = Team(team_number=100, team_name='Alpha', scouting_team_number=1111)
-        teamB = Team(team_number=200, team_name='Beta', scouting_team_number=2222)
-        db.session.add(teamA)
-        db.session.add(teamB)
+        # create a user/team/event/match
+        u = User(username='qualmob', scouting_team_number=3333)
+        u.set_password('pw')
+        db.session.add(u)
+        t = Team(team_number=111, team_name='T111', scouting_team_number=3333)
+        db.session.add(t)
+        evt = Event(name='QualEvent', code='QUAL', scouting_team_number=3333, year=2026)
+        db.session.add(evt)
         db.session.flush()
+        m = Match(match_number=1, match_type='qual', event_id=evt.id,
+                  red_alliance=str(t.team_number), blue_alliance='', scouting_team_number=3333)
+        db.session.add(m)
+        db.session.commit()
 
-        # Event A is team-only for 1111
-        eventA = Event(name='Event A', code='EVTA', scouting_team_number=1111, year=2024)
-        db.session.add(eventA)
-        db.session.flush()
-        matchA = Match(match_number=1, match_type='qual', event_id=eventA.id, red_alliance=str(teamA.team_number), blue_alliance='', scouting_team_number=1111)
-        db.session.add(matchA)
+        from app.routes import mobile_api as ma
+        token = ma.create_token(u.id, u.username, u.scouting_team_number)
 
-        # Event B is for team 2222 and will be allied
+        # prepare qualitative data with two teams out of order by ranking
+        payload = {
+            'qualitative': True,
+            'individual_team': False,
+            'match_id': m.id,
+            'alliance_scouted': 'red',
+            'team_data': {
+                'red': {
+                    'team_222': {'ranking': 2},
+                    'team_111': {'ranking': 1}
+                }
+            }
+        }
+        resp = client.post('/api/mobile/scouting/submit', json=payload,
+                           headers={'Authorization': f'Bearer {token}'})
+        assert resp.status_code == 200 and resp.get_json().get('success')
+        qid = resp.get_json().get('qualitative_id')
+        assert qid is not None
+        # fetch saved entry and confirm ordering
+        from app.models import QualitativeScoutingData
+        entry = QualitativeScoutingData.query.get(qid)
+        assert entry is not None
+        data = entry.data
+        # after fix the stored map should directly contain the alliance sides
+        assert 'team_data' not in data
+        assert 'red' in data and isinstance(data['red'], dict)
+        keys = list(data['red'].keys())
+        assert keys == ['team_111', 'team_222']
+        # simulate the template access that triggered the bug
+        # Jinja would attempt getattr(data, 'red'); ensure that works by
+        # accessing via attribute on a simple namespace for the dict.
+        class Wrapper:
+            def __init__(self, d):
+                self.__dict__.update(d)
+        wrapped = Wrapper(data)
+        assert hasattr(wrapped, 'red')
+
+        # also verify the web list view can render this entry without crashing
+        from flask_login import login_user
+        from app.routes.scouting import list_qualitative_data
+        login_user(u)
+        with app.test_request_context('/scouting/qualitative/list'):
+            # call the view directly; it should return a Response object
+            resp = list_qualitative_data()
+            # Flask will normally render a Response; ensure it's not an error
+            assert hasattr(resp, 'status_code')
+            assert resp.status_code == 200
+
+    # restore alliance-mode test header
+
+def test_mobile_alliance_mode_filters_events_teams_matches():
+    app = create_app()
+
         eventB = Event(name='Event B', code='EVTB', scouting_team_number=2222, year=2024)
         db.session.add(eventB)
         db.session.flush()

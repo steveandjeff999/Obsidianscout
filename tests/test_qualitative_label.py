@@ -19,6 +19,10 @@ def test_qualitative_form_includes_moving_label(app, client):
     assert b'Scores while moving' in r.data
     # prediction UI should be present by default
     assert b'Predicted Winner' in r.data
+    # the old per-user toggles should no longer be rendered; visibility is
+    # controlled via team settings now
+    assert b'id="toggle-auto-climb"' not in r.data
+    assert b'id="toggle-endgame-climb"' not in r.data
 
     # create a minimal event, match, and qualitative entry to verify view works
     with app.app_context():
@@ -147,6 +151,31 @@ def test_leaderboard_includes_qualitative_predictions(app, client):
     assert b'BLUE' in rv3.data
 
 
+def test_data_property_unwraps_legacy_structure(app):
+    # entries saved with the old mobile API format had an extra "team_data"
+    # wrapper; the data property should correct for that so templates don't
+    # explode when iterating.
+    import json
+    with app.app_context():
+        from app.models import QualitativeScoutingData
+        raw = {
+            'team_data': {'red': {'team_1': {'ranking': 1}}},
+            '_match_summary': {'predicted_winner': 'blue'}
+        }
+        q = QualitativeScoutingData(
+            match_id=1,
+            scouting_team_number=1,
+            scout_name='x',
+            scout_id=1,
+            alliance_scouted='red',
+            data_json=json.dumps(raw)
+        )
+        db.session.add(q)
+        db.session.commit()
+        fetched = QualitativeScoutingData.query.get(q.id)
+        assert fetched.data == {'red': {'team_1': {'ranking': 1}}, '_match_summary': {'predicted_winner': 'blue'}}
+
+
 def test_prediction_disabled_respected(app, client):
     # if team setting turns off predictions the save endpoint should drop them
     with app.app_context():
@@ -190,6 +219,54 @@ def test_prediction_disabled_respected(app, client):
         assert entry is not None
         ms = entry.data.get('_match_summary', {})
         assert 'predicted_winner' not in ms
+
+
+def test_team_settings_control_qualitative_climb(app, client):
+    # team settings should determine whether auto/endgame climb fields are
+    # shown and the save API should enforce those rules regardless of what
+    # the client submits.
+    with app.app_context():
+        from app.models import Event, Match, User, ScoutingTeamSettings
+        # create a user and explicit settings
+        u = User(username='climbuser', scouting_team_number=9999)
+        u.set_password('pw')
+        db.session.add(u)
+        ts = ScoutingTeamSettings(scouting_team_number=9999,
+                                   qual_show_auto_climb=True,
+                                   qual_show_endgame_climb=False)
+        db.session.add(ts)
+        # minimal event/match
+        evt = Event(code='CLB')
+        db.session.add(evt)
+        db.session.commit()
+        m = Match(match_number=1, match_type='qual', event_id=evt.id,
+                  red_alliance='1111', blue_alliance='2222', scouting_team_number=9999)
+        db.session.add(m)
+        db.session.commit()
+        mid = m.id
+    # login
+    login_resp = client.post('/auth/login', data={'username': 'climbuser', 'password': 'pw', 'team_number': 9999})
+    assert login_resp.status_code == 200
+    # payload missing any climb results should fail because auto is enabled
+    payload = {
+        'qualitative': True,
+        'individual_team': True,
+        'match_id': mid,
+        'team_number': 1111,
+        'team_data': {'individual': {'team_1111': {'ranking': 1}}},
+        'match_summary': {}
+    }
+    rv = client.post('/qualitative/save', json=payload)
+    assert rv.status_code == 400
+    assert b'Auto climb required' in rv.data
+    # now disable both climb fields and try again - should succeed
+    with app.app_context():
+        ts2 = ScoutingTeamSettings.query.filter_by(scouting_team_number=9999).first()
+        ts2.qual_show_auto_climb = False
+        ts2.qual_show_endgame_climb = False
+        db.session.commit()
+    rv2 = client.post('/qualitative/save', json=payload)
+    assert rv2.status_code == 200 and rv2.json.get('success')
 
 
 def test_alliance_qualitative_view(app, client):

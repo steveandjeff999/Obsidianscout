@@ -57,7 +57,8 @@ Key analytics pages:
   - Use query params for team/event/metric filtering, e.g. `/graphs/?teams=254&metric=points`
 - Data import/export & overview: `/data/` (requires `analytics` role)
   - Import Excel: `/data/import/excel`
-  - Import QR: `/data/import_qr`
+  - Import QR: `/data/import_qr` (also accessible via "Scan / Paste QR" link on the sidebar for admin/analytics users)
+  - Events JSON feed: `/data/events` (sidebar link "Events" available to admin/analytics users)
 - Scouting data listing (analytics or admin): `/scouting/list` (analytics have access; scouts only are redirected away)
 - Shared graphs / saved charts may be available under `/graphs/` pages
 

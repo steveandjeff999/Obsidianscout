@@ -1211,7 +1211,10 @@ def create_app(test_config=None, use_postgres=False):
                     'liquid_glass_buttons_enabled': bool(team_settings and getattr(team_settings, 'liquid_glass_buttons', False)),
                     'spinning_counters_enabled': bool(team_settings and getattr(team_settings, 'spinning_counters_enabled', False)),
                     'predictions_enabled': bool(team_settings and getattr(team_settings, 'predictions_enabled', True)),
-                    'leaderboard_accuracy_visible': bool(team_settings and getattr(team_settings, 'leaderboard_accuracy_visible', True))
+                    'leaderboard_accuracy_visible': bool(team_settings and getattr(team_settings, 'leaderboard_accuracy_visible', True)),
+                    # qualitative form climb visibility enforced team-wide
+                    'qual_show_auto_climb': bool(team_settings and getattr(team_settings, 'qual_show_auto_climb', False)),
+                    'qual_show_endgame_climb': bool(team_settings and getattr(team_settings, 'qual_show_endgame_climb', False))
                 }
         except Exception:
             pass

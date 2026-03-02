@@ -129,6 +129,26 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-arrows-alt-v"></i> Qualitative Settings {{ help.help_icon('Choose which climb-related sections appear on the qualitative scouting form for all users.', 'Qualitative settings') }}</h5></div>
+                                <div class="card-body d-flex flex-column">
+                                    <p class="mb-3">Enable or disable the Auto Climb and Endgame Climb fields on the qualitative scouting form.</p>
+                                    <div class="mt-auto">
+                                        <form method="POST" action="{{ url_for('auth.toggle_qual_auto') }}" class="d-inline mb-2">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button id="qualAutoBtn" type="submit" class="btn btn-secondary"><i id="qualAutoIcon" class="fas fa-spinner fa-spin"></i> <span id="qualAutoText">Loading...</span></button>
+                                            <p id="qualAutoStatus" class="mt-2 small text-muted">Checking server...</p>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('auth.toggle_qual_endgame') }}" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button id="qualEndgameBtn" type="submit" class="btn btn-secondary"><i id="qualEndgameIcon" class="fas fa-spinner fa-spin"></i> <span id="qualEndgameText">Loading...</span></button>
+                                            <p id="qualEndgameStatus" class="mt-2 small text-muted">Checking server...</p>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -608,6 +628,82 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     refreshLeaderboardStatus();
     setInterval(refreshLeaderboardStatus, 10000);
+
+    // Qualitative auto-climb visibility status
+    async function refreshQualAutoStatus() {
+        try {
+            const resp = await fetch("{{ url_for('auth.qual_auto_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
+            const data = await resp.json();
+            const enabled = !!data.enabled;
+            const btn = document.getElementById('qualAutoBtn');
+            const icon = document.getElementById('qualAutoIcon');
+            const text = document.getElementById('qualAutoText');
+            const statusEl = document.getElementById('qualAutoStatus');
+            if (enabled) {
+                btn.className = 'btn btn-success';
+                icon.className = 'fas fa-toggle-on';
+                text.textContent = 'Disable Auto Climb Field';
+                statusEl.className = 'mt-2 small text-success';
+                statusEl.textContent = 'Auto climb field is ENABLED on qualitative form';
+            } else {
+                btn.className = 'btn btn-secondary';
+                icon.className = 'fas fa-toggle-off';
+                text.textContent = 'Enable Auto Climb Field';
+                statusEl.className = 'mt-2 small text-muted';
+                statusEl.textContent = 'Auto climb field is DISABLED on qualitative form';
+            }
+        } catch (e) {
+            const statusEl = document.getElementById('qualAutoStatus');
+            const btn = document.getElementById('qualAutoBtn');
+            const icon = document.getElementById('qualAutoIcon');
+            const text = document.getElementById('qualAutoText');
+            statusEl.className = 'mt-2 small text-muted';
+            statusEl.textContent = 'Could not fetch server status';
+            btn.className = 'btn btn-secondary';
+            icon.className = 'fas fa-exclamation-triangle';
+            text.textContent = 'Retry';
+        }
+    }
+    refreshQualAutoStatus();
+    setInterval(refreshQualAutoStatus, 10000);
+
+    // Qualitative endgame-climb visibility status
+    async function refreshQualEndgameStatus() {
+        try {
+            const resp = await fetch("{{ url_for('auth.qual_endgame_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
+            const data = await resp.json();
+            const enabled = !!data.enabled;
+            const btn = document.getElementById('qualEndgameBtn');
+            const icon = document.getElementById('qualEndgameIcon');
+            const text = document.getElementById('qualEndgameText');
+            const statusEl = document.getElementById('qualEndgameStatus');
+            if (enabled) {
+                btn.className = 'btn btn-success';
+                icon.className = 'fas fa-toggle-on';
+                text.textContent = 'Disable Endgame Climb Field';
+                statusEl.className = 'mt-2 small text-success';
+                statusEl.textContent = 'Endgame climb field is ENABLED on qualitative form';
+            } else {
+                btn.className = 'btn btn-secondary';
+                icon.className = 'fas fa-toggle-off';
+                text.textContent = 'Enable Endgame Climb Field';
+                statusEl.className = 'mt-2 small text-muted';
+                statusEl.textContent = 'Endgame climb field is DISABLED on qualitative form';
+            }
+        } catch (e) {
+            const statusEl = document.getElementById('qualEndgameStatus');
+            const btn = document.getElementById('qualEndgameBtn');
+            const icon = document.getElementById('qualEndgameIcon');
+            const text = document.getElementById('qualEndgameText');
+            statusEl.className = 'mt-2 small text-muted';
+            statusEl.textContent = 'Could not fetch server status';
+            btn.className = 'btn btn-secondary';
+            icon.className = 'fas fa-exclamation-triangle';
+            text.textContent = 'Retry';
+        }
+    }
+    refreshQualEndgameStatus();
+    setInterval(refreshQualEndgameStatus, 10000);
 
     // --- EPA quick-status badge on admin page ---
     async function refreshEpaQuickStatus() {

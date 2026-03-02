@@ -69,20 +69,25 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% set data = entry.data %}
+                                    {# unwrap old-mobile wrapper if present, otherwise use value directly #}
+                                    {% if entry.data.team_data is defined %}
+                                        {% set data = entry.data.team_data %}
+                                    {% else %}
+                                        {% set data = entry.data %}
+                                    {% endif %}
                                     {% set ranked_count = 0 %}
                                     {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}
                                         {% set ranked_count = 1 %}
                                     {% else %}
                                         {% if entry.alliance_scouted == 'red' or entry.alliance_scouted == 'both' %}
-                                            {% for team_key, team_data in data.red.items() %}
+                                            {% for team_key, team_data in (data.get('red') or {}).items() %}
                                                 {% if team_data.get('ranking') is not none %}
                                                     {% set ranked_count = ranked_count + 1 %}
                                                 {% endif %}
                                             {% endfor %}
                                         {% endif %}
                                         {% if entry.alliance_scouted == 'blue' or entry.alliance_scouted == 'both' %}
-                                            {% for team_key, team_data in data.blue.items() %}
+                                            {% for team_key, team_data in (data.get('blue') or {}).items() %}
                                                 {% if team_data.get('ranking') is not none %}
                                                     {% set ranked_count = ranked_count + 1 %}
                                                 {% endif %}

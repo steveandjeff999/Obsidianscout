@@ -1779,14 +1779,16 @@ def save_qualitative_scouting():
         # determine whether predictions are allowed for this team
         ts = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
         predictions_allowed = bool(ts and getattr(ts, 'predictions_enabled', True))
+        # compute climb visibility from team settings (ignore client hints)
+        show_auto = bool(ts and getattr(ts, 'qual_show_auto_climb', False))
+        show_endgame = bool(ts and getattr(ts, 'qual_show_endgame_climb', False))
         
         if individual_team:
             # Individual team scouting mode (from a match, single team)
             team_number = data.get('team_number')
             match_id = data.get('match_id')
             team_data = data.get('team_data', {})
-            show_auto = data.get('show_auto_climb', False)
-            show_endgame = data.get('show_endgame_climb', False)
+            # match_summary follows below
             match_summary = data.get('match_summary') or {}
             # strip prediction if disabled
             if not predictions_allowed and 'predicted_winner' in match_summary:
@@ -1848,9 +1850,9 @@ def save_qualitative_scouting():
             if not match_id or not alliance_scouted:
                 return jsonify({'success': False, 'message': 'Missing required fields'}), 400
 
-            # Respect UI visibility flags: require Auto/Endgame only when visible
-            show_auto = data.get('show_auto_climb', False)
-            show_endgame = data.get('show_endgame_climb', False)
+            # Visibility flags come from team settings; ignore UI hints
+            show_auto = bool(ts and getattr(ts, 'qual_show_auto_climb', False))
+            show_endgame = bool(ts and getattr(ts, 'qual_show_endgame_climb', False))
             match_summary = data.get('match_summary') or {}
             # strip prediction if disabled
             if not predictions_allowed and 'predicted_winner' in match_summary:

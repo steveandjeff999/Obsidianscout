@@ -135,7 +135,7 @@ curl -k "https://localhost:8080/api/mobile/matches?event_id=EVENT_ID" \
 
 ### Submit Scouting Data
 
-Replace placeholders with actual values:
+Replace placeholders with actual values (standard or qualitative payloads are accepted):
 
 ```bash
 curl -k -X POST https://localhost:8080/api/mobile/scouting/submit \
@@ -154,6 +154,18 @@ curl -k -X POST https://localhost:8080/api/mobile/scouting/submit \
   }'
 ```
 
+For qualitative forms include the `"qualitative": true` flag and a
+`team_data` structure; the server will automatically sort entries by ranking.
+Example qualitative body:
+
+```json
+{
+  "qualitative": true,
+  "match_id": 1,
+  "alliance_scouted": "red",
+  "team_data": { "red": { "team_222": {"ranking":2}, "team_111": {"ranking":1} } }
+}
+```
 ### Get Game Configuration
 
 ```bash
