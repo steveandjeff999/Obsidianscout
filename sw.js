@@ -1,7 +1,7 @@
 // Service Worker for ObsidianScout - Simplified version without offline analytics
 
 // Increment the CACHE_VERSION to force clients to update caches when you change assets
-const CACHE_VERSION = 10;
+const CACHE_VERSION = 11;
 const CACHE_NAME = `scout-app-cache-v${CACHE_VERSION}`;
 
 // Core site shell files to pre-cache. Add any top-level routes or critical files here.
@@ -27,6 +27,14 @@ const STATIC_ASSETS = [
   '/static/offline.html',
   '/scouting/form'
 ];
+
+// Ensure we cache the graphs dashboard and related endpoints so users can
+// open them later when offline. NavigationHandler already caches pages when
+// visited, but pre-caching the base path helps for first-time installs.
+STATIC_ASSETS.push('/graphs');
+STATIC_ASSETS.push('/graphs/');
+
+
 
 // Common image fallbacks to pre-cache so we can serve a reliable placeholder
 // when individual icon requests fail. Add any frequently used icons here.
@@ -158,10 +166,20 @@ async function networkFirst(req) {
     const fresh = await fetch(req);
     // We're online and serving a fresh network response — notify clients to hide any offline banner
     try { notifyClientsOffline(false); } catch (e) { /* ignore */ }
-    // Only cache successful responses for HTML pages
-    if (fresh.ok && (req.url.endsWith('/') || req.url.includes('.html'))) {
+    // Cache successful responses for HTML pages as before, but also keep
+    // around JSON results for graph data (and any other useful API responses).
+    // This allows the graphs dashboard to pull cached scouting metrics when
+    // the device is offline.
+    if (fresh.ok) {
       const cache = await caches.open(CACHE_NAME);
-      cache.put(req, fresh.clone());
+      const contentType = fresh.headers.get('Content-Type') || '';
+      const isHtml = req.url.endsWith('/') || req.url.includes('.html');
+      const isGraphData = req.url.includes('/graphs/data');
+      const isJson = contentType.includes('application/json');
+
+      if (isHtml || isGraphData || isJson) {
+        cache.put(req, fresh.clone());
+      }
     }
     return fresh;
   } catch (error) {

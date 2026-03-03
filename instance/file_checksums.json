@@ -7,7 +7,7 @@
     },
     "app_config.json": {
       "checksum": "49e6588ada1118a2680f67a833550cf938cedcd9e9dd19acb90c25ec56f78336",
-      "modified": 1772293161.1215248,
+      "modified": 1772482465.1443973,
       "size": 705
     },
     "assistant_responses.json": {
@@ -87,7 +87,7 @@
     },
     "run.py": {
       "checksum": "0a27032bd404de7f5a7cf0f57b48462fdd03154ff7a0d4ca2c20d60279faedf3",
-      "modified": 1772293161.149565,
+      "modified": 1772482465.1897693,
       "size": 57653
     },
     "START.bat": {
@@ -347,7 +347,7 @@
     },
     "app\\routes\\scouting.py": {
       "checksum": "75159bd396478738ac681bc2e1a7773e71fc3a91670d6134a507a67fb45598c8",
-      "modified": 1772416682.2196405,
+      "modified": 1772481982.0566084,
       "size": 106646
     },
     "app\\routes\\scouting_alliances.py": {
@@ -546,9 +546,9 @@
       "size": 0
     },
     "app\\static\\css\\modern-ui.css": {
-      "checksum": "b155286721cac227c1550a1eee9166e35747fe10873630b11417549f7fe12c28",
-      "modified": 1771681751.9908414,
-      "size": 33600
+      "checksum": "482b40015c198a770996f87ed73dc96481e0110859827a7c75e1328d4eda211b",
+      "modified": 1772509231.0676785,
+      "size": 34939
     },
     "app\\static\\css\\navbar-improvements.css": {
       "checksum": "2b6f180670789cf31a09f88511e680d0dc63a4305816d14d4e43ca9ac5d1ea78",
@@ -712,7 +712,7 @@
     },
     "app\\static\\img\\avatars\\user_4.png": {
       "checksum": "2d4566582844690f8634a8b2534ea5221560038c6c0650c99140759bad603ae2",
-      "modified": 1772420876.8018885,
+      "modified": 1772509118.6176772,
       "size": 7
     },
     "app\\static\\img\\avatars\\user_5.png": {
@@ -752,7 +752,7 @@
     },
     "app\\static\\js\\dark-mode-handlers.js": {
       "checksum": "02a81f49dd4c892f897c9719ec056c7256da89ec59566b6cd6b8ed78aacac2a8",
-      "modified": 1769785759.6505065,
+      "modified": 1772508993.4441042,
       "size": 6969
     },
     "app\\static\\js\\game-config.js": {
@@ -976,9 +976,9 @@
       "size": 48679
     },
     "app\\templates\\base.html": {
-      "checksum": "debb4a5589bc9856e73a060c72b87ad50ca0e62de418b31a9915bc73a4fd7598",
-      "modified": 1772477760.0291872,
-      "size": 280399
+      "checksum": "aa6977952070bc071d229216008f8d9b377652b1184f5654ce5f4fdd7e5beeda",
+      "modified": 1772509231.0676785,
+      "size": 285621
     },
     "app\\templates\\chat.html": {
       "checksum": "f383782328107751c2ddbd3bf83d245229bbcc7091a304c35781b1c0887f00bf",
@@ -3662,7 +3662,7 @@
     },
     "config\\game_config_backup.json": {
       "checksum": "3b8d06608d2f8617853dbdd25b2a6482b98e637d9bc34de1bd03578b7d05ebb3",
-      "modified": 1772293161.1230392,
+      "modified": 1772482465.1464014,
       "size": 7566
     },
     "config\\pit_config.json": {
@@ -3677,7 +3677,7 @@
     },
     "config\\sync_config.json": {
       "checksum": "fc3ec5144a33a4576af93eb7fc1982843cb733524a67c16b92a37575917bba12",
-      "modified": 1772293161.1230392,
+      "modified": 1772482465.1483994,
       "size": 390
     },
     "config\\theme_config.json": {
@@ -3987,7 +3987,7 @@
     },
     "instance\\apis.db-shm": {
       "checksum": "f1c2b4db1d847e2ce1bb6ff4e4231547e837c90bd51855de5ad25efb985d96ff",
-      "modified": 1772463491.9998636,
+      "modified": 1772508454.4034822,
       "size": 32768
     },
     "instance\\apis.db-wal": {
@@ -4002,7 +4002,7 @@
     },
     "instance\\email_config.json": {
       "checksum": "3de7d52cfd99214f51621e235261cbe28a5825b6d8da17c4989e7a3f375ca279",
-      "modified": 1772293161.124557,
+      "modified": 1772482465.1499233,
       "size": 223
     },
     "instance\\import_trace.txt": {
@@ -4011,18 +4011,18 @@
       "size": 57020
     },
     "instance\\misc.db": {
-      "checksum": "295689e9e5fe85b1da5e73a45661fac431a689e33863f7f7228776375750f333",
-      "modified": 1772289073.4824114,
+      "checksum": "387d99fd8beeb0ce4f0aa01fcb2ddac5790dee435162edb397dc6d2923d2e62b",
+      "modified": 1772480909.1643634,
       "size": 73728
     },
     "instance\\misc.db-shm": {
-      "checksum": "52fe4003258237682f1384a88fcac7e4ec7a014d5c80a7ae9339c41f29170303",
-      "modified": 1772477790.0325186,
+      "checksum": "0507c0c6a295c8fabddbef102131066af1e903515e6cc5f894d191b42fd3f3cb",
+      "modified": 1772509290.5216267,
       "size": 32768
     },
     "instance\\misc.db-wal": {
-      "checksum": "83885791a21a80cc0f17337dbee2b89a5a81189e35a1683215324ec3342c3c1e",
-      "modified": 1772478555.1544337,
+      "checksum": "3130392984e1660f85b2f56d4143c0436fc94ab92a317c1eb3aab46d3b80bcdc",
+      "modified": 1772509376.590461,
       "size": 4128272
     },
     "instance\\notifications.json": {
@@ -4036,18 +4036,18 @@
       "size": 8192
     },
     "instance\\pages.db-shm": {
-      "checksum": "9d712e47e478e414ca04ca8be9fe1f79420c2341079c58c3097c38daa77dcd22",
-      "modified": 1772477789.9941185,
+      "checksum": "378434573fd5cbc2b04fdd34158f1fb424d2a9e9a46843b3f158633a8d0c6dc4",
+      "modified": 1772509290.463914,
       "size": 32768
     },
     "instance\\pages.db-wal": {
-      "checksum": "10fed0b45182e9a85be6e65c2e9d1174dc019549520270e8319d86350262df44",
-      "modified": 1772478555.145854,
-      "size": 898192
+      "checksum": "331e58934a1acb738f7f6af3f4625f6207b0dc2843d82f8fe0567ef18e972901",
+      "modified": 1772509376.5879498,
+      "size": 997072
     },
     "instance\\postgres_config.json": {
       "checksum": "68dce8ae3459cbdd9b853ed82a6201dcdffaf8318c77febd612f2be763382dc6",
-      "modified": 1772293161.1260817,
+      "modified": 1772482465.152471,
       "size": 289
     },
     "instance\\strategy_shares.json": {
@@ -4061,14 +4061,14 @@
       "size": 32768
     },
     "instance\\users.db-shm": {
-      "checksum": "2a7481ebd23f19333d06089e82f21b80af20eee86f504a6340118d43310b66cc",
-      "modified": 1772477789.9849017,
+      "checksum": "2d8a698440f62c5c241a0bda29486a5c9947d5acf6cccfdf3860d33d960d2ecb",
+      "modified": 1772509290.4019973,
       "size": 32768
     },
     "instance\\users.db-wal": {
-      "checksum": "fe29cbcc140589d3cfc3cff5e15fad44b9fd4a1a8575183eb23d816841787e18",
-      "modified": 1772478555.1417103,
-      "size": 1388472
+      "checksum": "8eea35d123d1a10c5dfea03ca85072a5e6a60e075a3c79d14c1bbafa6528d257",
+      "modified": 1772509376.5859425,
+      "size": 2130072
     },
     "instance\\users.db.bak": {
       "checksum": "16d49906e475455fc690c9a33b229f0f461bfff83e56b0122f79cea7abfd53a0",
@@ -4085,19 +4085,19 @@
       "modified": 1770751963.4512575,
       "size": 1331
     },
-    "instance\\backup\\one.db.20260302_014600.bak": {
-      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "modified": 1772415960.8730054,
-      "size": 0
-    },
-    "instance\\backup\\one.db.20260302_025803.bak": {
-      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "modified": 1772420283.8937159,
-      "size": 0
-    },
     "instance\\backup\\one.db.20260302_030759.bak": {
       "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "modified": 1772420879.6851423,
+      "size": 0
+    },
+    "instance\\backup\\one.db.20260302_194828.bak": {
+      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": 1772480908.0344605,
+      "size": 0
+    },
+    "instance\\backup\\one.db.20260303_033840.bak": {
+      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": 1772509120.8292623,
       "size": 0
     },
     "instance\\backup\\20251130T003655Z\\apis.db": {
@@ -5236,9 +5236,9 @@
       "size": 1667
     },
     "tests\\test_sidebar_links.py": {
-      "checksum": "f48794bdc083852b97a149de467cbbefd382b88492bd733072e141eee523428b",
-      "modified": 1772420551.5135064,
-      "size": 916
+      "checksum": "0b4b25d6eaedd93e96c292c85340fcd49fb485bf123cc525a8588ff11a573dc5",
+      "modified": 1772509262.9561775,
+      "size": 1652
     },
     "tests\\test_simulations_dedupe.py": {
       "checksum": "17c2ea32598e07b674abb7067c8b39b18c138c7c8e3066533bb5169f8f12d058",
@@ -5926,5 +5926,5 @@
       "size": 23782
     }
   },
-  "created": "2026-03-02T19:48:10.880464+00:00"
+  "created": "2026-03-03T03:43:08.682782+00:00"
 }

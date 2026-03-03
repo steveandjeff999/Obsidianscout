@@ -609,9 +609,9 @@ def index():
         # Use the selected list of graph types for rendering
         for graph_type in selected_graph_types:
             if graph_type == 'bar':
-                plots.update(_create_bar_chart(team_data, selected_metric, selected_data_view))
+                plots.update(_create_bar_chart(team_data, selected_metric, selected_data_view, selected_sort))
             elif graph_type == 'line':
-                plots.update(_create_line_chart(team_data, selected_metric, selected_data_view))
+                plots.update(_create_line_chart(team_data, selected_metric, selected_data_view, selected_sort))
             elif graph_type == 'scatter':
                 plots.update(_create_scatter_chart(team_data, selected_metric, selected_data_view))
             elif graph_type == 'histogram':
@@ -3548,23 +3548,34 @@ def delete_share(share_id):
     return redirect(url_for('graphs.my_shares'))
 
 # Helper functions for creating different chart types
-def _create_bar_chart(team_data, metric, data_view):
+def _create_bar_chart(team_data, metric, data_view, sort='points_desc'):
     """Create a bar chart for the given team data and metric"""
     plots = {}
     
     if data_view == 'averages':
         # Team averages bar chart
-        teams = []
-        values = []
+        avg_entries = []
         
-        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
+        for team_number, data in team_data.items():
             # Exclude teams with no valid metric values
             vals = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
             if not vals:
                 continue
             avg_value = sum(vals) / len(vals)
-            teams.append(str(team_number))
-            values.append(avg_value)
+            avg_entries.append((team_number, avg_value))
+
+        # Apply requested sort order
+        if sort == 'points_asc':
+            avg_entries.sort(key=lambda x: x[1])
+        elif sort == 'points_desc':
+            avg_entries.sort(key=lambda x: x[1], reverse=True)
+        elif sort == 'team_desc':
+            avg_entries.sort(key=lambda x: int(x[0]), reverse=True)
+        else:  # team_asc / default
+            avg_entries.sort(key=lambda x: int(x[0]))
+
+        teams = [str(e[0]) for e in avg_entries]
+        values = [e[1] for e in avg_entries]
         
         if teams:
             fig = go.Figure(data=[
@@ -3602,7 +3613,7 @@ def _create_bar_chart(team_data, metric, data_view):
     
     return plots
 
-def _create_line_chart(team_data, metric, data_view):
+def _create_line_chart(team_data, metric, data_view, sort='points_desc'):
     """Create a line chart for the given team data and metric"""
     plots = {}
     
@@ -3640,8 +3651,15 @@ def _create_line_chart(team_data, metric, data_view):
             avg_data.append({'team': team_number, 'avg': avg})
 
         if avg_data:
-            # sort by team number for stable ordering
-            avg_data = sorted(avg_data, key=lambda x: int(x['team']))
+            # sort by requested order
+            if sort == 'points_asc':
+                avg_data = sorted(avg_data, key=lambda x: x['avg'])
+            elif sort == 'points_desc':
+                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)
+            elif sort == 'team_desc':
+                avg_data = sorted(avg_data, key=lambda x: int(x['team']), reverse=True)
+            else:  # team_asc / default
+                avg_data = sorted(avg_data, key=lambda x: int(x['team']))
             fig_line = go.Figure()
             fig_line.add_trace(go.Scatter(
                 x=[str(d['team']) for d in avg_data],

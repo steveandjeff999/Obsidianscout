@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 {#
     If the server already knows the current theme is a dark variant, add
     `dark-mode` class (and some inline background color) to the <html> element
     so the browser paints correctly before any scripts run.  This covers the
     common case where users have saved a dark theme as their preference.
 #}
-<html lang="en" class="h-100{% if current_theme_id and ('dark' in current_theme_id) %} dark-mode{% endif %}"{% if current_theme_id and ('dark' in current_theme_id) %} style="background:#0b0b0d;color:#e6e6e6;"{% endif %}>
+<html lang="en" class="h-100{% if current_theme_id and ('dark' in current_theme_id) %} dark-mode{% endif %}"{% if current_theme_id and ('dark' in current_theme_id) %} data-bs-theme="dark" style="background:#0b0b0d;color:#e6e6e6;"{% endif %}>
 <script>
     // **extremely early** theme detection executed before any styles are parsed.
     // This handles client-side darkMode preference stored in localStorage
@@ -14,6 +14,11 @@
     // to the browser's first paint, eliminating the flash of light layout.
     (function(){
         try {
+            // Suppress ALL transitions during initial paint so no element can
+            // animate from the server-rendered theme to the client preference.
+            // Removed via double-rAF in applyState() after the first clean frame.
+            document.documentElement.classList.add('no-transitions');
+
             var stored = null;
             try { stored = localStorage.getItem('darkMode'); } catch(e) { stored = null; }
             var prefers = false;
@@ -24,9 +29,26 @@
             else useDark = prefers;
             if (useDark) {
                 document.documentElement.classList.add('dark-mode');
+                document.documentElement.classList.remove('light-mode-explicit');
+                // also set bootstrap theme attribute early so styles that rely on
+                // `[data-bs-theme]` win even before JS initializes
+                try {
+                    document.documentElement.setAttribute('data-bs-theme','dark');
+                    document.body.setAttribute('data-bs-theme','dark');
+                } catch(e) { /* ignore */ }
                 // inline background ensures any unthemed elements start dark
                 document.documentElement.style.background = '#0b0b0d';
                 document.documentElement.style.color = '#e6e6e6';
+            } else {
+                // ANY light-mode path (explicit 'false', OS light, or no preference).
+                // Stamp the guard class immediately so the early-dark-rules block
+                // cancels any dark paint that the server-side dark-mode class or a
+                // dark OS might otherwise trigger â€” before any stylesheet has loaded.
+                document.documentElement.classList.add('light-mode-explicit');
+                document.documentElement.classList.remove('dark-mode');
+                document.documentElement.setAttribute('data-bs-theme','light');
+                document.documentElement.style.background = '#f4f6fb';
+                document.documentElement.style.color = '#111827';
             }
         } catch(e) { /* ignore */ }
     })();
@@ -34,33 +56,93 @@
 <head>
     <!-- Tell the browser we support both light and dark so it chooses appropriate defaults -->
     <meta name="color-scheme" content="light dark">
-    <!-- If the operating system prefers dark, have CSS set a dark background immediately
-         before any scripts run.  This catches the initial paint even on first visit. -->
-    <style>
-        @media (prefers-color-scheme: dark) {
-            html, body { background: #0b0b0d !important; color: #e6e6e6 !important; }
+    <!-- Early theme paint â€“ uses CLASS selectors only (html.dark-mode) so these rules
+         never fire when the user has explicitly chosen light mode.
+         The inline <script> immediately before <head> already adds html.dark-mode
+         before the browser processes these styles, removing any flash. -->
+    <style id="early-theme-base">
+        /* Freeze all transitions during initial load to prevent any theme flash animation.
+           The no-transitions class is added by the pre-<head> script and removed after
+           the first clean painted frame via double-requestAnimationFrame in applyState(). */
+        html.no-transitions *,
+        html.no-transitions *::before,
+        html.no-transitions *::after {
+            transition: none !important;
+            animation-duration: 0.001ms !important;
         }
+        /* Dark mode â€“ controlled by html.dark-mode class set in the early <script> */
+        html.dark-mode,
+        html.dark-mode body { background: #0b0b0d !important; color: #e6e6e6 !important; }
     </style>
-    <!-- Additional generic dark-mode rules that apply either when the user has explicitly
-         enabled dark mode via localStorage or when the OS prefers dark.  Placing this
-         style here ensures the browser already knows to render cards, alerts, navbars,
-         etc. with dark backgrounds before any external CSS loads or JS runs. -->
+    <!-- Dark component overrides â€“ class-based ONLY, never fired by OS media query
+         so light-mode users with a dark OS preference see the correct light layout. -->
     <style id="early-dark-rules">
-        @media (prefers-color-scheme: dark), .dark-mode {
-            html, body,
-            .card, .card-body, .card-header,
-            .navbar, .modal,
-            .bg-white, .bg-light,
-            .alert, .dropdown-menu, .list-group-item,
-            table, th, td,
-            .form-control, .btn, .badge {
-                background-color: #2d3338 !important;
-                color: #e6e6e6 !important;
-                border-color: #444 !important;
-            }
-            .navbar, .modal {
-                background-color: #252a30 !important;
-            }
+        html.dark-mode .card,
+        html.dark-mode .card-body,
+        html.dark-mode .card-header,
+        html.dark-mode .navbar,
+        html.dark-mode .modal,
+        html.dark-mode .bg-white,
+        html.dark-mode .bg-light,
+        html.dark-mode .alert,
+        html.dark-mode .dropdown-menu,
+        html.dark-mode .list-group-item,
+        html.dark-mode table,
+        html.dark-mode th,
+        html.dark-mode td,
+        html.dark-mode .form-control,
+        html.dark-mode .btn,
+        html.dark-mode .badge {
+            background-color: #2d3338 !important;
+            color: #e6e6e6 !important;
+            border-color: #444 !important;
+        }
+        html.dark-mode .navbar,
+        html.dark-mode .modal { background-color: #252a30 !important; }
+        /* Light mode guard â€“ fires for ALL light-mode users (OS light, explicit, or
+           no stored preference). Set by the pre-<head> script before any CSS loads,
+           so the browser's first paint is already correct with no flash. */
+        html.light-mode-explicit,
+        html.light-mode-explicit body {
+            background: #f4f6fb !important;
+            color: #111827 !important;
+        }
+        /* Cards and every common card sub-element */
+        html.light-mode-explicit .card,
+        html.light-mode-explicit .card-body,
+        html.light-mode-explicit .card-header,
+        html.light-mode-explicit .card-footer,
+        html.light-mode-explicit .card-title,
+        html.light-mode-explicit .card-text {
+            background-color: #ffffff !important;
+            color: #111827 !important;
+            border-color: rgba(17,24,39,0.10) !important;
+        }
+        /* Glass/modern card variants */
+        html.light-mode-explicit .glass-card,
+        html.light-mode-explicit .modern-card,
+        html.light-mode-explicit .stat-card,
+        html.light-mode-explicit .info-card {
+            background: rgba(255,255,255,0.92) !important;
+            color: #111827 !important;
+            border-color: rgba(17,24,39,0.10) !important;
+        }
+        /* Buttons, inputs, badges */
+        html.light-mode-explicit .btn,
+        html.light-mode-explicit .form-control,
+        html.light-mode-explicit .form-select,
+        html.light-mode-explicit .input-group-text,
+        html.light-mode-explicit .badge {
+            background-color: #ffffff !important;
+            color: #111827 !important;
+            border-color: rgba(17,24,39,0.12) !important;
+        }
+        /* Sidebar and topbar */
+        html.light-mode-explicit .sidebar,
+        html.light-mode-explicit .topbar,
+        html.light-mode-explicit .navbar {
+            background-color: #ffffff !important;
+            color: #111827 !important;
         }
     </style>
     <!-- ensure the full dark-theme CSS is available immediately on first paint
@@ -68,11 +150,6 @@
          the file is still downloaded early but only applied when appropriate. -->
     <link rel="preload" href="{{ url_for('static', filename='css/dark-mode-force.css') }}" as="style">
     <link rel="preload" href="{{ url_for('static', filename='css/dark-theme-modern.css') }}" as="style">
-    <!-- always load the dark-mode CSS; it targets .dark-mode selectors internally
-         so it won’t affect light themes but will be available the instant the class is
-         added by the script above. -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-force.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-theme-modern.css') }}">
     <!-- Early theme detection: apply dark-mode class to <html> before CSS loads to prevent white flash -->
     <script>
         // Server-side indication whether liquid glass buttons are allowed for this team.
@@ -398,6 +475,88 @@
             color: var(--bs-body-color) !important;
             background-clip: padding-box !important;
             overflow: hidden !important;
+        }
+
+        /* =======================================================================
+           LIGHT-MODE FORCE OVERRIDE â€” loaded after ALL other stylesheets so it
+           wins the cascade. Targets the exact server-render collision: body has
+           dark-mode class from Jinja2 but html has light-mode-explicit from the
+           pre-<head> script (user's real preference is light).
+           Specificity: html(1) + .light-mode-explicit(1) + body(1) + .dark-mode(1)
+           + .card(1) = beats dark-mode-force.css's body.modern-layout.dark-mode(2)
+           ======================================================================= */
+        html.light-mode-explicit body.dark-mode .card,
+        html.light-mode-explicit body.modern-layout.dark-mode .card,
+        html.light-mode-explicit body.dark-mode .card.shadow-sm,
+        html.light-mode-explicit body.modern-layout.dark-mode .card.shadow-sm,
+        html.light-mode-explicit body.dark-mode .card.shadow,
+        html.light-mode-explicit body.modern-layout.dark-mode .card.shadow,
+        html.light-mode-explicit body.dark-mode .card.h-100,
+        html.light-mode-explicit body.modern-layout.dark-mode .card.h-100,
+        html.light-mode-explicit body.dark-mode .stat-card,
+        html.light-mode-explicit body.modern-layout.dark-mode .stat-card,
+        html.light-mode-explicit body.dark-mode .dashboard-card,
+        html.light-mode-explicit body.modern-layout.dark-mode .dashboard-card,
+        html.light-mode-explicit body.dark-mode .data-card,
+        html.light-mode-explicit body.modern-layout.dark-mode .data-card,
+        html.light-mode-explicit body.dark-mode .team-card,
+        html.light-mode-explicit body.modern-layout.dark-mode .team-card,
+        html.light-mode-explicit body.dark-mode .match-card,
+        html.light-mode-explicit body.modern-layout.dark-mode .match-card,
+        html.light-mode-explicit body.dark-mode .glass-card,
+        html.light-mode-explicit body.modern-layout.dark-mode .glass-card,
+        html.light-mode-explicit body.dark-mode .modern-card,
+        html.light-mode-explicit body.modern-layout.dark-mode .modern-card {
+            background-color: #ffffff !important;
+            background: #ffffff !important;
+            border-color: rgba(17,24,39,0.10) !important;
+            color: #111827 !important;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.07) !important;
+        }
+        html.light-mode-explicit body.dark-mode .card-body,
+        html.light-mode-explicit body.modern-layout.dark-mode .card-body,
+        html.light-mode-explicit body.dark-mode .card-header,
+        html.light-mode-explicit body.modern-layout.dark-mode .card-header,
+        html.light-mode-explicit body.dark-mode .card-footer,
+        html.light-mode-explicit body.modern-layout.dark-mode .card-footer {
+            background-color: transparent !important;
+            color: #111827 !important;
+            border-color: rgba(17,24,39,0.08) !important;
+        }
+        html.light-mode-explicit body.dark-mode .card .card,
+        html.light-mode-explicit body.modern-layout.dark-mode .card .card {
+            background-color: #f8f9fa !important;
+            background: #f8f9fa !important;
+            border-color: rgba(17,24,39,0.08) !important;
+        }
+        /* Stat card sub-elements */
+        html.light-mode-explicit body.dark-mode .stat-card .stat-icon,
+        html.light-mode-explicit body.modern-layout.dark-mode .stat-card .stat-icon,
+        html.light-mode-explicit body.dark-mode .stat-card .stat-icon i,
+        html.light-mode-explicit body.modern-layout.dark-mode .stat-card .stat-icon i {
+            color: #374151 !important;
+        }
+        html.light-mode-explicit body.dark-mode .stat-card .stat-label,
+        html.light-mode-explicit body.modern-layout.dark-mode .stat-card .stat-label {
+            color: #6b7280 !important;
+        }
+        html.light-mode-explicit body.dark-mode .stat-card .stat-value,
+        html.light-mode-explicit body.modern-layout.dark-mode .stat-card .stat-value {
+            color: #111827 !important;
+        }
+        /* Page background */
+        html.light-mode-explicit body.dark-mode,
+        html.light-mode-explicit body.modern-layout.dark-mode {
+            background-color: #f4f6fb !important;
+            background: #f4f6fb !important;
+            color: #111827 !important;
+        }
+        /* Buttons within cards */
+        html.light-mode-explicit body.dark-mode .btn:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info),
+        html.light-mode-explicit body.modern-layout.dark-mode .btn:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info) {
+            background-color: #ffffff !important;
+            color: #374151 !important;
+            border-color: rgba(17,24,39,0.15) !important;
         }
     </style>
     
@@ -1235,7 +1394,7 @@
         <div class="sidebar-header d-flex align-items-center justify-content-between">
             <a class="brand d-flex align-items-center text-decoration-none" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
                 <div class="brand-logo d-flex align-items-center justify-content-center me-2" role="img" aria-label="ObsidianScout logo" tabindex="0">
-                    <!-- Use the same image that’s used for the favicon/tab icon -->
+                    <!-- Use the same image thatâ€™s used for the favicon/tab icon -->
                     <img src="{{ url_for('static', filename='obsidian-192.png') }}" class="brand-svg" aria-hidden="true" alt="">
                 </div>
                 <div class="brand-info d-flex flex-column">
@@ -1299,7 +1458,7 @@
                 {% if 'config_averages' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.analytics_config_averages' %}active{% endif %}" href="{{ url_for('main.analytics_config_averages') }}"><i class="fas fa-calculator"></i><span>Config Averages</span></a>{% endif %}
                 {% if 'custom_pages' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.pages') %}active{% endif %}" href="{{ url_for('graphs.pages_index') }}"><i class="fas fa-file-alt"></i><span>Custom Pages</span></a>{% endif %}
                 {% if 'strategy' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy' %}active{% endif %}" href="{{ url_for('matches.strategy') }}"><i class="fas fa-chess"></i><span>Strategy</span></a>{% endif %}
-                {% if 'strategy_all' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_all' %}active{% endif %}" href="{{ url_for('matches.strategy_all') }}"><i class="fas fa-th-large"></i><span>Strategy — All Matches</span></a>{% endif %}
+                {% if 'strategy_all' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_all' %}active{% endif %}" href="{{ url_for('matches.strategy_all') }}"><i class="fas fa-th-large"></i><span>Strategy â€” All Matches</span></a>{% endif %}
                 {% if 'strategy_draw' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}" href="{{ url_for('matches.strategy_draw') }}"><i class="fas fa-pen-ruler"></i><span>Strategy Draw</span></a>{% endif %}
                 {% if 'strategy_live' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_live' %}active{% endif %}" href="{{ url_for('matches.strategy_live') }}"><i class="fas fa-broadcast-tower"></i><span>Live Strategy</span></a>{% endif %}
                 {% if 'my_graph_shares' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}" href="{{ url_for('graphs.my_shares') }}"><i class="fas fa-share-alt"></i><span>My Graph Shares</span></a>{% endif %}
@@ -1847,7 +2006,7 @@
                         <span class="fw-bold">ObsidianScout</span>
                         {# On normal pages show a subtle secondary label; hide it on the login page to avoid duplication. #}
                         {% if request.endpoint != 'auth.login' %}
-                        <span class="text-muted mx-2">•</span>
+                        <span class="text-muted mx-2">â€¢</span>
                         <span class="small text-muted">ObsidianScout</span>
                         {% endif %}
                     </div>
@@ -2079,14 +2238,25 @@
             function applyState(on){
                 try {
                     const htmlEl = document.documentElement;
+
+                    // maintain both class and the new Bootstrap 5 theme attribute so
+                    // components using `[data-bs-theme]` selectors will update correctly.
                     if (on) {
                         body.classList.add('dark-mode');
                         htmlEl.classList.add('dark-mode');
+                        htmlEl.classList.remove('light-mode-explicit');
+                        body.classList.remove('light-mode-explicit');
+                        htmlEl.setAttribute('data-bs-theme', 'dark');
+                        body.setAttribute('data-bs-theme', 'dark');
                         if(darkModeIcon){darkModeIcon.classList.remove('fa-moon');darkModeIcon.classList.add('fa-sun');}
                         if(darkModeLabel){darkModeLabel.textContent='Light Mode';}
                     } else {
                         body.classList.remove('dark-mode');
                         htmlEl.classList.remove('dark-mode');
+                        htmlEl.classList.add('light-mode-explicit');
+                        body.classList.add('light-mode-explicit');
+                        htmlEl.setAttribute('data-bs-theme', 'light');
+                        body.setAttribute('data-bs-theme', 'light');
                         if(darkModeIcon){darkModeIcon.classList.remove('fa-sun');darkModeIcon.classList.add('fa-moon');}
                         if(darkModeLabel){darkModeLabel.textContent='Dark Mode';}
                     }
@@ -2096,6 +2266,16 @@
                 }
             }
             applyState(isDarkMode);
+            // Unfreeze transitions after the first clean frame has been committed.
+            // Double rAF ensures the browser has painted at least once with the
+            // correct theme before any CSS transition can fire.
+            try {
+                requestAnimationFrame(function(){
+                    requestAnimationFrame(function(){
+                        document.documentElement.classList.remove('no-transitions');
+                    });
+                });
+            } catch(e) {}
 
             // Apply rounded UI preference
             try {
@@ -2121,7 +2301,15 @@
                     const now = !body.classList.contains('dark-mode');
                     localStorage.setItem('darkMode', now ? 'true':'false');
                     // Keep both html and body in sync so early loaded scripts and observers react
-                    try { if (now) { document.documentElement.classList.add('dark-mode'); } else { document.documentElement.classList.remove('dark-mode'); } } catch(e) {}
+                    try {
+                        if (now) {
+                            document.documentElement.classList.add('dark-mode');
+                            document.documentElement.classList.remove('light-mode-explicit');
+                        } else {
+                            document.documentElement.classList.remove('dark-mode');
+                            document.documentElement.classList.add('light-mode-explicit');
+                        }
+                    } catch(e) {}
                     applyState(now);
 
                     // Persist only locally; no server-side theme endpoints are available.
@@ -2601,7 +2789,7 @@
                         };
                         window.__scrollJumpLogs.push(entry);
                         // Print brief warning so you can observe in console if present
-                        console.warn('Captured scrollTo(0) after user click — recorded to window.__scrollJumpLogs (first 3 chars of stack):', (entry.stack||'').slice(0,120));
+                        console.warn('Captured scrollTo(0) after user click â€” recorded to window.__scrollJumpLogs (first 3 chars of stack):', (entry.stack||'').slice(0,120));
                         // Still perform the original call so behavior is unchanged while debugging
                         return origScrollTo.apply(window, arguments);
                     }
@@ -2610,7 +2798,7 @@
                 }
                 return origScrollTo.apply(window, arguments);
             };
-            console.log('Scroll debug shim active for tall-portrait screens — logs available at window.__scrollJumpLogs');
+            console.log('Scroll debug shim active for tall-portrait screens â€” logs available at window.__scrollJumpLogs');
         } catch(e) { /* ignore */ }
     })();
     </script>
@@ -2687,7 +2875,7 @@
                 setTimeout(function(){ window.__lastUserScrollBeforeHash = 0; }, 700);
             }, true);
 
-            console.log('Extra scroll/focus/history debug instrumentation active — logs available at window.__scrollActionLogs');
+            console.log('Extra scroll/focus/history debug instrumentation active â€” logs available at window.__scrollActionLogs');
         } catch(e) { /* ignore */ }
     })();
     </script>
@@ -4263,7 +4451,7 @@
                 btn.__touchHandlerAttached = true;
 
                 btn.addEventListener('touchend', function(e){
-                    // If bootstrap dropdown exists, toggle explicitly — this avoids issues when clicks are swallowed by overlays
+                    // If bootstrap dropdown exists, toggle explicitly â€” this avoids issues when clicks are swallowed by overlays
                     try {
                         if (window.bootstrap && window.bootstrap.Dropdown) {
                             const inst = window.bootstrap.Dropdown.getOrCreateInstance(btn);
