@@ -653,124 +653,470 @@ option[value=""] { color: var(--ui-muted); }
     .form-select, select { padding-right: 3.2rem !important; }
 }
 
-/* Light-mode surface fixes: remove hazy glass and restore crisp contrast */
+/* =============================================================
+   LIGHT MODE – comprehensive surface and colour overrides
+   Targets body:not(.dark-mode) so these rules apply whenever the
+   dark-mode class is absent, no matter which sub-layout is used.
+   ============================================================= */
+
+/* 1. CSS custom property reset -------------------------------- */
 body:not(.dark-mode) {
-    --ui-bg: #f5f7fb;
-    --ui-card-bg: #ffffff;
-    --ui-foreground: #0f1724;
-    --ui-muted: #6b7280;
-    --ui-border: rgba(15,23,42,0.08);
-    --card-bg: #ffffff;
-    --glass-bg: #ffffff;
-    --glass-border: rgba(15,23,42,0.06);
+    --ui-bg:          #f4f6fb;
+    --ui-card-bg:     #ffffff;
+    --ui-surface:     #ffffff;
+    --ui-foreground:  #111827;
+    --ui-muted:       #6b7280;
+    --ui-border:      rgba(17,24,39,0.08);
+    --ui-accent:      #1976d2;
+    --ui-accent-rgb:  25,118,210;
+    /* Legacy variable aliases used across other CSS files */
+    --card-bg:        #ffffff;
+    --card-header:    #f8fafc;
+    --card-border:    rgba(17,24,39,0.08);
+    --text-main:      #111827;
+    --text-muted:     #6b7280;
+    --glass-bg:       rgba(255,255,255,0.96);
+    --glass-border:   rgba(17,24,39,0.06);
+    --sidebar-bg:     #ffffff;
+    --sidebar-border: rgba(17,24,39,0.08);
+    --topbar-surface-light: linear-gradient(90deg,rgba(255,255,255,0.92),rgba(255,255,255,0.80));
 }
 
-body:not(.dark-mode) .modern-layout {
-    background: radial-gradient(circle at 10% 20%, #f8fbff 0, #f5f7fb 32%, #f1f4f9 70%);
-}
-
+/* 2. Page background & base text ----------------------------- */
 body:not(.dark-mode),
-html:not(.dark-mode) {
-    background: #f5f7fb !important;
-    color: #0f1724 !important;
+html:not(.dark-mode) body {
+    background: #f4f6fb !important;
+    color:      #111827 !important;
 }
 
-body:not(.dark-mode) .modern-layout .sidebar,
-body:not(.dark-mode) .modern-layout .topbar {
-    background: #ffffff !important;
-    border: 1px solid var(--ui-border) !important;
-    box-shadow: 0 14px 36px rgba(15,23,42,0.08) !important;
+html:not(.dark-mode) { background: #f4f6fb !important; }
+
+/* 3. Sidebar -------------------------------------------------- */
+body:not(.dark-mode) .sidebar {
+    background:      #ffffff !important;
+    border-right:    1px solid rgba(17,24,39,0.09) !important;
+    box-shadow:      1px 0 24px rgba(17,24,39,0.06) !important;
+    color:           #111827 !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
-    color: var(--ui-foreground) !important;
 }
 
-body:not(.dark-mode) .modern-layout .card,
-body:not(.dark-mode) .modern-layout .dashboard-card,
-body:not(.dark-mode) .modern-layout .stat-card,
-body:not(.dark-mode) .modern-layout .modal-content,
-body:not(.dark-mode) .modern-layout .dropdown-menu {
-    background: #ffffff !important;
-    border: 1px solid var(--ui-border) !important;
-    box-shadow: 0 12px 32px rgba(15,23,42,0.08) !important;
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-    color: var(--ui-foreground) !important;
+/* Nav links */
+body:not(.dark-mode) .sidebar .nav-link {
+    color: #374151 !important;
+}
+body:not(.dark-mode) .sidebar .nav-link:hover {
+    background: rgba(17,24,39,0.04) !important;
+    color: #111827 !important;
+}
+body:not(.dark-mode) .sidebar .nav-link.active {
+    background: rgba(25,118,210,0.10) !important;
+    color: #1976d2 !important;
+}
+body:not(.dark-mode) .sidebar .nav-link.active i {
+    color: #1976d2 !important;
+}
+body:not(.dark-mode) .sidebar .nav-link i {
+    color: #6b7280 !important;
+}
+body:not(.dark-mode) .sidebar .nav-group-title {
+    color: #9ca3af !important;
+}
+body:not(.dark-mode) .sidebar .brand-text {
+    color: #111827 !important;
 }
 
-/* Global light-mode enforcement: keep every card/panel white even if a bg-dark class is present */
+/* Sidebar footer */
+body:not(.dark-mode) .sidebar .sidebar-footer {
+    border-top-color: rgba(17,24,39,0.08) !important;
+    background: transparent !important;
+}
+body:not(.dark-mode) .sidebar .sidebar-footer .btn {
+    background:    #ffffff !important;
+    border-color:  rgba(17,24,39,0.12) !important;
+    color:         #374151 !important;
+    box-shadow:    0 1px 3px rgba(17,24,39,0.06) !important;
+}
+body:not(.dark-mode) .sidebar .sidebar-footer .btn:hover {
+    background:   #f4f6fb !important;
+    border-color: rgba(17,24,39,0.20) !important;
+    color:        #111827 !important;
+}
+body:not(.dark-mode) .sidebar .sidebar-footer .btn-outline-primary {
+    color:        #1976d2 !important;
+    border-color: rgba(25,118,210,0.35) !important;
+}
+body:not(.dark-mode) .sidebar .sidebar-footer .btn-outline-primary:hover {
+    background:   rgba(25,118,210,0.08) !important;
+    color:        #1565c0 !important;
+}
+body:not(.dark-mode) .sidebar .sidebar-footer .btn-outline-danger {
+    color:        #dc2626 !important;
+    border-color: rgba(220,38,38,0.35) !important;
+}
+body:not(.dark-mode) .sidebar .sidebar-footer .btn-outline-danger:hover {
+    background:   rgba(220,38,38,0.07) !important;
+    color:        #b91c1c !important;
+}
+body:not(.dark-mode) .sidebar .sidebar-footer .btn-outline-secondary {
+    color:        #4b5563 !important;
+    border-color: rgba(17,24,39,0.18) !important;
+}
+body:not(.dark-mode) .sidebar .user-mini {
+    background: rgba(17,24,39,0.03) !important;
+    color:      #374151 !important;
+}
+
+/* Sidebar scrollbar */
+body:not(.dark-mode) .sidebar::-webkit-scrollbar-thumb {
+    background: rgba(17,24,39,0.10) !important;
+}
+
+/* Sidebar btn-toggle (group headers) */
+body:not(.dark-mode) .sidebar .btn-toggle {
+    color:      #6b7280 !important;
+    background: transparent !important;
+}
+body:not(.dark-mode) .sidebar .btn-toggle:hover {
+    background: rgba(17,24,39,0.04) !important;
+    color:      #374151 !important;
+}
+
+/* 4. Topbar --------------------------------------------------- */
+body:not(.dark-mode) .topbar {
+    background:      rgba(255,255,255,0.92) !important;
+    border-bottom:   1px solid rgba(17,24,39,0.07) !important;
+    box-shadow:      0 2px 12px rgba(17,24,39,0.06) !important;
+    color:           #111827 !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    backdrop-filter: blur(10px) !important;
+}
+body:not(.dark-mode) .topbar .btn {
+    background:   transparent !important;
+    color:        #374151 !important;
+    border-color: rgba(17,24,39,0.12) !important;
+    box-shadow:   none !important;
+}
+body:not(.dark-mode) .topbar .btn:hover {
+    background:   rgba(17,24,39,0.04) !important;
+    color:        #111827 !important;
+}
+body:not(.dark-mode) .topbar i,
+body:not(.dark-mode) .topbar .brand-icon {
+    color: #374151 !important;
+}
+body:not(.dark-mode) .topbar .dropdown-toggle {
+    color: #374151 !important;
+}
+
+/* 5. Dropdown menus ------------------------------------------ */
+body:not(.dark-mode) .dropdown-menu {
+    background:   #ffffff !important;
+    border:       1px solid rgba(17,24,39,0.08) !important;
+    box-shadow:   0 12px 36px rgba(17,24,39,0.12) !important;
+    color:        #111827 !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    backdrop-filter: blur(8px) !important;
+}
+body:not(.dark-mode) .dropdown-menu .dropdown-item {
+    color: #374151 !important;
+}
+body:not(.dark-mode) .dropdown-menu .dropdown-item:hover,
+body:not(.dark-mode) .dropdown-menu .dropdown-item:focus {
+    background: rgba(17,24,39,0.04) !important;
+    color:      #111827 !important;
+}
+body:not(.dark-mode) .dropdown-menu .dropdown-divider {
+    border-color: rgba(17,24,39,0.08) !important;
+}
+
+/* 6. Cards ---------------------------------------------------- */
 body:not(.dark-mode) .card,
 body:not(.dark-mode) .dashboard-card,
 body:not(.dark-mode) .stat-card,
-body:not(.dark-mode) .data-card {
-    background: #ffffff !important;
-    color: #0f1724 !important;
-    border: 1px solid var(--ui-border) !important;
-    box-shadow: 0 10px 28px rgba(15,23,42,0.06) !important;
+body:not(.dark-mode) .data-card,
+body:not(.dark-mode) .team-card,
+body:not(.dark-mode) .match-card {
+    background:   #ffffff !important;
+    color:        #111827 !important;
+    border:       1px solid rgba(17,24,39,0.08) !important;
+    box-shadow:   0 4px 20px rgba(17,24,39,0.06) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
 }
 
 body:not(.dark-mode) .card .card-header,
-body:not(.dark-mode) .card .card-body,
-body:not(.dark-mode) .dashboard-card .card-body,
-body:not(.dark-mode) .stat-card .card-body {
-    background: #ffffff !important;
-    color: #0f1724 !important;
-    border-color: var(--ui-border) !important;
+body:not(.dark-mode) .card-header {
+    background:    #f8fafc !important;
+    color:         #111827 !important;
+    border-bottom: 1px solid rgba(17,24,39,0.08) !important;
 }
+body:not(.dark-mode) .card .card-body,
+body:not(.dark-mode) .card-body {
+    background: #ffffff !important;
+    color:      #111827 !important;
+}
+body:not(.dark-mode) .card .card-footer,
+body:not(.dark-mode) .card-footer {
+    background:  #f8fafc !important;
+    color:       #374151 !important;
+    border-top:  1px solid rgba(17,24,39,0.08) !important;
+}
+body:not(.dark-mode) .card .card-title,
+body:not(.dark-mode) .card-title  { color: #111827 !important; }
+body:not(.dark-mode) .card .card-text,
+body:not(.dark-mode) .card-text   { color: #374151 !important; }
 
-/* Nuke accidental dark tiles in light mode (stat cards, dashboards, bg-dark utilities) */
+/* Fix bg-dark / bg-black utility on card elements */
 body:not(.dark-mode) .bg-dark,
+body:not(.dark-mode) .bg-black,
 body:not(.dark-mode) .card.bg-dark,
 body:not(.dark-mode) .card.bg-black,
+body:not(.dark-mode) .card-header.bg-dark,
+body:not(.dark-mode) .card-header.bg-black,
 body:not(.dark-mode) .dashboard-card.bg-dark,
 body:not(.dark-mode) .stat-card.bg-dark,
-body:not(.dark-mode) .data-card.bg-dark,
-body:not(.dark-mode) .card-header.bg-dark {
-    background: #ffffff !important;
-    color: #0f1724 !important;
-    border-color: var(--ui-border) !important;
-    box-shadow: 0 10px 28px rgba(15,23,42,0.06) !important;
+body:not(.dark-mode) .data-card.bg-dark {
+    background: #f4f6fb !important;
+    color:      #111827 !important;
+    border-color: rgba(17,24,39,0.08) !important;
 }
 
-/* Catch any cards rendered outside modern-layout to keep light mode bright */
-body:not(.dark-mode) .card,
-body:not(.dark-mode) .stat-card,
+/* 7. Modals --------------------------------------------------- */
+body:not(.dark-mode) .modal-content {
+    background:   #ffffff !important;
+    color:        #111827 !important;
+    border:       1px solid rgba(17,24,39,0.08) !important;
+    box-shadow:   0 24px 64px rgba(17,24,39,0.16) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+body:not(.dark-mode) .modal-header {
+    background:    #f8fafc !important;
+    border-bottom: 1px solid rgba(17,24,39,0.08) !important;
+    color:         #111827 !important;
+}
+body:not(.dark-mode) .modal-footer {
+    background:  #f8fafc !important;
+    border-top:  1px solid rgba(17,24,39,0.08) !important;
+    color:       #374151 !important;
+}
+body:not(.dark-mode) .modal-body   { background: #ffffff !important; color: #111827 !important; }
+
+/* 8. Form controls ------------------------------------------- */
+body:not(.dark-mode) .form-control,
+body:not(.dark-mode) input.form-control,
+body:not(.dark-mode) textarea.form-control,
+body:not(.dark-mode) .form-select,
+body:not(.dark-mode) .input-group-text {
+    background:   #f8fafc !important;
+    border:       1px solid rgba(17,24,39,0.14) !important;
+    color:        #111827 !important;
+    box-shadow:   inset 0 1px 3px rgba(17,24,39,0.04) !important;
+}
+body:not(.dark-mode) .form-control::placeholder { color: #9ca3af !important; }
+body:not(.dark-mode) .form-control:focus,
+body:not(.dark-mode) .form-select:focus {
+    background:   #ffffff !important;
+    border-color: rgba(25,118,210,0.50) !important;
+    box-shadow:   inset 0 1px 3px rgba(17,24,39,0.04),
+                  0 0 0 3px rgba(25,118,210,0.12) !important;
+    color:        #111827 !important;
+}
+
+/* 9. List groups --------------------------------------------- */
+body:not(.dark-mode) .list-group-item {
+    background:   #ffffff !important;
+    color:        #374151 !important;
+    border-color: rgba(17,24,39,0.08) !important;
+}
+body:not(.dark-mode) .list-group-item-action:hover,
+body:not(.dark-mode) .list-group-item-action:focus {
+    background: #f4f6fb !important;
+    color:      #111827 !important;
+}
+body:not(.dark-mode) .list-group-flush .list-group-item {
+    background:   #ffffff !important;
+    border-color: rgba(17,24,39,0.06) !important;
+}
+
+/* 10. Tables -------------------------------------------------- */
+body:not(.dark-mode) .table {
+    color:        #374151 !important;
+    border-color: rgba(17,24,39,0.08) !important;
+}
+body:not(.dark-mode) .table thead th {
+    background: transparent !important;
+    color:      #111827 !important;
+    font-weight: 700;
+    border-bottom: 2px solid rgba(17,24,39,0.10) !important;
+}
+body:not(.dark-mode) .table tbody tr:hover {
+    background: rgba(25,118,210,0.04) !important;
+}
+body:not(.dark-mode) .table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: rgba(17,24,39,0.02) !important;
+}
+
+/* 11. Navigation (tabs / pills outside sidebar) -------------- */
+body:not(.dark-mode) .nav-link:not(.active) {
+    color: #6b7280 !important;
+}
+body:not(.dark-mode) .nav-link:hover { color: #111827 !important; }
+body:not(.dark-mode) .nav-tabs { border-bottom-color: rgba(17,24,39,0.10) !important; }
+body:not(.dark-mode) .nav-tabs .nav-link.active {
+    background:    #ffffff !important;
+    color:         #1976d2 !important;
+    border-color:  rgba(17,24,39,0.10) rgba(17,24,39,0.10) #ffffff !important;
+}
+
+/* 12. Alerts -------------------------------------------------- */
+body:not(.dark-mode) .alert {
+    background:   #f8fafc !important;
+    color:        #111827 !important;
+    border-color: rgba(17,24,39,0.08) !important;
+}
+body:not(.dark-mode) .alert-danger  { background:#fef2f2 !important; border-color:#fca5a5 !important; color:#991b1b !important; }
+body:not(.dark-mode) .alert-success { background:#f0fdf4 !important; border-color:#86efac !important; color:#166534 !important; }
+body:not(.dark-mode) .alert-warning { background:#fffbeb !important; border-color:#fcd34d !important; color:#92400e !important; }
+body:not(.dark-mode) .alert-info    { background:#eff6ff !important; border-color:#93c5fd !important; color:#1e40af !important; }
+body:not(.dark-mode) .alert-primary { background:#eff6ff !important; border-color:#93c5fd !important; color:#1e40af !important; }
+
+/* 13. Badges -------------------------------------------------- */
+body:not(.dark-mode) .badge.bg-secondary { background-color: #e5e7eb !important; color: #374151 !important; }
+
+/* 14. Text colour helpers ------------------------------------ */
+body:not(.dark-mode) .text-muted  { color: #6b7280 !important; }
+body:not(.dark-mode) .text-dark   { color: #111827 !important; }
+body:not(.dark-mode) .text-white  { color: #ffffff !important; } /* preserve on coloured backgrounds */
+
+/* 15. Stat / data card values -------------------------------- */
+body:not(.dark-mode) .stat-value  { color: #111827 !important; }
+body:not(.dark-mode) .stat-label  { color: #6b7280 !important; }
+body:not(.dark-mode) .section-heading h2 { color: #111827 !important; }
+
+/* 16. Misc surfaces ------------------------------------------ */
+body:not(.dark-mode) .hero {
+    background: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 100%) !important;
+    box-shadow: 0 8px 32px rgba(17,24,39,0.07) !important;
+    color:      #111827 !important;
+}
+body:not(.dark-mode) .pill { background: rgba(17,24,39,0.05) !important; color: #374151 !important; }
+body:not(.dark-mode) .card-glass {
+    background: rgba(255,255,255,0.85) !important;
+    border:     1px solid rgba(17,24,39,0.06) !important;
+}
 body:not(.dark-mode) .dashboard-card {
-    background: #ffffff !important;
-    color: #0f1724 !important;
-    border-color: var(--ui-border) !important;
-    box-shadow: 0 10px 28px rgba(15,23,42,0.06) !important;
+    background: linear-gradient(180deg,#ffffff,#fafbfd) !important;
 }
 
+/* 17. Enhanced glass topbar/sidebar override (non-modern-layout pages) */
+body:not(.dark-mode) .topbar.glass,
+body:not(.dark-mode) .topbar.navbar-glass {
+    background:   rgba(255,255,255,0.92) !important;
+    border-bottom: 1px solid rgba(17,24,39,0.07) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    backdrop-filter: blur(12px) !important;
+}
+
+/* 18. modern-layout scoped extra polish ---------------------- */
+body:not(.dark-mode) .modern-layout {
+    background: radial-gradient(circle at 10% 20%, #f8fbff 0, #f4f6fb 40%, #eef1f7 100%);
+}
 body:not(.dark-mode) .modern-layout .card .card-header,
 body:not(.dark-mode) .modern-layout .card .card-body {
-    background: #ffffff !important;
-    color: var(--ui-foreground) !important;
-    border-color: var(--ui-border) !important;
+    background:   #ffffff !important;
+    color:        #111827 !important;
+    border-color: rgba(17,24,39,0.08) !important;
 }
 
-body:not(.dark-mode) .modern-layout .stat-value,
-body:not(.dark-mode) .modern-layout .dashboard-card .stat-value { color: #0f1724 !important; }
-body:not(.dark-mode) .modern-layout .stat-card .text-muted { color: var(--ui-muted) !important; }
+/* 19. Search input ------------------------------------------ */
+body:not(.dark-mode) .search-input-wrapper,
+body:not(.dark-mode) .enhanced-search-input {
+    background:   #ffffff !important;
+    border-color: rgba(17,24,39,0.14) !important;
+    color:        #111827 !important;
+}
+body:not(.dark-mode) .search-input-wrapper .search-icon   { color: #9ca3af !important; }
+body:not(.dark-mode) .search-input-wrapper .search-clear-btn,
+body:not(.dark-mode) .search-input-wrapper .search-submit-btn {
+    color:      #6b7280 !important;
+    background: transparent !important;
+    border-color: transparent !important;
+}
+body:not(.dark-mode) .enhanced-search-input::placeholder  { color: #9ca3af !important; }
 
-body:not(.dark-mode) .modern-layout input.form-control,
-body:not(.dark-mode) .modern-layout .form-control,
-body:not(.dark-mode) .modern-layout .form-select {
-    background: #f8fafc !important;
-    border: 1px solid var(--ui-border) !important;
-    box-shadow: inset 0 1px 2px rgba(15,23,42,0.04) !important;
-    color: var(--ui-foreground) !important;
+/* 20. Tooltips ---------------------------------------------- */
+body:not(.dark-mode) .tooltip-inner {
+    background: rgba(17,24,39,0.88) !important;
+    color:      #ffffff !important;
 }
 
-body:not(.dark-mode) .modern-layout .nav-link { color: var(--ui-foreground) !important; }
-body:not(.dark-mode) .modern-layout .nav-link .badge { background: rgba(var(--ui-accent-rgb),0.08); color: var(--ui-foreground); }
-
-body:not(.dark-mode) .modern-layout .topbar .btn,
-body:not(.dark-mode) .modern-layout .sidebar .btn {
-    background: #f7f9fc;
-    border: 1px solid var(--ui-border) !important;
-    box-shadow: 0 6px 16px rgba(15,23,42,0.06);
-    color: var(--ui-foreground);
+/* 21. Liquid-glass buttons in light mode --------------------- */
+/* The liquid-glass mode uses near-transparent backgrounds designed for dark
+   surfaces. Override here so buttons render crisply in light mode. */
+body:not(.dark-mode).liquid-glass-buttons .btn {
+    background:   rgba(255,255,255,0.85) !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+    border: 1px solid rgba(17,24,39,0.14) !important;
+    color:  #374151 !important;
+    box-shadow: 0 1px 4px rgba(17,24,39,0.06) !important;
 }
+body:not(.dark-mode).liquid-glass-buttons .btn:hover {
+    background:   rgba(255,255,255,0.98) !important;
+    border-color: rgba(17,24,39,0.22) !important;
+    color:  #111827 !important;
+}
+body:not(.dark-mode).liquid-glass-buttons .btn.btn-primary {
+    background: linear-gradient(135deg,rgba(25,118,210,0.92),rgba(25,118,210,0.80)) !important;
+    border-color: rgba(25,118,210,0.6) !important;
+    color: #ffffff !important;
+}
+body:not(.dark-mode).liquid-glass-buttons .btn.btn-outline-primary {
+    background:   rgba(255,255,255,0.85) !important;
+    border-color: rgba(25,118,210,0.45) !important;
+    color: #1976d2 !important;
+}
+body:not(.dark-mode).liquid-glass-buttons .btn.btn-outline-primary:hover {
+    background: rgba(25,118,210,0.08) !important;
+    color: #1565c0 !important;
+}
+body:not(.dark-mode).liquid-glass-buttons .btn.btn-outline-secondary {
+    background:   rgba(255,255,255,0.85) !important;
+    border-color: rgba(17,24,39,0.20) !important;
+    color: #4b5563 !important;
+}
+body:not(.dark-mode).liquid-glass-buttons .btn.btn-outline-danger {
+    background:   rgba(255,255,255,0.85) !important;
+    border-color: rgba(220,38,38,0.40) !important;
+    color: #dc2626 !important;
+}
+body:not(.dark-mode).liquid-glass-buttons .btn.btn-outline-danger:hover {
+    background: rgba(220,38,38,0.07) !important;
+    color: #b91c1c !important;
+}
+body:not(.dark-mode).liquid-glass-buttons .btn.btn-sm {
+    background: rgba(255,255,255,0.85) !important;
+}
+
+/* 22. Catch-all: any .btn inside sidebar/topbar still dark in light mode --*/
+/* Handles cases where Bootstrap resets or other themes override our rules. */
+body:not(.dark-mode) .topbar .btn:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning) {
+    background:   transparent !important;
+    border-color: rgba(17,24,39,0.12) !important;
+    color:        #374151 !important;
+}
+body:not(.dark-mode) .sidebar .btn:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning) {
+    background:   #ffffff !important;
+    border-color: rgba(17,24,39,0.12) !important;
+    color:        #374151 !important;
+}
+/* Preserve colored semantic buttons (success, danger etc.) text-on-color */
+body:not(.dark-mode) .btn.btn-primary   { color: #ffffff !important; }
+body:not(.dark-mode) .btn.btn-success   { color: #ffffff !important; }
+body:not(.dark-mode) .btn.btn-danger    { color: #ffffff !important; }
+body:not(.dark-mode) .btn.btn-warning   { color: #000000 !important; }
+body:not(.dark-mode) .btn.btn-info      { color: #000000 !important; }
 
 
