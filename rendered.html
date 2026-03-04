@@ -2163,6 +2163,12 @@
     </script>
 
         <!-- Select mapping helper: add adjacent mapped display for native <select> elements with team options -->
+        <style>
+            /* ensure an explicit opt-out still hides any span if it somehow gets added */
+            select[data-no-mapped-display] + .select-mapped-display {
+                display: none !important;
+            }
+        </style>
         <script>
         (function(){
             // Debounce helper
@@ -2170,6 +2176,9 @@
 
             function isTeamSelect(sel){
                 try{
+                    // Explicit opt-out via attribute (see base.html comments)
+                    if(sel && sel.dataset && ('noMappedDisplay' in sel.dataset)) return false;
+
                     // Heuristic: any option with data-team-number attribute
                     for(let i=0;i<sel.options.length;i++){
                         if(sel.options[i].dataset && sel.options[i].dataset.teamNumber) return true;

@@ -17,6 +17,10 @@ def test_qualitative_form_includes_moving_label(app, client):
     r = client.get('/qualitative')
     assert r.status_code == 200
     assert b'Scores while moving' in r.data
+    # there should be an opt‑out on the individual team dropdown so the JS mapper
+    # doesn’t add a redundant team number element
+    assert b'id="indiv-team-selector"' in r.data
+    assert b'data-no-mapped-display' in r.data
     # prediction UI should be present by default
     assert b'Predicted Winner' in r.data
     # the old per-user toggles should no longer be rendered; visibility is
@@ -85,6 +89,43 @@ def test_qualitative_form_includes_moving_label(app, client):
     assert b'success' in rv2.data.lower()
 
 
+def test_team_view_shows_qualitative(app, client):
+    """Ensure the team detail page includes any qualitative notes for that team.
+
+    This test reproduces a regression where `event` was undefined in the
+    view route, causing the qualification logic to raise a NameError and the
+    page to always show an empty list.  After the fix the note should render.
+    """
+    with app.app_context():
+        from app.models import Team, Event, Match, QualitativeScoutingData
+
+        # create a team and event/match
+        t = Team(team_number=9999)
+        db.session.add(t)
+        evt = Event(code='TV1')
+        db.session.add(evt)
+        db.session.commit()
+
+        m = Match(match_number=1, match_type='qual', event_id=evt.id,
+                  red_alliance='9999', blue_alliance='0000', scouting_team_number=None)
+        db.session.add(m)
+        db.session.commit()
+
+        # add a qualitative entry that mentions the team
+        q = QualitativeScoutingData(match_id=m.id,
+                                     scouting_team_number=1234,
+                                     scout_name='tester',
+                                     alliance_scouted='red')
+        q.data = {'red': {'team_9999': {'notes': 'test note'}}}
+        db.session.add(q)
+        db.session.commit()
+
+    # load the team view page; no event_id parameter should still show the note
+    rv = client.get('/teams/9999/view')
+    assert rv.status_code == 200
+    assert b'test note' in rv.data
+
+
 def test_leaderboard_includes_qualitative_predictions(app, client):
     # set up two users and create qualitative entries with opposing predictions
     with app.app_context():
@@ -133,6 +174,68 @@ def test_leaderboard_includes_qualitative_predictions(app, client):
     assert 'lb1' in data
     assert data.find('lb1') < data.find('lb2')
     assert '100.0' in data
+
+
+def test_qualitative_leaderboard_sorting(app, client):
+    # verify that query parameters change the ordering of the leaderboard
+    with app.app_context():
+        from app.models import Event, Match, QualitativeScoutingData, User
+        # create user and some basic data
+        u = User(username='sortuser', scouting_team_number=3333)
+        u.set_password('pw')
+        db.session.add(u)
+        db.session.commit()
+        evt = Event(code='SRT')
+        db.session.add(evt); db.session.commit()
+        m = Match(match_number=1, match_type='qual', event_id=evt.id,
+                  red_alliance='1111', blue_alliance='2222', scouting_team_number=3333)
+        db.session.add(m); db.session.commit()
+        mid = m.id
+        # two qualitative entries with different ratings
+        q1 = QualitativeScoutingData(match_id=mid,
+                                     scouting_team_number=3333,
+                                     scout_name='s1',
+                                     alliance_scouted='team_1111')
+        q1.data = {'individual': {'team_1111': {'overall_rating': 5}}}
+        q2 = QualitativeScoutingData(match_id=mid,
+                                     scouting_team_number=3333,
+                                     scout_name='s2',
+                                     alliance_scouted='team_2222')
+        q2.data = {'individual': {'team_2222': {'overall_rating': 1}}}
+        db.session.add_all([q1, q2])
+        db.session.commit()
+    # login as the user
+    resp = client.post('/auth/login', data={'username': 'sortuser', 'password': 'pw', 'team_number': 3333})
+    assert resp.status_code == 200
+    # default (desc by avg rating) should put 1111 before 2222
+    r0 = client.get('/scouting/qualitative/leaderboard')
+    assert r0.status_code == 200
+    s0 = r0.data.decode('utf-8')
+    assert s0.find('Team 1111') < s0.find('Team 2222')
+
+    # the sortable columns should be present. there are now two buttons
+    # that both sort by average rating (the small progress-bar column and
+    # the list of individual ratings), plus the rank column.
+    assert b'data-sort="rank"' in r0.data
+    # avg_rating should appear at least twice (two headers use it)
+    assert r0.data.count(b'data-sort="avg_rating"') >= 2
+    assert b'Overall Ratings' in r0.data
+
+    # explicit query parameters are supported for deep-linking as well.
+    # ascending rating (low-to-high) reverses the order.
+    r1 = client.get('/scouting/qualitative/leaderboard?sort=avg_rating&dir=asc')
+    s1 = r1.data.decode('utf-8')
+    assert s1.find('Team 2222') < s1.find('Team 1111')
+
+    # sorting by rank is identical to rating but with toggleable direction
+    r2 = client.get('/scouting/qualitative/leaderboard?sort=rank&dir=desc')
+    s2 = r2.data.decode('utf-8')
+    assert s2.find('Team 1111') < s2.find('Team 2222')
+
+    r3 = client.get('/scouting/qualitative/leaderboard?sort=rank&dir=asc')
+    s3 = r3.data.decode('utf-8')
+    assert s3.find('Team 2222') < s3.find('Team 1111')
+
 
     # also verify predicted winner is shown if stored in match_summary
     with app.app_context():

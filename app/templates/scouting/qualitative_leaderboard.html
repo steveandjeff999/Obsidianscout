@@ -101,7 +101,7 @@
     <div class="card">
         <div class="card-header bg-warning text-dark">
             <h5 class="mb-0">
-                <i class="fas fa-star me-2"></i>Team Rankings
+                <i class="fas fa-feather me-2"></i>Team Rankings
                 <span id="filtered-count" class="badge bg-dark ms-2">{{ total_teams }} teams</span>
             </h5>
         </div>
@@ -110,9 +110,22 @@
                 <table class="table table-hover table-striped mb-0" id="leaderboard-table">
                     <thead class="table-dark">
                         <tr>
-                            <th style="width: 80px;">Rank</th>
+                            <!-- rank column: the position of the team in the current
+                                 ordering.  sorting by this column actually performs the
+                                 same comparison as avg_rating on the server, but the UI
+                                 treats it as a separate key so that users can click
+                                 either header to drive the ordering. -->
+                            <th style="width: 80px;">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-white text-decoration-none {% if sort_by == 'rank' %}fw-bold{% endif %}" data-sort="rank" title="Sort by rank">
+                                    Rank <i class="fas fa-sort-down sort-icon ms-1" data-for="rank" style="{% if sort_by != 'rank' %}opacity:0.3{% endif %}"></i>
+                                </button>
+                            </th>
                             <th style="width: 120px;">Team</th>
                             <th style="width: 220px;">
+                                <!-- avg_rating column is the average of all individual
+                                     overall ratings for that team.  the header is
+                                     clickable to allow switching between low‑to‑high
+                                     and high‑to‑low. -->
                                 <button type="button" class="sort-col btn btn-link p-0 border-0 text-white text-decoration-none {% if sort_by == 'avg_rating' %}fw-bold{% endif %}" data-sort="avg_rating" title="Sort by average rating">
                                     Avg Overall Rating <span class="text-muted small">(higher is better)</span> <i class="fas fa-sort-down sort-icon ms-1" data-for="avg_rating" style="{% if sort_by != 'avg_rating' %}opacity:0.3{% endif %}"></i>
                                 </button>
@@ -129,7 +142,11 @@
                                     Endgame Climb <i class="fas fa-sort-down sort-icon ms-1" data-for="endgame_climb" style="{% if sort_by != 'endgame_climb' %}opacity:0.3{% endif %}"></i>
                                 </button>
                             </th>
-                            <th>Overall Ratings</th>
+                            <th style="width: 180px;">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-white text-decoration-none {% if sort_by == 'avg_rating' %}fw-bold{% endif %}" data-sort="avg_rating" title="Sort by average rating">
+                                    Overall Ratings <i class="fas fa-sort-down sort-icon ms-1" data-for="avg_rating" style="{% if sort_by != 'avg_rating' %}opacity:0.3{% endif %}"></i>
+                                </button>
+                            </th>
                             <th style="width: 150px;">Actions</th>
                         </tr>
                     </thead>
@@ -386,8 +403,19 @@ function escapeHtml(text) {
 }
 
 // Client-side leaderboard sorting (no refresh)
+// These variables are initialised from the query string values the
+// server rendered so that clicking on a column header can both reorder
+// in the browser and persist via URLs.  "rank" is treated the same as
+// "avg_rating" when computing keys.
+let currentSortBy = '{{ sort_by or "avg_rating" }}';
+let currentSortDir = '{{ sort_dir or "desc" }}';
+
 function getSortKey(row, sortBy) {
-    if (sortBy === 'avg_rating') {
+    // "rank" is simply the position in the list; sorting by it is the
+    // same as sorting by the underlying numeric value we display in the
+    // "Avg Overall Rating" column.  this allows users to click either
+    // header and still get sensible results.
+    if (sortBy === 'avg_rating' || sortBy === 'rank') {
         return parseFloat(row.dataset.averageRanking) || 0;
     }
     if (sortBy === 'auto_climb') {
@@ -407,18 +435,46 @@ function getSortKey(row, sortBy) {
     return 0;
 }
 
-function sortLeaderboard(sortBy) {
+function sortLeaderboard(sortBy, explicitDir) {
+    // determine effective sort direction
+    if (explicitDir) {
+        currentSortBy = sortBy;
+        currentSortDir = explicitDir;
+    } else {
+        if (currentSortBy === sortBy) {
+            // toggle direction
+            currentSortDir = currentSortDir === 'desc' ? 'asc' : 'desc';
+        } else {
+            currentSortBy = sortBy;
+            currentSortDir = 'desc';
+        }
+    }
+
     const tbody = document.querySelector('#leaderboard-table tbody');
     if (!tbody) return;
     const rows = Array.from(tbody.querySelectorAll('tr.team-row'));
     rows.sort(function(a, b) {
-        const ka = getSortKey(a, sortBy);
-        const kb = getSortKey(b, sortBy);
+        const ka = getSortKey(a, currentSortBy);
+        const kb = getSortKey(b, currentSortBy);
+        let cmp;
         if (Array.isArray(ka) && Array.isArray(kb)) {
-            if (kb[0] !== ka[0]) return kb[0] - ka[0];
-            return (kb[1] || 0) - (ka[1] || 0);
+            // perform element‑by‑element lexicographic comparison; arrays
+            // may differ in length.  note that ka/kb are already prepared
+            // in the desired descending order by getSortKey when needed.
+            const len = Math.max(ka.length, kb.length);
+            cmp = 0;
+            for (let i = 0; i < len; i++) {
+                const a = ka[i] || 0;
+                const b = kb[i] || 0;
+                if (a !== b) {
+                    cmp = b - a;
+                    break;
+                }
+            }
+        } else {
+            cmp = kb - ka;
         }
-        return (kb - ka);
+        return currentSortDir === 'desc' ? cmp : -cmp;
     });
     rows.forEach(function(row) { tbody.appendChild(row); });
     rows.forEach(function(row, i) {
@@ -432,10 +488,19 @@ function sortLeaderboard(sortBy) {
         td.innerHTML = '<span class="badge ' + badgeClass + ' ' + sizeClass + '">#' + rank + emoji + '</span>';
     });
     document.querySelectorAll('.sort-col').forEach(function(btn) {
-        btn.classList.toggle('fw-bold', btn.dataset.sort === sortBy);
+        btn.classList.toggle('fw-bold', btn.dataset.sort === currentSortBy);
     });
     document.querySelectorAll('.sort-icon').forEach(function(icon) {
-        icon.style.opacity = icon.dataset.for === sortBy ? '1' : '0.3';
+        if (icon.dataset.for === currentSortBy) {
+            icon.style.opacity = '1';
+            // arrows point down for desc, up for asc
+            icon.classList.toggle('fa-sort-down', currentSortDir === 'desc');
+            icon.classList.toggle('fa-sort-up', currentSortDir === 'asc');
+        } else {
+            icon.style.opacity = '0.3';
+            icon.classList.remove('fa-sort-up');
+            icon.classList.add('fa-sort-down');
+        }
     });
 }
 
@@ -447,6 +512,9 @@ document.addEventListener('DOMContentLoaded', function() {
             sortLeaderboard(this.dataset.sort);
         });
     });
+
+    // perform initial sort according to server-provided values
+    sortLeaderboard(currentSortBy, currentSortDir);
 
     const filterAll = document.getElementById('filter-all');
     const roleFilters = document.querySelectorAll('.role-filter');

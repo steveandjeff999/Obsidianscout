@@ -49,7 +49,7 @@
                                 <span class="input-group-text"><i class="fas fa-search"></i></span>
                                 <input type="search" id="team-search" class="form-control form-control-sm" placeholder="Search teams by number or name" aria-label="Search teams">
                             </div>
-                            <select class="form-select" id="team-selector" name="team_id" required aria-label="Team selector">
+                            <select class="form-select" id="team-selector" name="team_id" required aria-label="Team selector" data-no-mapped-display="1">
                                 <option value="">-- Select Team --</option>
                                 {% for team_option in teams|dedupe_teams %}
                                 <option value="{{ team_option.id }}" data-team-number="{{ team_option.team_number }}" data-team-name="{{ team_option.team_name }}" {% if team and team.id == team_option.id %}selected{% endif %}>

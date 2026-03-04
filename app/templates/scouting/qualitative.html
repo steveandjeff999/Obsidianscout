@@ -9,7 +9,7 @@
 <div class="container-fluid">
     <div class="d-flex align-items-center justify-content-between mb-3">
         <div>
-            <h2 class="mb-0">Qualitative Scouting</h2>
+            <h2 class="mb-0"><i class="fas fa-feather me-2"></i>Qualitative Scouting</h2>
         </div>
         <div>
             <a href="{{ url_for('scouting.qualitative_leaderboard') }}" class="btn btn-warning">
@@ -25,7 +25,7 @@
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
-                        <i class="fas fa-star me-2"></i>Qualitative Scouting
+                        <i class="fas fa-feather me-2"></i>Qualitative Scouting
                         {{ help.help_icon('Scout entire alliances from matches or individual teams', 'Qualitative Scouting') }}
                     </h5>
                 </div>
@@ -128,7 +128,7 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label for="indiv-team-selector" class="form-label">Select Team</label>
-                                    <select class="form-select" id="indiv-team-selector" disabled>
+                                    <select class="form-select" id="indiv-team-selector" disabled data-no-mapped-display="1"> <!-- team numbers shown in dropdown already, skip extra mapped display -->
                                         <option value="">-- Select a Match First --</option>
                                     </select>
                                 </div>
@@ -970,6 +970,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 opt.value = t;
                 opt.textContent = 'Team ' + t;
                 opt.setAttribute('data-alliance', 'red');
+                opt.setAttribute('data-team-number', t);
                 redGroup.appendChild(opt);
             });
             indivTeamSelector.appendChild(redGroup);
@@ -982,6 +983,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 opt.value = t;
                 opt.textContent = 'Team ' + t;
                 opt.setAttribute('data-alliance', 'blue');
+                opt.setAttribute('data-team-number', t);
                 blueGroup.appendChild(opt);
             });
             indivTeamSelector.appendChild(blueGroup);

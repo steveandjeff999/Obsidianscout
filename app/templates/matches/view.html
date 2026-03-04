@@ -22,24 +22,24 @@
             <div class="mb-2">
                 <span class="badge bg-warning text-dark me-2">Event {{ match.event.schedule_offset|abs }}m {{ 'behind' if match.event.schedule_offset > 0 else 'ahead' }}</span>
                 <strong>Adjusted Time:</strong>
-                <span class="text-warning fw-bold">~{{ match.predicted_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}</span>
+                <span class="text-warning fw-bold">~<span class="tz-time" data-utc-ms="{{ match.predicted_time | to_utc_ms }}" data-event-tz="{{ match.event.timezone if match.event and match.event.timezone else '' }}" data-fmt="long">{{ match.predicted_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}</span></span>
             </div>
-            <p class="small text-muted">Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})</p>
+            <p class="small text-muted tz-label" data-event-tz="{{ match.event.timezone }}">Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})</p>
 
         {% elif match.predicted_time %}
-            <p class="mb-1"><strong>Adjusted Time:</strong> <span class="text-warning fw-bold">~{{ match.predicted_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}</span></p>
+            <p class="mb-1"><strong>Adjusted Time:</strong> <span class="text-warning fw-bold">~<span class="tz-time" data-utc-ms="{{ match.predicted_time | to_utc_ms }}" data-event-tz="{{ match.event.timezone if match.event and match.event.timezone else '' }}" data-fmt="long">{{ match.predicted_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}</span></span></p>
             {% if match.event and match.event.timezone %}
-                <p class="mb-0 small text-muted">Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})</p>
+                <p class="mb-0 small text-muted tz-label" data-event-tz="{{ match.event.timezone }}">Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})</p>
             {% endif %}
 
         {% elif match.scheduled_time %}
-            <p class="mb-1"><strong>Scheduled:</strong> {{ match.scheduled_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}</p>
+            <p class="mb-1"><strong>Scheduled:</strong> <span class="tz-time" data-utc-ms="{{ match.scheduled_time | to_utc_ms }}" data-event-tz="{{ match.event.timezone if match.event and match.event.timezone else '' }}" data-fmt="long">{{ match.scheduled_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}</span></p>
             {% if match.actual_time %}
                 <hr>
-                <p class="mb-1"><strong>Played at:</strong> {{ match.actual_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}</p>
+                <p class="mb-1"><strong>Played at:</strong> <span class="tz-time" data-utc-ms="{{ match.actual_time | to_utc_ms }}" data-event-tz="{{ match.event.timezone if match.event and match.event.timezone else '' }}" data-fmt="long">{{ match.actual_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}</span></p>
             {% endif %}
             {% if match.event and match.event.timezone %}
-                <p class="mb-0 small text-muted">Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})</p>
+                <p class="mb-0 small text-muted tz-label" data-event-tz="{{ match.event.timezone }}">Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})</p>
             {% endif %}
 
         {% endif %}
@@ -202,4 +202,44 @@
         </div>
     </div>
 </div>
+
+<script>
+(function(){
+    function fmtTime(ms, pref, eventTz, fmt) {
+        var d = new Date(ms);
+        var tz = pref === 'utc' ? 'UTC' : (pref === 'local' ? null : (eventTz || null));
+        var suffix = pref === 'utc' ? ' UTC' : '';
+        function tStr() { var o = {hour:'2-digit',minute:'2-digit'}; if (tz) o.timeZone = tz; try { return d.toLocaleTimeString([], o); } catch(e) { return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); } }
+        if (fmt === 'long') {
+            var dOpts = {weekday:'long',month:'long',day:'numeric'}; if (tz) dOpts.timeZone = tz;
+            try { return d.toLocaleDateString([], dOpts) + ' at ' + tStr() + suffix; } catch(e) { return tStr() + suffix; }
+        }
+        if (fmt === 'datetime') {
+            var dtOpts = {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}; if (tz) dtOpts.timeZone = tz;
+            try { return d.toLocaleString([], dtOpts) + suffix; } catch(e) { return tStr() + suffix; }
+        }
+        return tStr() + suffix;
+    }
+    function applyTzPref() {
+        var pref; try { pref = localStorage.getItem('match_time_zone_pref') || 'event'; } catch(e) { pref = 'event'; }
+        document.querySelectorAll('.tz-time').forEach(function(el) {
+            var ms = parseInt(el.getAttribute('data-utc-ms') || '', 10);
+            if (isNaN(ms)) return;
+            var eventTz = el.getAttribute('data-event-tz') || null;
+            var fmt = el.getAttribute('data-fmt') || 'short';
+            if (pref === 'event') { if (el.getAttribute('data-orig')) el.textContent = el.getAttribute('data-orig'); return; }
+            if (!el.getAttribute('data-orig')) el.setAttribute('data-orig', el.textContent);
+            el.textContent = fmtTime(ms, pref, eventTz, fmt);
+        });
+        document.querySelectorAll('.tz-label').forEach(function(el) {
+            if (!el.getAttribute('data-orig')) el.setAttribute('data-orig', el.innerHTML);
+            if (pref === 'event') { el.innerHTML = el.getAttribute('data-orig'); }
+            else if (pref === 'utc') { el.textContent = 'Times shown in UTC'; }
+            else { el.textContent = 'Times shown in your local timezone'; }
+        });
+    }
+    document.addEventListener('DOMContentLoaded', applyTzPref);
+    window.addEventListener('storage', applyTzPref);
+})();
+</script>
 {% endblock %}

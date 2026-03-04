@@ -8,7 +8,11 @@ from app import db
 from app.models import Match, Team, Event
 from app.models_misc import NotificationSubscription, DeviceToken, NotificationLog
 from app.utils.api_utils import safe_int_team_number
-from app.utils.team_isolation import filter_matches_by_scouting_team, filter_teams_by_scouting_team
+from app.utils.team_isolation import (
+    filter_matches_by_scouting_team, filter_teams_by_scouting_team,
+    get_event_by_code, get_all_teams_at_event
+)
+from app.utils.alliance_data import get_active_alliance_id, get_all_teams_for_alliance
 from app.utils.notification_service import (
     send_notification_for_subscription,
     get_user_notification_history,
@@ -104,7 +108,7 @@ def index():
     vapid_keys = get_vapid_keys()
     vapid_public_key = vapid_keys.get('public_key', '')
     
-    # Get available teams at current event
+    # Get available teams at current event — use the same approach as /graphs and /teams
     from app.utils.config_manager import get_effective_game_config
     game_config = get_effective_game_config()
     event_code = game_config.get('current_event_code')
@@ -112,15 +116,31 @@ def index():
     available_teams = []
     current_event = None
     if event_code:
-        current_event = Event.query.filter_by(
-            code=event_code,
-            scouting_team_number=current_user.scouting_team_number
-        ).first()
+        # Use get_event_by_code which handles case-insensitive matching and
+        # year-prefixed codes (e.g. '2026OKOK' vs 'OKOK')
+        current_event = get_event_by_code(event_code)
         if current_event:
-            available_teams = Team.query.filter(
-                Team.events.contains(current_event),
-                Team.scouting_team_number == current_user.scouting_team_number
-            ).order_by(Team.team_number).all()
+            try:
+                alliance_id = get_active_alliance_id()
+                if alliance_id:
+                    # Alliance mode — same pattern as /graphs and /teams
+                    available_teams, _ = get_all_teams_for_alliance(
+                        event_code=getattr(current_event, 'code', None)
+                    )
+                else:
+                    # Normal mode — get all teams at this event
+                    available_teams = get_all_teams_at_event(event_id=current_event.id)
+                # Deduplicate by team_number (keep first)
+                seen = set()
+                deduped = []
+                for t in available_teams:
+                    if t.team_number not in seen:
+                        seen.add(t.team_number)
+                        deduped.append(t)
+                available_teams = sorted(deduped, key=lambda t: t.team_number)
+            except Exception as e:
+                current_app.logger.warning(f'notifications: could not load event teams: {e}')
+                available_teams = []
     
     return render_template(
         'notifications/index.html',
@@ -215,17 +235,13 @@ def subscribe():
         current_event_code = game_config.get('current_event_code')
         
         if current_event_code and event_code == current_event_code:
-            # Find event and schedule notifications
-            event = Event.query.filter_by(
-                code=event_code,
-                scouting_team_number=current_user.scouting_team_number
-            ).first()
+            # Find event using case-insensitive + year-prefix-aware lookup
+            event = get_event_by_code(event_code)
             
             if event:
-                # Get matches for this event that belong to the user's scouting team
-                matches = Match.query.filter_by(
-                    event_id=event.id,
-                    scouting_team_number=current_user.scouting_team_number
+                # Get matches for this event (respects scouting team isolation)
+                matches = filter_matches_by_scouting_team().filter(
+                    Match.event_id == event.id
                 ).all()
                 
                 scheduled_count = 0
@@ -402,16 +418,12 @@ Sent: {datetime.now(timezone.utc).strftime('%Y-%m-%d %I:%M %p UTC')}
             current_event_code = game_config.get('current_event_code')
             
             if current_event_code:
-                event = Event.query.filter_by(
-                    code=current_event_code,
-                    scouting_team_number=current_user.scouting_team_number
-                ).first()
+                event = get_event_by_code(current_event_code)
                 
                 if event:
                     # Get random match from event
-                    matches = Match.query.filter_by(
-                        event_id=event.id,
-                        scouting_team_number=current_user.scouting_team_number
+                    matches = filter_matches_by_scouting_team().filter(
+                        Match.event_id == event.id
                     ).all()
                     
                     if matches:
@@ -538,10 +550,7 @@ def test_subscription(subscription_id):
         if not event_code:
             return jsonify({'error': 'No event configured'}), 400
         
-        event = Event.query.filter_by(
-            code=event_code,
-            scouting_team_number=current_user.scouting_team_number
-        ).first()
+        event = get_event_by_code(event_code)
         
         if not event:
             return jsonify({'error': 'Event not found'}), 404
@@ -628,7 +637,7 @@ def refresh_schedule():
         if not raw_event_code:
             return jsonify({'error': 'No current event configured'}), 400
         
-        # Construct year-prefixed code for database lookup
+        # Construct year-prefixed code for API call
         current_year = game_config.get('season', 2026)
         event_code = f"{current_year}{raw_event_code}"
         
@@ -636,10 +645,11 @@ def refresh_schedule():
         updated_count = update_match_times(event_code, current_user.scouting_team_number)
         
         # Clear and reschedule all pending notifications for this event
-        event = Event.query.filter_by(
-            code=event_code,
-            scouting_team_number=current_user.scouting_team_number
-        ).first()
+        # Use get_event_by_code which handles format/case differences
+        event = get_event_by_code(raw_event_code)
+        if not event:
+            # Fallback: try the year-prefixed code directly
+            event = get_event_by_code(event_code)
         
         if not event:
             return jsonify({'error': f'Event {event_code} not found'}), 404
@@ -961,17 +971,12 @@ def mobile_schedule_ui():
     matches = []
     current_event = None
     if event_code:
-        # Try year-prefixed code first (database stores codes like '2026OKTU')
-        year_prefixed_code = event_code
-        if not (len(str(event_code)) >= 4 and str(event_code)[:4].isdigit()):
-            season = game_config.get('season', 2026)
-            year_prefixed_code = f"{season}{event_code}"
-        current_event = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=current_user.scouting_team_number).first()
-        # Fall back to raw code if year-prefixed not found
-        if not current_event and year_prefixed_code != event_code:
-            current_event = Event.query.filter_by(code=event_code, scouting_team_number=current_user.scouting_team_number).first()
+        # Use get_event_by_code which handles case-insensitive + year-prefix matching
+        current_event = get_event_by_code(event_code)
         if current_event:
-            matches = Match.query.filter_by(event_id=current_event.id, scouting_team_number=current_user.scouting_team_number).order_by(Match.match_number).all()
+            matches = filter_matches_by_scouting_team().filter(
+                Match.event_id == current_event.id
+            ).order_by(Match.match_number).all()
 
     return render_template('notifications/mobile_schedule.html', subscriptions=subs, matches=matches, event_code=event_code)
 

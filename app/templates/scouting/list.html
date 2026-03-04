@@ -41,6 +41,14 @@
             <i class="fas fa-boxes me-2"></i>
             <strong>Pit Data:</strong> To view pit data, visit <a href="{{ url_for('pit_scouting.list_dynamic') }}" class="alert-link">/pit-scouting/list-dynamic</a>.
         </div>
+        <div class="alert alert-secondary mb-3">
+            <i class="fas fa-feather me-2"></i>
+            <strong>Qualitative Data:</strong> To view qualitative data, visit <a href="{{ url_for('scouting.list_qualitative_data') }}" class="alert-link">/scouting/qualitative/list</a>.
+        </div>
+        <div class="alert alert-secondary mb-3">
+            <i class="fas fa-feather-alt me-2"></i>
+            <strong>Qualitative Data:</strong> To view qualitative entries, visit <a href="{{ url_for('scouting.list_qualitative_data') }}" class="alert-link">/scouting/qualitative/list</a>.
+        </div>
         {% if scouting_data %}        <div class="d-flex gap-3 mb-3">
             <div>
                 <label class="form-label">Filter by event:</label>

@@ -27,6 +27,21 @@ def init_app(app):
             return ""
         return format_time_with_timezone(dt, event_timezone, format_str)
 
+    @app.template_filter('to_utc_ms')
+    def to_utc_ms(dt):
+        """
+        Convert a datetime to UTC epoch milliseconds string for use in data attributes.
+        Returns empty string if dt is None.
+        """
+        if dt is None:
+            return ''
+        try:
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return str(int(dt.timestamp() * 1000))
+        except Exception:
+            return ''
+
     @app.template_filter('is_starting_soon')
     def is_starting_soon(match, event_timezone=None, adjusted_dt=None):
         """

@@ -161,6 +161,266 @@ def get_team_performance_stats(team_id, scouting_team_number):
     return None
 
 
+def get_team_epa_aware_stats(team_number, scouting_team_number):
+    """
+    Get team performance stats with EPA/OPR enrichment based on admin EPA source setting.
+
+    Falls back gracefully through scouted → external → None.
+
+    Returns a dict::
+
+        {
+            'total_avg': float,
+            'auto_avg': float | None,
+            'teleop_avg': float | None,
+            'endgame_avg': float | None,
+            'match_count': int,
+            'source_tag': str,   # 'scouted', 'statbotics', 'tba_opr', 'blended', or 'unknown'
+        }
+    or None if no data at all.
+    """
+    try:
+        from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team, blend_epa_value
+    except Exception:
+        # Fall back to scouting-only if analysis module unavailable
+        team_obj = Team.query.filter_by(
+            team_number=team_number, scouting_team_number=scouting_team_number
+        ).first()
+        if not team_obj:
+            return None
+        return get_team_performance_stats(team_obj.id, scouting_team_number)
+
+    team_obj = Team.query.filter_by(
+        team_number=team_number, scouting_team_number=scouting_team_number
+    ).first()
+
+    # Scouted stats (may be None if no scouting data yet)
+    scouted = None
+    if team_obj:
+        try:
+            scouted = get_team_performance_stats(team_obj.id, scouting_team_number)
+        except Exception:
+            scouted = None
+
+    epa_source = get_current_epa_source()
+    match_count = scouted['match_count'] if scouted else 0
+
+    # For scouted_only mode just return raw scouting stats
+    if epa_source == 'scouted_only':
+        if not scouted:
+            return None
+        scouted['source_tag'] = 'scouted'
+        return scouted
+
+    # Fetch external EPA/OPR metrics
+    try:
+        epa_metrics = get_epa_metrics_for_team(team_number)
+        epa_total = epa_metrics.get('total') if epa_metrics else None
+        epa_auto = epa_metrics.get('auto') if epa_metrics else None
+        epa_teleop = epa_metrics.get('teleop') if epa_metrics else None
+        epa_endgame = epa_metrics.get('endgame') if epa_metrics else None
+    except Exception:
+        epa_total = epa_auto = epa_teleop = epa_endgame = None
+
+    # Blend total
+    scouted_total = scouted['total_avg'] if scouted else None
+    blended_total, source_tag = blend_epa_value(scouted_total, epa_total, match_count, epa_source)
+
+    if blended_total is None:
+        return None
+
+    result = {
+        'total_avg': blended_total,
+        'match_count': match_count,
+        'source_tag': source_tag or 'unknown',
+    }
+
+    # Auto/Teleop/Endgame — blend if external has breakdown, else use scouted
+    scouted_auto = scouted['auto_avg'] if scouted else None
+    scouted_teleop = scouted['teleop_avg'] if scouted else None
+    scouted_endgame = scouted['endgame_avg'] if scouted else None
+
+    blended_auto, _ = blend_epa_value(scouted_auto, epa_auto, match_count, epa_source)
+    blended_teleop, _ = blend_epa_value(scouted_teleop, epa_teleop, match_count, epa_source)
+    blended_endgame, _ = blend_epa_value(scouted_endgame, epa_endgame, match_count, epa_source)
+
+    result['auto_avg'] = blended_auto
+    result['teleop_avg'] = blended_teleop
+    result['endgame_avg'] = blended_endgame
+
+    return result
+
+
+def get_team_qualitative_trends(team_number, scouting_team_number, event_id=None):
+    """
+    Summarise qualitative scouting observations for a specific team.
+
+    Searches QualitativeScoutingData entries for any record that contains
+    data for *team_number*.  Returns a dict with trend strings, or None if
+    no qualitative data is available.
+
+    Returns::
+
+        {
+            'notes': [str, ...],           # up to 5 most recent free-text notes
+            'roles': {'scoring': 3, ...},  # role → count across entries
+            'avg_driver_skill': float | None,
+            'avg_defense_eff': float | None,
+            'avg_shot_accuracy': float | None,
+            'avg_ranking': float | None,
+            'entry_count': int,
+            'summary': str,               # one-line human-readable summary
+        }
+    or None if no data found.
+    """
+    from app.models import QualitativeScoutingData
+
+    try:
+        q = QualitativeScoutingData.query.filter_by(
+            scouting_team_number=scouting_team_number
+        )
+        if event_id:
+            from app.models import Match
+            match_ids = [m.id for m in Match.query.filter_by(event_id=event_id).all()]
+            if match_ids:
+                q = q.filter(QualitativeScoutingData.match_id.in_(match_ids))
+
+        entries = q.order_by(QualitativeScoutingData.timestamp.desc()).all()
+    except Exception:
+        return None
+
+    team_key = f'team_{team_number}'
+    ROLE_FIELDS = ['cycling', 'scoring', 'feeding', 'defending', 'stealing', 'did_not_contribute']
+    RATING_FIELDS = ['driver_skill', 'defense_effectiveness', 'shot_accuracy']
+
+    notes = []
+    role_counts = {}
+    rating_sums = {f: [] for f in RATING_FIELDS}
+    rankings = []
+
+    for entry in entries:
+        try:
+            data = entry.data or {}
+        except Exception:
+            continue
+
+        # Search all alliance/individual buckets for this team
+        for bucket_key in ('red', 'blue', 'individual', 'both'):
+            bucket = data.get(bucket_key)
+            if not isinstance(bucket, dict):
+                continue
+            team_data = bucket.get(team_key)
+            if not isinstance(team_data, dict):
+                continue
+
+            # Notes
+            note_text = (team_data.get('notes') or '').strip()
+            if note_text and note_text not in notes:
+                notes.append(note_text)
+
+            # Ranking
+            ranking = team_data.get('ranking')
+            if isinstance(ranking, (int, float)) and ranking > 0:
+                rankings.append(float(ranking))
+
+            # Numeric ratings
+            for field in RATING_FIELDS:
+                val = team_data.get(field)
+                if isinstance(val, (int, float)) and val > 0:
+                    rating_sums[field].append(float(val))
+
+            # Boolean roles
+            for role in ROLE_FIELDS:
+                if team_data.get(role):
+                    role_counts[role] = role_counts.get(role, 0) + 1
+
+    total_entries = len([
+        e for e in entries
+        if any(
+            isinstance((e.data or {}).get(b, None), dict) and
+            (e.data or {}).get(b, {}).get(team_key) is not None
+            for b in ('red', 'blue', 'individual', 'both')
+        )
+    ])
+
+    if total_entries == 0 and not notes and not role_counts:
+        return None
+
+    result = {
+        'notes': notes[:5],
+        'roles': role_counts,
+        'avg_driver_skill': (sum(rating_sums['driver_skill']) / len(rating_sums['driver_skill'])) if rating_sums['driver_skill'] else None,
+        'avg_defense_eff': (sum(rating_sums['defense_effectiveness']) / len(rating_sums['defense_effectiveness'])) if rating_sums['defense_effectiveness'] else None,
+        'avg_shot_accuracy': (sum(rating_sums['shot_accuracy']) / len(rating_sums['shot_accuracy'])) if rating_sums['shot_accuracy'] else None,
+        'avg_ranking': (sum(rankings) / len(rankings)) if rankings else None,
+        'entry_count': total_entries,
+    }
+
+    # Build a one-line summary
+    parts = []
+    if result['avg_ranking'] is not None:
+        parts.append(f"avg rank {result['avg_ranking']:.1f}")
+    if result['avg_driver_skill'] is not None:
+        parts.append(f"driver skill {result['avg_driver_skill']:.1f}/5")
+    top_roles = sorted(role_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+    if top_roles:
+        role_str = ', '.join(r.replace('_', ' ') for r, _ in top_roles)
+        parts.append(f"often: {role_str}")
+    if parts:
+        result['summary'] = '; '.join(parts)
+    elif result['entry_count'] > 0:
+        result['summary'] = f"{result['entry_count']} qualitative observation(s)"
+    else:
+        result['summary'] = ''
+
+    return result
+
+
+def _format_qualitative_section(qual_trends, indent='  '):
+    """Format qualitative trend data into a text block for notifications."""
+    if not qual_trends:
+        return ''
+    lines = []
+    # Ratings
+    rating_parts = []
+    if qual_trends.get('avg_driver_skill') is not None:
+        rating_parts.append(f"Driver Skill: {qual_trends['avg_driver_skill']:.1f}/5")
+    if qual_trends.get('avg_defense_eff') is not None:
+        rating_parts.append(f"Defense Eff.: {qual_trends['avg_defense_eff']:.1f}/5")
+    if qual_trends.get('avg_shot_accuracy') is not None:
+        rating_parts.append(f"Shot Accuracy: {qual_trends['avg_shot_accuracy']:.1f}/5")
+    if rating_parts:
+        lines.append(f"{indent}Ratings: {', '.join(rating_parts)}")
+    # Roles
+    roles = qual_trends.get('roles', {})
+    if roles:
+        sorted_roles = sorted(roles.items(), key=lambda x: x[1], reverse=True)[:5]
+        role_str = ', '.join(f"{r.replace('_', ' ').title()} ({c}x)" for r, c in sorted_roles)
+        lines.append(f"{indent}Observed Roles: {role_str}")
+    # Avg ranking
+    if qual_trends.get('avg_ranking') is not None:
+        lines.append(f"{indent}Avg Scout Ranking: {qual_trends['avg_ranking']:.1f}")
+    # Notes (up to 3)
+    notes = qual_trends.get('notes', [])
+    if notes:
+        lines.append(f"{indent}Scout Notes:")
+        for note in notes[:3]:
+            # Truncate long notes
+            note_display = note[:120] + ('...' if len(note) > 120 else '')
+            lines.append(f"{indent}  \"{note_display}\"")
+    return '\n'.join(lines)
+
+
+def _source_tag_label(source_tag):
+    """Return a short human-readable label for a data source tag."""
+    return {
+        'scouted': 'scouted data',
+        'statbotics': 'Statbotics EPA',
+        'tba_opr': 'TBA OPR',
+        'blended': 'blended data',
+    }.get(source_tag or '', 'data')
+
+
 def create_match_prediction_html(match, target_team_number, message):
     """
     Generate styled HTML content for match strategy email
@@ -319,9 +579,11 @@ def create_match_prediction_html(match, target_team_number, message):
 
 
 def create_strategy_notification_message(match, target_team_number):
-    """Create notification message for match strategy reminder with predictions"""
-    from app.models import ScoutingData
-    
+    """Create notification message for match strategy reminder with predictions.
+
+    Uses the admin-configured EPA/OPR data source for performance estimates and
+    incorporates qualitative scouting trends when available.
+    """
     # Determine if target team is on red or blue alliance
     alliance_color = None
     if target_team_number in match.red_teams:
@@ -336,118 +598,117 @@ def create_strategy_notification_message(match, target_team_number):
         alliance_color = 'Unknown'
         alliance_teams = []
         opponent_teams = []
-    
+
     title = f"Match Strategy: Team {target_team_number}"
-    
+
     message = f"Match {match.match_type} {match.match_number} starting soon!\n\n"
     message += f"Team {target_team_number} is on {alliance_color} Alliance\n"
-    
+
     if alliance_teams:
         message += f"{alliance_color} Alliance: {', '.join([str(t) for t in alliance_teams])}\n"
     if opponent_teams:
         opponent_color = 'Blue' if alliance_color == 'Red' else 'Red'
         message += f"{opponent_color} Alliance: {', '.join([str(t) for t in opponent_teams])}\n"
-    
+
     match_time = get_match_time(match)
+    event = Event.query.get(match.event_id) if match.event_id else None
+    event_tz = event.timezone if event else None
+
     if match_time:
-        # Get event to determine timezone
-        event = Event.query.get(match.event_id) if match.event_id else None
-        event_tz = event.timezone if event else None
-        
-        # Format time in event's local timezone
         formatted_time = format_time_with_timezone(match_time, event_tz, '%I:%M %p')
         message += f"\nScheduled: {formatted_time}\n"
-    
-    # Add match predictions based on scouting data
-    message += "\n--- MATCH ANALYSIS ---\n"
-    
-    # Get average scores for alliance teams
+
+    # ---- Get EPA/OPR source label for this context ----------------------
+    try:
+        from app.utils.analysis import get_current_epa_source
+        epa_source = get_current_epa_source()
+    except Exception:
+        epa_source = 'scouted_only'
+
+    source_labels = {
+        'scouted_only': 'scouted data',
+        'scouted_with_statbotics': 'scouted + Statbotics EPA',
+        'statbotics_only': 'Statbotics EPA',
+        'tba_opr_only': 'TBA OPR',
+        'scouted_with_tba_opr': 'scouted + TBA OPR',
+    }
+    source_label = source_labels.get(epa_source, 'scouted data')
+    message += f"\n--- MATCH ANALYSIS (via {source_label}) ---\n"
+
+    event_id = event.id if event else None
+
+    def _team_stats_block(team_num, scouting_team_number, indent='  '):
+        """Return a text block with performance + qualitative info for one team."""
+        lines = []
+        stats = get_team_epa_aware_stats(team_num, scouting_team_number)
+        if stats:
+            src = _source_tag_label(stats.get('source_tag'))
+            auto = stats.get('auto_avg')
+            teleop = stats.get('teleop_avg')
+            cnt = stats.get('match_count', 0)
+            perf_parts = [f"~{stats['total_avg']:.1f} pts/match ({src})"]
+            if auto is not None and teleop is not None:
+                perf_parts.append(f"Auto: {auto:.1f}, Teleop: {teleop:.1f}")
+            if cnt > 0:
+                perf_parts.append(f"{cnt} match{'es' if cnt != 1 else ''}")
+            lines.append(f"{indent}Team {team_num}: {', '.join(perf_parts)}")
+        else:
+            lines.append(f"{indent}Team {team_num}: No performance data available")
+
+        # Qualitative trends
+        qual = get_team_qualitative_trends(team_num, scouting_team_number, event_id=event_id)
+        qual_block = _format_qualitative_section(qual, indent=indent + '  ')
+        if qual_block:
+            lines.append(f"{indent}  [Qualitative - {qual['entry_count']} observation(s)]")
+            lines.append(qual_block)
+
+        return '\n'.join(lines)
+
+    # Alliance analysis
     if alliance_teams:
         message += f"\n{alliance_color} Alliance Analysis:\n"
         for team_num in alliance_teams:
-            # Get team by team_number
-            team = Team.query.filter_by(
-                team_number=team_num,
-                scouting_team_number=match.scouting_team_number
-            ).first()
-            
-            if team:
-                stats = get_team_performance_stats(team.id, match.scouting_team_number)
-                
-                if stats:
-                    message += f"  Team {team_num}: ~{stats['total_avg']:.1f} pts/match "
-                    message += f"(Auto: {stats['auto_avg']:.1f}, Teleop: {stats['teleop_avg']:.1f}) "
-                    message += f"[{stats['match_count']} matches]\n"
-                else:
-                    message += f"  Team {team_num}: No scouting data available\n"
-            else:
-                message += f"  Team {team_num}: Team not found in database\n"
-    
+            message += _team_stats_block(team_num, match.scouting_team_number) + '\n'
+
     if opponent_teams:
         opponent_color = 'Blue' if alliance_color == 'Red' else 'Red'
         message += f"\n{opponent_color} Alliance Analysis:\n"
         for team_num in opponent_teams:
-            # Get team by team_number
-            team = Team.query.filter_by(
-                team_number=team_num,
-                scouting_team_number=match.scouting_team_number
-            ).first()
-            
-            if team:
-                stats = get_team_performance_stats(team.id, match.scouting_team_number)
-                
-                if stats:
-                    message += f"  Team {team_num}: ~{stats['total_avg']:.1f} pts/match "
-                    message += f"(Auto: {stats['auto_avg']:.1f}, Teleop: {stats['teleop_avg']:.1f}) "
-                    message += f"[{stats['match_count']} matches]\n"
-                else:
-                    message += f"  Team {team_num}: No scouting data available\n"
-            else:
-                message += f"  Team {team_num}: Team not found in database\n"
-    
-    # Calculate predicted outcome
+            message += _team_stats_block(team_num, match.scouting_team_number) + '\n'
+
+    # ---- Predicted outcome -----------------------------------------------
     alliance_avg = 0
     opponent_avg = 0
     alliance_count = 0
     opponent_count = 0
-    
+
     for team_num in alliance_teams:
-        team = Team.query.filter_by(
-            team_number=team_num,
-            scouting_team_number=match.scouting_team_number
-        ).first()
-        
-        if team:
-            stats = get_team_performance_stats(team.id, match.scouting_team_number)
-            if stats:
-                alliance_avg += stats['total_avg']
-                alliance_count += 1
-    
+        stats = get_team_epa_aware_stats(team_num, match.scouting_team_number)
+        if stats:
+            alliance_avg += stats['total_avg']
+            alliance_count += 1
+
     for team_num in opponent_teams:
-        team = Team.query.filter_by(
-            team_number=team_num,
-            scouting_team_number=match.scouting_team_number
-        ).first()
-        
-        if team:
-            stats = get_team_performance_stats(team.id, match.scouting_team_number)
-            if stats:
-                opponent_avg += stats['total_avg']
-                opponent_count += 1
-    
+        stats = get_team_epa_aware_stats(team_num, match.scouting_team_number)
+        if stats:
+            opponent_avg += stats['total_avg']
+            opponent_count += 1
+
     if alliance_count > 0 and opponent_count > 0:
         opponent_color = 'Blue' if alliance_color == 'Red' else 'Red'
         message += f"\nPredicted Score:\n"
         message += f"  {alliance_color}: {alliance_avg:.0f} points\n"
         message += f"  {opponent_color}: {opponent_avg:.0f} points\n"
-        
+
         if alliance_avg > opponent_avg:
             message += f"\n Prediction: {alliance_color} Alliance wins by {(alliance_avg - opponent_avg):.0f} points\n"
         elif opponent_avg > alliance_avg:
             message += f"\n Prediction: {opponent_color} Alliance wins by {(opponent_avg - alliance_avg):.0f} points\n"
         else:
             message += f"\n Prediction: Close match - too close to call!\n"
-    
+    elif alliance_count > 0:
+        message += f"\nEstimated {alliance_color} Alliance score: {alliance_avg:.0f} points\n"
+
     return title, message
 
 
@@ -598,29 +859,64 @@ def create_end_of_day_summary(last_match):
             mt = get_match_time(m)
             message_lines.append(f" - {m.match_type} {m.match_number} at {format_time_with_timezone(mt, event_tz)}")
 
-    # Team performance averages (use scouting data where available)
+    # Team performance averages (uses admin EPA/OPR source setting)
     team_set = set()
     for m, _ in matches:
         for t in m.red_teams + m.blue_teams:
             team_set.add(t)
 
+    # Get EPA source label once
+    try:
+        from app.utils.analysis import get_current_epa_source
+        _eod_epa_source = get_current_epa_source()
+    except Exception:
+        _eod_epa_source = 'scouted_only'
+    _eod_source_labels = {
+        'scouted_only': 'scouted data',
+        'scouted_with_statbotics': 'scouted + EPA',
+        'statbotics_only': 'Statbotics EPA',
+        'tba_opr_only': 'TBA OPR',
+        'scouted_with_tba_opr': 'scouted + TBA OPR',
+    }
+    _eod_source_label = _eod_source_labels.get(_eod_epa_source, 'data')
+
     team_stats = []
+    _team_source_tags = {}
     for team_num in sorted(team_set):
         try:
-            team_obj = Team.query.filter_by(team_number=team_num, scouting_team_number=last_match.scouting_team_number).first()
-            if team_obj:
-                stats = get_team_performance_stats(team_obj.id, last_match.scouting_team_number)
-                if stats:
-                    team_stats.append((team_num, stats['total_avg'], stats['match_count']))
+            stats = get_team_epa_aware_stats(team_num, last_match.scouting_team_number)
+            if stats:
+                team_stats.append((team_num, stats['total_avg'], stats['match_count']))
+                _team_source_tags[team_num] = stats.get('source_tag', 'unknown')
         except Exception:
             continue
 
     if team_stats:
-        message_lines.append('\nTEAM AVERAGES (approx):')
+        message_lines.append(f'\nTEAM AVERAGES (via {_eod_source_label}):')
         # Sort by average points desc
         team_stats.sort(key=lambda x: x[1], reverse=True)
         for tn, avg, cnt in team_stats[:10]:
-            message_lines.append(f" - Team {tn}: ~{avg:.1f} pts/match ({cnt} matches)")
+            src = _team_source_tags.get(tn, '')
+            src_str = f' [{_source_tag_label(src)}]' if src and src != 'scouted' else ''
+            message_lines.append(f" - Team {tn}: ~{avg:.1f} pts/match ({cnt} match{'es' if cnt != 1 else ''}){src_str}")
+
+    # Qualitative scouting trends for top teams (up to 10, those with data)
+    qual_teams_with_data = []
+    for team_num in [ts[0] for ts in sorted(team_stats, key=lambda x: x[1], reverse=True)[:15]]:
+        try:
+            qual = get_team_qualitative_trends(team_num, last_match.scouting_team_number, event_id=event.id if event else None)
+            if qual:
+                qual_teams_with_data.append((team_num, qual))
+        except Exception:
+            continue
+
+    if qual_teams_with_data:
+        message_lines.append('\nQUALITATIVE SCOUTING TRENDS:')
+        for team_num, qual in qual_teams_with_data[:8]:
+            message_lines.append(f" Team {team_num} ({qual['entry_count']} obs.):")
+            qual_block = _format_qualitative_section(qual, indent='   ')
+            if qual_block:
+                message_lines.append(qual_block)
 
     # Schedule offset analysis (predicted vs scheduled)
     if offsets_minutes:
@@ -672,9 +968,86 @@ def send_notification_for_subscription(subscription, match):
             # Use the provided match as the anchor for the day's summary
             title, message = create_end_of_day_summary(match)
         else:
-            # Generic match reminder
-            title = f"Match Reminder"
-            message = f"Match starting in {subscription.minutes_before} minutes!\n\n{format_match_description(match)}"
+            # Generic match reminder — include EPA/OPR-aware team stats and qualitative notes
+            title = "Match Reminder"
+            target_team = subscription.target_team_number
+            mins = subscription.minutes_before or ''
+            mins_str = f" in {mins} minutes" if mins else ""
+            message = f"Match starting{mins_str}!\n\n{format_match_description(match)}\n"
+
+            # Determine target team's alliance
+            if target_team:
+                if target_team in (match.red_teams or []):
+                    t_alliance = 'Red'
+                    my_teams = match.red_teams or []
+                    opp_teams = match.blue_teams or []
+                elif target_team in (match.blue_teams or []):
+                    t_alliance = 'Blue'
+                    my_teams = match.blue_teams or []
+                    opp_teams = match.red_teams or []
+                else:
+                    t_alliance = None
+                    my_teams = (match.red_teams or []) + (match.blue_teams or [])
+                    opp_teams = []
+
+                if t_alliance:
+                    message += f"\nTeam {target_team} is on {t_alliance} Alliance\n"
+
+                # Get EPA source label
+                try:
+                    from app.utils.analysis import get_current_epa_source
+                    _rm_epa_src = get_current_epa_source()
+                except Exception:
+                    _rm_epa_src = 'scouted_only'
+                _rm_src_labels = {
+                    'scouted_only': 'scouted data',
+                    'scouted_with_statbotics': 'scouted + EPA',
+                    'statbotics_only': 'Statbotics EPA',
+                    'tba_opr_only': 'TBA OPR',
+                    'scouted_with_tba_opr': 'scouted + TBA OPR',
+                }
+                _rm_src_label = _rm_src_labels.get(_rm_epa_src, 'data')
+
+                event = Event.query.get(match.event_id) if match.event_id else None
+                event_id = event.id if event else None
+
+                # Alliance team stats
+                if my_teams:
+                    message += f"\n--- ALLIANCE ANALYSIS (via {_rm_src_label}) ---\n"
+                    for tn in my_teams:
+                        stats = get_team_epa_aware_stats(tn, match.scouting_team_number)
+                        if stats:
+                            src = _source_tag_label(stats.get('source_tag'))
+                            auto = stats.get('auto_avg')
+                            teleop = stats.get('teleop_avg')
+                            parts = [f"~{stats['total_avg']:.1f} pts ({src})"]
+                            if auto is not None and teleop is not None:
+                                parts.append(f"A:{auto:.0f} T:{teleop:.0f}")
+                            message += f"  Team {tn}: {', '.join(parts)}\n"
+                            qual = get_team_qualitative_trends(tn, match.scouting_team_number, event_id=event_id)
+                            if qual and qual.get('summary'):
+                                message += f"    Qual: {qual['summary']}\n"
+                        else:
+                            message += f"  Team {tn}: No data\n"
+
+                if opp_teams:
+                    opp_color = 'Blue' if t_alliance == 'Red' else 'Red'
+                    message += f"\n--- {opp_color} ALLIANCE (via {_rm_src_label}) ---\n"
+                    for tn in opp_teams:
+                        stats = get_team_epa_aware_stats(tn, match.scouting_team_number)
+                        if stats:
+                            src = _source_tag_label(stats.get('source_tag'))
+                            parts = [f"~{stats['total_avg']:.1f} pts ({src})"]
+                            auto = stats.get('auto_avg')
+                            teleop = stats.get('teleop_avg')
+                            if auto is not None and teleop is not None:
+                                parts.append(f"A:{auto:.0f} T:{teleop:.0f}")
+                            message += f"  Team {tn}: {', '.join(parts)}\n"
+                            qual = get_team_qualitative_trends(tn, match.scouting_team_number, event_id=event_id)
+                            if qual and qual.get('summary'):
+                                message += f"    Qual: {qual['summary']}\n"
+                        else:
+                            message += f"  Team {tn}: No data\n"
         
         # Create log entry
         log = NotificationLog(

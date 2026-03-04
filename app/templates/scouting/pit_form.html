@@ -30,7 +30,7 @@
                     <!-- Team selector dropdown -->
                     <div class="mb-3">
                         <label for="team_number" class="form-label fw-semibold">Team</label>
-                        <select id="team_number" name="team_number" class="form-select form-select-lg" required>
+                        <select id="team_number" name="team_number" class="form-select form-select-lg" required data-no-mapped-display="1"> <!-- explicit opt‑out of mapped display, avoids duplicate team number badge -->
                             <option value="">Select a team...</option>
                             {% for t in teams %}
                                 <option value="{{ t.team_number }}" {% if (edit_mode and pit_data and pit_data.team and pit_data.team.team_number == t.team_number) or (team_param_int and team_param_int == t.team_number) %}selected{% endif %}>
@@ -96,6 +96,7 @@
                                                 <select class="form-select form-select-lg" 
                                                         id="{{ element.id }}" 
                                                         name="{{ element.id }}"
+                                                        data-no-mapped-display="1"
                                                         {% if element.required %}required{% endif %}>
                                                     <option value="">Select...</option>
                                                     {% for option in element.options %}
