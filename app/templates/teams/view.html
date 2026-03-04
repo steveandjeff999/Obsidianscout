@@ -199,7 +199,81 @@
                 </div>
             </div>
         </div>
-        {% else %}
+        {% endif %}
+
+        {% if qualitative_entries %}
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">Qualitative Notes {{ help.help_icon('Notes extracted from qualitative scouting entries that mention this team.', 'Qualitative notes') }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Match</th>
+                                <th>Alliance</th>
+                                <th>Notes</th>
+                                <th>Scouted By</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for q in qualitative_entries %}
+                            <tr>
+                                <td>{{ q.entry.match.match_type }} {{ q.entry.match.match_number }}</td>
+                                <td>{{ q.alliance|title }}</td>
+                                <td>{{ q.notes }}</td>
+                                <td>{{ q.entry.scout_name }}</td>
+                                <td>
+                                    <a href="{{ url_for('scouting.view_qualitative_data', entry_id=q.entry.id) }}" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-eye me-1"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if pit_entries %}
+        <div class="card mb-4">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">Pit Scouting Data {{ help.help_icon('Pit scouting entries for this team. Click View to inspect details.', 'Pit scouting') }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Scouted By</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pd in pit_entries %}
+                            <tr>
+                                <td>{{ pd.timestamp }}</td>
+                                <td>{{ pd.scout_name }}</td>
+                                <td>
+                                    <a href="{{ url_for('pit_scouting.view', id=pd.id) }}" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-eye me-1"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if not scouting_data and not qualitative_entries and not pit_entries %}
         <div class="card">
             <div class="card-body">
                 <div class="alert alert-info mb-0">

@@ -686,7 +686,12 @@ def delete(team_number):
 def view(team_number):
     """View team details"""
     from app.utils.team_isolation import get_current_scouting_team_number
-    from app.utils.alliance_data import get_scouting_data_for_team, get_active_alliance_id
+    from app.utils.alliance_data import (
+        get_scouting_data_for_team,
+        get_active_alliance_id,
+        get_all_pit_data,
+        get_all_qualitative_data,
+    )
     
     # Check if we're in alliance mode
     alliance_id = get_active_alliance_id()
@@ -843,6 +848,59 @@ def view(team_number):
     except Exception as e:
         print(f"EPA enrichment for team detail failed: {e}")
 
+    # --- collect qualitative and pit data for this team ---
+    # Qualitative helper originally depended on current_user which isn't always
+    # set when viewing arbitrary team pages (e.g. during tests).  Instead we
+    # query both the local and shared tables manually and then extract any
+    # notes that apply to the team number we're looking at.  We also apply the
+    # same event filtering logic used for scouting_data above so the page
+    # remains focused when an event is specified.
+    try:
+        from app.models import QualitativeScoutingData, AllianceSharedQualitativeData, Match
+
+        qualitative_for_team = []
+        # build base query for regular qualitative rows
+        qquery = QualitativeScoutingData.query.join(Match)
+        if event and getattr(event, 'id', None):
+            qquery = qquery.filter(Match.event_id == event.id)
+        qual_entries = qquery.all()
+
+        if is_alliance_mode:
+            share_q = AllianceSharedQualitativeData.query.join(Match).filter(
+                AllianceSharedQualitativeData.alliance_id == alliance_id,
+                AllianceSharedQualitativeData.is_active == True
+            )
+            if event and getattr(event, 'id', None):
+                share_q = share_q.filter(Match.event_id == event.id)
+            qual_entries += share_q.all()
+
+        for qentry in qual_entries:
+            qdata = qentry.data
+            for alliance_key in ['red', 'blue', 'individual']:
+                alliance_data = qdata.get(alliance_key, {})
+                if not isinstance(alliance_data, dict):
+                    continue
+                team_key = f"team_{team.team_number}"
+                team_data = alliance_data.get(team_key)
+                if isinstance(team_data, dict):
+                    notes = (team_data.get('notes') or '').strip()
+                    if notes:
+                        qualitative_for_team.append({
+                            'entry': qentry,
+                            'alliance': alliance_key,
+                            'notes': notes,
+                        })
+    except Exception:
+        qualitative_for_team = []
+
+    try:
+        # pit_entries already handles alliance mode and team_number filtering; no
+        # event filtering is applied here (that could be added if desired)
+        pit_entries, _, _ = get_all_pit_data(team_number=team.team_number)
+    except Exception:
+        pit_entries = []
+
+
     # Get events this team is competing at from the API
     team_events = []
     try:
@@ -879,6 +937,8 @@ def view(team_number):
         'teams/view.html', 
         team=team, 
         scouting_data=scouting_data, 
+        qualitative_entries=qualitative_for_team,
+        pit_entries=pit_entries,
         metrics=metrics, 
         game_config=game_config,
         component_metrics=component_metrics,

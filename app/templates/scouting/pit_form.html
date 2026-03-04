@@ -17,6 +17,9 @@
                 <h5 class="mb-0">
                     <i class="fas fa-clipboard-list me-2"></i>
                     {{ pit_config.pit_scouting.title }}
+                    <span id="form-header-extra">
+                        {% if edit_mode and pit_data %}- Team {{ pit_data.team.team_number }}{% endif %}
+                    </span>
                     {% if current_event %}
                         - {{ current_event.name }}
                     {% endif %}
@@ -30,7 +33,7 @@
                         <select id="team_number" name="team_number" class="form-select form-select-lg" required>
                             <option value="">Select a team...</option>
                             {% for t in teams %}
-                                <option value="{{ t.team_number }}" {% if edit_mode and pit_data and pit_data.team and pit_data.team.team_number == t.team_number %}selected{% endif %}>
+                                <option value="{{ t.team_number }}" {% if (edit_mode and pit_data and pit_data.team and pit_data.team.team_number == t.team_number) or (team_param_int and team_param_int == t.team_number) %}selected{% endif %}>
                                     {{ t.team_number }}{% if t.team_name %} - {{ t.team_name }}{% endif %}
                                 </option>
                             {% endfor %}
@@ -67,7 +70,7 @@
                                                        name="{{ element.id }}"
                                                        {% if element.required %}required{% endif %}
                                                        {% if element.placeholder %}placeholder="{{ element.placeholder }}"{% endif %}
-                                                       {% if edit_mode and pit_data.data.get(element.id) %}value="{{ pit_data.data.get(element.id) }}"{% endif %}>
+                                                       {% if pit_data and pit_data.data.get(element.id) %}value="{{ pit_data.data.get(element.id) }}"{% endif %}>
 
                                             {% elif element.type == 'number' %}
                                                 <input type="number" 
@@ -79,7 +82,7 @@
                                                            {% if element.validation.min %}min="{{ element.validation.min }}"{% endif %}
                                                            {% if element.validation.max %}max="{{ element.validation.max }}"{% endif %}
                                                        {% endif %}
-                                                       {% if edit_mode and pit_data.data.get(element.id) %}value="{{ pit_data.data.get(element.id) }}"{% endif %}>
+                                                       {% if pit_data and pit_data.data.get(element.id) %}value="{{ pit_data.data.get(element.id) }}"{% endif %}>
 
                                             {% elif element.type == 'textarea' %}
                                                 <textarea class="form-control form-control-lg" 
@@ -87,7 +90,7 @@
                                                           name="{{ element.id }}"
                                                           rows="4"
                                                           {% if element.required %}required{% endif %}
-                                                          {% if element.placeholder %}placeholder="{{ element.placeholder }}"{% endif %}>{% if edit_mode and pit_data.data.get(element.id) %}{{ pit_data.data.get(element.id) }}{% endif %}</textarea>
+                                                          {% if element.placeholder %}placeholder="{{ element.placeholder }}"{% endif %}>{% if pit_data and pit_data.data.get(element.id) %}{{ pit_data.data.get(element.id) }}{% endif %}</textarea>
 
                                             {% elif element.type == 'select' %}
                                                 <select class="form-select form-select-lg" 
@@ -97,7 +100,7 @@
                                                     <option value="">Select...</option>
                                                     {% for option in element.options %}
                                                         <option value="{{ option.value }}" 
-                                                                {% if edit_mode and pit_data.data.get(element.id) == option.value %}selected{% endif %}>
+                                                                {% if pit_data and pit_data.data.get(element.id) == option.value %}selected{% endif %}>
                                                             {{ option.label }}
                                                         </option>
                                                     {% endfor %}
@@ -112,7 +115,7 @@
                                                                    id="{{ element.id }}_{{ option.value }}" 
                                                                    name="{{ element.id }}" 
                                                                    value="{{ option.value }}"
-                                                                   {% if edit_mode and option.value in pit_data.data.get(element.id, []) %}checked{% endif %}>
+                                                                   {% if pit_data and option.value in pit_data.data.get(element.id, []) %}checked{% endif %}>
                                                             <label class="form-check-label" for="{{ element.id }}_{{ option.value }}">{{ option.label }}</label>
                                                         </div>
                                                     {% endfor %}
@@ -120,7 +123,7 @@
 
                                             {% elif element.type == 'boolean' %}
                                                 <div class="form-check form-switch">
-                                                    <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" {% if edit_mode and pit_data.data.get(element.id) %}checked{% endif %}>
+                                                    <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" {% if pit_data and pit_data.data.get(element.id) %}checked{% endif %}>
                                                     <label class="form-check-label" for="{{ element.id }}">{{ element.name }}</label>
                                                 </div>
 
@@ -139,12 +142,31 @@
                         <a href="{{ url_for('pit_scouting.index') }}" class="btn btn-outline-secondary btn-lg">
                             <i class="fas fa-arrow-left me-1"></i> Back
                         </a>
-                        <button type="submit" class="btn btn-primary btn-lg">
+                        <button type="submit" id="pit-submit-btn" class="btn btn-primary btn-lg">
                             <i class="fas fa-save me-1"></i>
                             {% if edit_mode %}Update{% else %}Save{% endif %}
                         </button>
                     </div>
                 </form>
+
+                <script>
+                // reload the page with team parameter when selection changes
+                document.addEventListener('DOMContentLoaded', function() {
+                    const teamSelect = document.getElementById('team_number');
+                    if (teamSelect) {
+                        teamSelect.addEventListener('change', function() {
+                            const selected = this.value;
+                            const url = new URL(window.location.href);
+                            if (selected) {
+                                url.searchParams.set('team', selected);
+                            } else {
+                                url.searchParams.delete('team');
+                            }
+                            window.location.href = url.toString();
+                        });
+                    }
+                });
+                </script>
             </div>
         </div>
     </div>
@@ -213,6 +235,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const teamNumberInput = document.getElementById('team_number');
             if (teamNumberInput) {
                 teamNumberInput.value = team.team_number;
+                // manually trigger change event so the page reloads/reset
+                teamNumberInput.dispatchEvent(new Event('change'));
                 // Close modal
                 const modal = bootstrap.Modal.getInstance(document.getElementById('teamSelectionModal'));
                 if (modal) modal.hide();
@@ -241,6 +265,92 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.setCustomValidity('');
             }
         });
+
+        teamNumberInput.addEventListener('change', function() {
+            const teamNum = this.value;
+            // clear any saved draft (we'll repopulate via AJAX if needed)
+            localStorage.removeItem('pit_scouting_draft');
+            sessionStorage.removeItem('preserved_pit_form_data');
+
+            clearForm();
+            updateHeader(teamNum, false);
+            updateSubmitButton(false);
+
+            // update url parameter without reloading
+            const newUrl = new URL(window.location);
+            if (teamNum) {
+                newUrl.searchParams.set('team', teamNum);
+            } else {
+                newUrl.searchParams.delete('team');
+            }
+            history.replaceState(null, '', newUrl);
+
+            if (teamNum) {
+                // fetch existing data for this scout/team
+                fetch(`/pit_scouting/form?team=${encodeURIComponent(teamNum)}&ajax=1`)
+                    .then(resp => resp.json())
+                    .then(data => {
+                        if (data.success) {
+                            if (data.pit_data && Object.keys(data.pit_data).length > 0) {
+                                populateForm(data.pit_data);
+                                updateHeader(teamNum, true);
+                                updateSubmitButton(true);
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error fetching pit data for team', teamNum, err);
+                    });
+            }
+        });
+    }
+
+    // helper to clear all inputs/checkboxes/selects except team selector
+    function clearForm() {
+        const elements = form.querySelectorAll('input, select, textarea');
+        elements.forEach(el => {
+            if (el.id === 'team_number') return;
+            if (el.type === 'checkbox' || el.type === 'radio') {
+                el.checked = false;
+            } else {
+                el.value = '';
+            }
+        });
+    }
+
+    function populateForm(data) {
+        for (const [key, value] of Object.entries(data)) {
+            const els = form.querySelectorAll(`[name="${key}"]`);
+            els.forEach(el => {
+                if (el.type === 'checkbox') {
+                    if (Array.isArray(value)) {
+                        el.checked = value.includes(el.value);
+                    } else {
+                        el.checked = !!value;
+                    }
+                } else if (el.type === 'radio') {
+                    el.checked = el.value === value;
+                } else {
+                    el.value = value;
+                }
+            });
+        }
+    }
+
+    function updateHeader(teamNum, isEdit) {
+        const extra = document.getElementById('form-header-extra');
+        if (!extra) return;
+        if (teamNum) {
+            extra.textContent = isEdit ? `- Team ${teamNum}` : `- Team ${teamNum}`;
+        } else {
+            extra.textContent = '';
+        }
+    }
+
+    function updateSubmitButton(isEdit) {
+        const btn = document.getElementById('pit-submit-btn');
+        if (!btn) return;
+        btn.innerHTML = `<i class="fas fa-save me-1"></i>${isEdit ? 'Update' : 'Save'}`;
     }
     
     // Form submission handling
@@ -267,8 +377,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Load data from localStorage if available
-    loadFormDataFromLocalStorage();
+    // Load data from localStorage if available (but avoid overwriting server data)
+    const serverHasData = {{ 'true' if pit_data else 'false' }};
+    if (!serverHasData) {
+        loadFormDataFromLocalStorage();
+    }
 });
 
 // Collapse/expand section handlers
@@ -315,7 +428,11 @@ function loadFormDataFromLocalStorage() {
     if (savedData) {
         try {
             const data = JSON.parse(savedData);
-            
+            // if the draft belongs to a different team, ignore it
+            const currentTeam = document.getElementById('team_number') ? document.getElementById('team_number').value : '';
+            if (data.team_number && currentTeam && data.team_number !== currentTeam) {
+                return;
+            }
             Object.keys(data).forEach(key => {
                 const elements = document.querySelectorAll(`[name="${key}"]`);
                 elements.forEach(element => {
