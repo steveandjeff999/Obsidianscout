@@ -263,6 +263,27 @@ def form():
     else:
         team_param_int = None
 
+    # Try to pre-load any existing data for the selected team (current scout only)
+    pit_data = None
+    if team_param_int:
+        team_obj = Team.query.filter_by(team_number=team_param_int).first()
+        if team_obj:
+            pit_data = PitScoutingData.query.filter_by(
+                team_id=team_obj.id,
+                scout_id=current_user.id
+            ).order_by(PitScoutingData.timestamp.desc()).first()
+    # track whether the form is being used to edit an existing entry
+    edit_mode = True if pit_data else False
+
+    # If this is a client-side request for pit data only, return JSON
+    if request.method == 'GET' and request.args.get('ajax'):
+        return jsonify({
+            'success': True,
+            'team_number': team_param_int,
+            'pit_data': pit_data.data if pit_data else {},
+            'edit_mode': edit_mode
+        })
+
     # Always load the current user's scouting team pit config
     # (ignore team parameter for form - form should always use current user's config)
     pit_config = get_current_pit_config()
@@ -500,6 +521,9 @@ def form():
                           scouted_local_numbers=list(scouted_local_numbers),
                           scouted_server_numbers=list(scouted_server_numbers),
                           teams_for_js=teams_for_js,
+                          pit_data=pit_data,
+                          team_param_int=team_param_int,
+                          edit_mode=edit_mode,
                           **get_theme_context())
 
 @bp.route('/list', endpoint='list')

@@ -7,7 +7,7 @@
     },
     "app_config.json": {
       "checksum": "49e6588ada1118a2680f67a833550cf938cedcd9e9dd19acb90c25ec56f78336",
-      "modified": 1772575622.618056,
+      "modified": 1772601167.869913,
       "size": 705
     },
     "assistant_responses.json": {
@@ -87,7 +87,7 @@
     },
     "run.py": {
       "checksum": "0a27032bd404de7f5a7cf0f57b48462fdd03154ff7a0d4ca2c20d60279faedf3",
-      "modified": 1772575622.7323537,
+      "modified": 1772601167.8989906,
       "size": 57653
     },
     "START.bat": {
@@ -101,8 +101,8 @@
       "size": 4561
     },
     "sw.js": {
-      "checksum": "a93fa483030f5fd1faf5e4fb844d993e25afc73a7392788aa0cc14492fe8812b",
-      "modified": 1772578712.785757,
+      "checksum": "19f08dfcef360e2f370e462900789520b15f80269ee0cfa54d199a7bc52e5482",
+      "modified": 1772599753.4703634,
       "size": 13974
     },
     "test_filtering.py": {
@@ -271,9 +271,9 @@
       "size": 17222
     },
     "app\\routes\\graphs.py": {
-      "checksum": "126df64f27694e04a51bfa232f7e5e37d881539cdd4d47f468aedd47725e6acf",
-      "modified": 1772578958.4467256,
-      "size": 221435
+      "checksum": "2db99746936d2a051a2d41b1b03383e39a2adb81178c3d617b3d522205ae1563",
+      "modified": 1772579412.641951,
+      "size": 220275
     },
     "app\\routes\\instance_backup.py": {
       "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -321,9 +321,9 @@
       "size": 0
     },
     "app\\routes\\pit_scouting.py": {
-      "checksum": "ea5d0400c38c2e0d4dae84612b9c588778c699487c12371885609bc96075e61e",
-      "modified": 1772067065.8700204,
-      "size": 84930
+      "checksum": "db5058c4eaf5ddff4b00748537ef6ba50c8007cd9a48266c968c694174a846fc",
+      "modified": 1772637460.2813032,
+      "size": 89343
     },
     "app\\routes\\public.py": {
       "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -386,9 +386,9 @@
       "size": 0
     },
     "app\\routes\\teams.py": {
-      "checksum": "5a96f5fcbb757faa1d5145ab9d4dd8f51fb86c6069acc5d91f07fc10d25ac34d",
-      "modified": 1771343879.3225505,
-      "size": 56705
+      "checksum": "073b5b4afaa95a9cdd4a0edee8d40b0ad57522e08993caefebe29bff14e439ca",
+      "modified": 1772637772.5569887,
+      "size": 58110
     },
     "app\\routes\\team_data_api.py": {
       "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -712,7 +712,7 @@
     },
     "app\\static\\img\\avatars\\user_4.png": {
       "checksum": "2d4566582844690f8634a8b2534ea5221560038c6c0650c99140759bad603ae2",
-      "modified": 1772509408.9208586,
+      "modified": 1772637965.2359135,
       "size": 7
     },
     "app\\static\\img\\avatars\\user_5.png": {
@@ -976,9 +976,9 @@
       "size": 48679
     },
     "app\\templates\\base.html": {
-      "checksum": "69c3cec5ad386b1eebdd896ceda6808592f38d0b42be6973aa1af1abfc4ec497",
-      "modified": 1772553962.2833822,
-      "size": 295670
+      "checksum": "511785190b50612d110b472afb2bb1e2e3945296c984126fcceca3a0fddd301f",
+      "modified": 1772601576.9019856,
+      "size": 295822
     },
     "app\\templates\\chat.html": {
       "checksum": "f383782328107751c2ddbd3bf83d245229bbcc7091a304c35781b1c0887f00bf",
@@ -1741,23 +1741,23 @@
       "size": 73246
     },
     "app\\templates\\scouting\\pit_form.html": {
-      "checksum": "1ca48d2fb29d2a67654c5abd166f0cdda0b32a5bf38903c95cfbd1fe5222cc34",
-      "modified": 1769656916.048485,
-      "size": 23727
+      "checksum": "999da50c04777fdc066f7328b94a9a3c521d72e4d0a2965bac2392f8e583499b",
+      "modified": 1772637460.2813032,
+      "size": 28812
     },
     "app\\templates\\scouting\\pit_index.html": {
-      "checksum": "f42a1ea78a7e59ae2321e805aff044e47658f6f6c664f22a59731f5cfa8e7bee",
-      "modified": 1769656916.0495071,
+      "checksum": "566db222539df0a1612cb945188ff84cd5564517d2cb3f34521a9b0f903801d4",
+      "modified": 1772599753.4703634,
       "size": 17805
     },
     "app\\templates\\scouting\\pit_list.html": {
-      "checksum": "9dc51491c69a29f57eef0cd3723af0cb680fcf185cc2f152c81cae61b8edd06c",
-      "modified": 1769656916.0505078,
+      "checksum": "14054cf5be1c11224f7e15f9905e5f09d3d70d6f4900d610db899ed42ca4a95d",
+      "modified": 1772599753.4733827,
       "size": 17557
     },
     "app\\templates\\scouting\\pit_list_dynamic.html": {
-      "checksum": "e4b192c32f67ca9d942dfc7cc565141236b4235f9765220e98671db51061b2f6",
-      "modified": 1769656916.0505078,
+      "checksum": "bd3b624efd5d308f66de13f91f8ef88b8b82288888aed60f9d9a1170f726dae0",
+      "modified": 1772599753.4703634,
       "size": 32746
     },
     "app\\templates\\scouting\\pit_sync_config.html": {
@@ -1766,9 +1766,9 @@
       "size": 12545
     },
     "app\\templates\\scouting\\pit_view.html": {
-      "checksum": "f3b9424b96963a35c5fdb13a4853fa22881084b6898db3bfa92c41a62f9e9978",
-      "modified": 1765943307.4808807,
-      "size": 24089
+      "checksum": "b15b75e16940db69b0eb8f454fb13a271744efd7517616e47cb790a5ca2c8e34",
+      "modified": 1772601576.9019856,
+      "size": 23809
     },
     "app\\templates\\scouting\\qr.html": {
       "checksum": "98e085a706936402ba76fa48cb3b26aeebed0f88816876d547b01925dced9315",
@@ -2021,9 +2021,9 @@
       "size": 13402
     },
     "app\\templates\\teams\\view.html": {
-      "checksum": "07ecc48f3dd9a81c123ab892a7648039c3fa3dc6cd1dc812cf02ce0e5d3b49f0",
-      "modified": 1769656916.0792942,
-      "size": 12288
+      "checksum": "b6f3e9fc97585129e1a935d847b17def1e338fcba134b5299784bd0b6ce68856",
+      "modified": 1772637812.552605,
+      "size": 15768
     },
     "app\\templates\\team_trends\\analyze.html": {
       "checksum": "31917b24b3d026d7b26dfda27efdaeaaea44bb81b9f95d55b3eb64387642bc16",
@@ -2091,9 +2091,9 @@
       "size": 59809
     },
     "app\\utils\\analysis.py": {
-      "checksum": "8f1438ea163faa126c88ee6d16318a0796710e1a051acddabfcc9157e92f780d",
-      "modified": 1772578917.4263115,
-      "size": 109874
+      "checksum": "a6fff88c28c0c33eed1db7370122caabafe510f8606f332fa72db0220c5a9e7f",
+      "modified": 1772579412.6447847,
+      "size": 109632
     },
     "app\\utils\\api_auth.py": {
       "checksum": "7a06b329fbd51dd934760054d992b8c12b73ac5723a80a777f8ef244cd9563a8",
@@ -2346,8 +2346,8 @@
       "size": 16820
     },
     "app\\utils\\sync_manager.py": {
-      "checksum": "13566ccfff95daed7349119d02843652d9a24a32c2637cd438f996dac1b7e8cf",
-      "modified": 1760506434.0608788,
+      "checksum": "a80089557c166a53cc07612bfb677145fa56b362427edb34647233d4a1410157",
+      "modified": 1772599753.4703634,
       "size": 11387
     },
     "app\\utils\\sync_status.py": {
@@ -3662,7 +3662,7 @@
     },
     "config\\game_config_backup.json": {
       "checksum": "3b8d06608d2f8617853dbdd25b2a6482b98e637d9bc34de1bd03578b7d05ebb3",
-      "modified": 1772575622.6346605,
+      "modified": 1772601167.8714356,
       "size": 7566
     },
     "config\\pit_config.json": {
@@ -3676,8 +3676,8 @@
       "size": 13790
     },
     "config\\sync_config.json": {
-      "checksum": "fc3ec5144a33a4576af93eb7fc1982843cb733524a67c16b92a37575917bba12",
-      "modified": 1772575622.6385696,
+      "checksum": "b77292ba6a58e2db4c28a5bee6d7aea366a9bbf796e04e177b48dd10bcda698c",
+      "modified": 1772601167.8724413,
       "size": 390
     },
     "config\\theme_config.json": {
@@ -3987,7 +3987,7 @@
     },
     "instance\\apis.db-shm": {
       "checksum": "f1c2b4db1d847e2ce1bb6ff4e4231547e837c90bd51855de5ad25efb985d96ff",
-      "modified": 1772576216.6793373,
+      "modified": 1772637436.597852,
       "size": 32768
     },
     "instance\\apis.db-wal": {
@@ -4002,7 +4002,7 @@
     },
     "instance\\email_config.json": {
       "checksum": "3de7d52cfd99214f51621e235261cbe28a5825b6d8da17c4989e7a3f375ca279",
-      "modified": 1772575622.64058,
+      "modified": 1772601167.8734348,
       "size": 223
     },
     "instance\\import_trace.txt": {
@@ -4016,13 +4016,13 @@
       "size": 73728
     },
     "instance\\misc.db-shm": {
-      "checksum": "aa4269c1eb442c4bc1814f71b942d51779eec69a68d8ce454e0ca6e5f7fde16e",
-      "modified": 1772579065.0563474,
+      "checksum": "1e4a66ca97559a47fa0e1d09a4c7cd6b1ca95d414e7501b7f3a97f24b84b4722",
+      "modified": 1772638125.9168284,
       "size": 32768
     },
     "instance\\misc.db-wal": {
-      "checksum": "8a00413694d6267083b59152871a2e76a7e64ab08c9909da94bd052084159e18",
-      "modified": 1772579148.111678,
+      "checksum": "cf5872b17cf87544465c99b6a31cc36afe78e44dc78f4a71c046d041277e2c19",
+      "modified": 1772638216.674039,
       "size": 4128272
     },
     "instance\\notifications.json": {
@@ -4036,18 +4036,18 @@
       "size": 8192
     },
     "instance\\pages.db-shm": {
-      "checksum": "ffce7e10399af9dfde6ef59246a142fa5f03787635e729f30db85f7ff97e98e5",
-      "modified": 1772579065.00067,
+      "checksum": "1701b8f3d1352889558cec74840363910b578325579aea8f7ce028c64754946a",
+      "modified": 1772638125.878464,
       "size": 32768
     },
     "instance\\pages.db-wal": {
-      "checksum": "9fb82c18dfb81f377c19d9b1c465c2c68445d9bebd08efae26594976846bbfde",
-      "modified": 1772579148.1056397,
-      "size": 1046512
+      "checksum": "370447e7185efbce330cfb45caaf912178db58c32f793d26491a4dfb8e053177",
+      "modified": 1772638216.6679838,
+      "size": 1145392
     },
     "instance\\postgres_config.json": {
       "checksum": "68dce8ae3459cbdd9b853ed82a6201dcdffaf8318c77febd612f2be763382dc6",
-      "modified": 1772575622.6561892,
+      "modified": 1772601167.874435,
       "size": 289
     },
     "instance\\strategy_shares.json": {
@@ -4061,14 +4061,14 @@
       "size": 32768
     },
     "instance\\users.db-shm": {
-      "checksum": "7a18274f8bdefe8714caf5bd6bbb08ff1e6a6312ff22771d4512a920ca20ccf7",
-      "modified": 1772579064.9787407,
+      "checksum": "d9897b17cc162475eea2363e96e955b0b68c74bc07e59c9377b6d06bc42f9dc7",
+      "modified": 1772638125.868894,
       "size": 32768
     },
     "instance\\users.db-wal": {
-      "checksum": "5adf7327e306750bff055f64923fc1d71324e55335c74cb103b8da1ee164a4f8",
-      "modified": 1772579148.1039906,
-      "size": 2500872
+      "checksum": "dbb74cca57df92469d4e9b8d0c83b8a4a627bbb31fda1a2ac5fbda5fbd03f909",
+      "modified": 1772638216.665172,
+      "size": 3254832
     },
     "instance\\users.db.bak": {
       "checksum": "16d49906e475455fc690c9a33b229f0f461bfff83e56b0122f79cea7abfd53a0",
@@ -4085,19 +4085,19 @@
       "modified": 1770751963.4512575,
       "size": 1331
     },
-    "instance\\backup\\one.db.20260302_194828.bak": {
-      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "modified": 1772480908.0344605,
-      "size": 0
-    },
-    "instance\\backup\\one.db.20260303_033840.bak": {
-      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "modified": 1772509120.8292623,
-      "size": 0
-    },
     "instance\\backup\\one.db.20260303_034332.bak": {
       "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "modified": 1772509412.78501,
+      "size": 0
+    },
+    "instance\\backup\\one.db.20260303_230609.bak": {
+      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": 1772579169.7803714,
+      "size": 0
+    },
+    "instance\\backup\\one.db.20260304_152608.bak": {
+      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": 1772637968.3891213,
       "size": 0
     },
     "instance\\backup\\20251130T003655Z\\apis.db": {
@@ -4601,9 +4601,9 @@
       "size": 13790
     },
     "instance\\configs\\5454\\pit_config.json": {
-      "checksum": "cb5844c6d6fa82322c52c73bcbb4f3be8c081eee57f39ce847523b236852b885",
-      "modified": 1772128386.8931763,
-      "size": 7013
+      "checksum": "c46d0b8eb7fd3140001ed79184ac2412ea1274e32b82354c705ea380517500a4",
+      "modified": 1772599883.873381,
+      "size": 6870
     },
     "instance\\configs\\5454\\theme_config.json": {
       "checksum": "2e549e5ca785f210ca3d1cf12594906725c5b47726c54df29ba84ab1a6fec746",
@@ -5060,6 +5060,11 @@
       "modified": 1760415561.4011033,
       "size": 752
     },
+    "scripts\\test_template.py": {
+      "checksum": "f1cdaf141bda847c6f97b170920662426fb0b4d94ecf24ec6af7ead7f25fe05b",
+      "modified": 1772636706.883837,
+      "size": 462
+    },
     "scripts\\test_trend_visualization.py": {
       "checksum": "87bfb7f1bb332137ef0cce009f2955dee592672193917f89727099e407a90d84",
       "modified": 1761602230.0857823,
@@ -5210,6 +5215,11 @@
       "modified": 1766170185.0317025,
       "size": 2784
     },
+    "tests\\test_pit_form.py": {
+      "checksum": "6a33477ddac082659c1c43d2326e0fb8b126ad377281ef837560d071acae4830",
+      "modified": 1772637460.2813032,
+      "size": 3633
+    },
     "tests\\test_qualitative_label.py": {
       "checksum": "ae8015eb255bb17ca5978a4801d386a686e87e2dce5d6cf6a692e6e83748620d",
       "modified": 1772467349.2102087,
@@ -5289,6 +5299,11 @@
       "checksum": "9a114fa30b86316ebdc470146ce2d2c8b88c9d50332cb234581a4713b45b3f64",
       "modified": 1765996350.6580987,
       "size": 1563
+    },
+    "tests\\test_team_view_data.py": {
+      "checksum": "baca7ba00dee416d598d9f00e1c80967fb473daee345055ae05b2af8155414ba",
+      "modified": 1772637830.707825,
+      "size": 2772
     },
     "tests\\test_tutorial_page.py": {
       "checksum": "95e9b77000b42f6b441b1e76bf33f12bc76a3df96e29f13f48e5bb8e8faf26b6",
@@ -5931,5 +5946,5 @@
       "size": 23782
     }
   },
-  "created": "2026-03-03T23:05:58.327088+00:00"
+  "created": "2026-03-04T15:30:29.406345+00:00"
 }
