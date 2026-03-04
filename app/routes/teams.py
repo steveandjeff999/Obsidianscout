@@ -693,6 +693,19 @@ def view(team_number):
         get_all_qualitative_data,
     )
     
+    # Determine optional event filter used when collecting qualitative entries.
+    # If no event is requested we leave it as None which means "show everything".
+    event = None
+    event_id = request.args.get('event_id', type=int)
+    if event_id:
+        try:
+            from app.utils.team_isolation import filter_events_by_scouting_team
+
+            event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+        except Exception:
+            # fallback to unfiltered lookup in case isolation helper fails
+            event = Event.query.get(event_id)
+
     # Check if we're in alliance mode
     alliance_id = get_active_alliance_id()
     is_alliance_mode = alliance_id is not None

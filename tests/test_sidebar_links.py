@@ -28,3 +28,6 @@ def test_sidebar_template_contains_new_links():
     assert '<link rel="preload"' in html
     # an ultra-early script should exist to apply dark-mode before any paint
     assert 'extremely early' in html or 'ultra-early' in html or 'theme detection executed before any styles are parsed' in html
+
+    # new qualitative leaderboard link should be present alongside team rankings
+    assert 'url_for(\'scouting.qualitative_leaderboard\')' in html

@@ -137,7 +137,14 @@
                                     <br><small class="text-muted">{{ match.event.timezone.split('/')[-1].replace('_', ' ') }}</small>
                                     {% endif %}
                                 </td>
-                                <td>
+                                {% set ds2 = display_scores.get(match.id) if display_scores is defined else None %}
+                                {% set _has_played = (ds2 and ds2.source != 'epa' and ds2.red_score is not none and ds2.red_score >= 0 and ds2.blue_score is not none and ds2.blue_score >= 0) or (match.actual_time is not none) %}
+                                <td class="match-time-td"
+                                    data-sched-ms="{{ match.scheduled_time | to_utc_ms }}"
+                                    data-pred-ms="{{ match.predicted_time | to_utc_ms }}"
+                                    data-actual-ms="{{ match.actual_time | to_utc_ms }}"
+                                    data-event-tz="{{ match.event.timezone if match.event and match.event.timezone else '' }}"
+                                    data-has-played="{{ '1' if _has_played else '0' }}">
                                     {# Consider a match 'played' ONLY if it has valid scores (not None and >= 0) #}
                                     {# Check if scores are available from display_scores dictionary #}
                                     {% set ds = display_scores.get(match.id) if display_scores is defined else None %}
@@ -390,6 +397,87 @@
                 form.addEventListener('mouseleave', function(){ if (confirming) exitConfirmState(); });
             });
         })();
+
+    // ── Match timezone display reformatter ──────────────────────────────
+    (function () {
+        function formatTimeForPref(epochMs, pref, eventTz) {
+            var d = new Date(epochMs);
+            if (pref === 'utc') {
+                return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC';
+            }
+            if (pref === 'local') {
+                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+            // 'event' — use event timezone
+            if (eventTz) {
+                try {
+                    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: eventTz });
+                } catch (e) {}
+            }
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function reformatMatchTimes() {
+            var pref;
+            try { pref = localStorage.getItem('match_time_zone_pref') || 'event'; } catch (e) { pref = 'event'; }
+            document.querySelectorAll('td.match-time-td').forEach(function (td) {
+                // Skip "Starting soon" cells — they are a live status label, not a raw clock time.
+                // Detect by text content so we don't accidentally skip predicted-time cells
+                // (which also carry text-warning but are real timestamps).
+                var tdText = td.textContent || '';
+                if (tdText.trim().indexOf('Starting soon') !== -1) return;
+
+                var schedMs  = parseInt(td.getAttribute('data-sched-ms')  || '', 10);
+                var predMs   = parseInt(td.getAttribute('data-pred-ms')   || '', 10);
+                var actualMs = parseInt(td.getAttribute('data-actual-ms') || '', 10);
+                var eventTz  = td.getAttribute('data-event-tz') || null;
+                // Use the server-computed played flag (set at render time, always accurate)
+                var hasPlayed = td.getAttribute('data-has-played') === '1';
+
+                // For 'event' mode the server-rendered HTML is already correct.
+                if (pref === 'event') {
+                    if (td.getAttribute('data-tz-swapped')) {
+                        td.innerHTML = td.getAttribute('data-orig-html');
+                        td.removeAttribute('data-tz-swapped');
+                    }
+                    return;
+                }
+
+                // Save original HTML once so we can restore when switching back to 'event'
+                if (!td.getAttribute('data-orig-html')) {
+                    td.setAttribute('data-orig-html', td.innerHTML);
+                }
+                td.setAttribute('data-tz-swapped', '1');
+
+                var html = '';
+
+                if (hasPlayed) {
+                    // Format: Scheduled (muted small) THEN Played at (success bold) — same order as server
+                    var playMs = !isNaN(actualMs) ? actualMs : (!isNaN(schedMs) ? schedMs : (!isNaN(predMs) ? predMs : NaN));
+                    if (!isNaN(schedMs)) {
+                        html += '<div class="text-nowrap"><small class="text-muted">Scheduled: ' + formatTimeForPref(schedMs, pref, eventTz) + '</small></div>';
+                    }
+                    if (!isNaN(playMs)) {
+                        html += '<div class="text-nowrap"><span class="text-success fw-bold">Played at ' + formatTimeForPref(playMs, pref, eventTz) + '</span></div>';
+                    }
+                } else if (!isNaN(schedMs) && !isNaN(predMs)) {
+                    // Unplayed with offset: strikethrough sched then ~predicted
+                    html = '<div class="text-nowrap"><span class="text-muted" style="text-decoration:line-through;font-size:0.85em;">' + formatTimeForPref(schedMs, pref, eventTz) + '</span></div>'
+                         + '<div class="text-nowrap"><span class="text-warning fw-bold">~' + formatTimeForPref(predMs, pref, eventTz) + '</span></div>';
+                } else if (!isNaN(schedMs)) {
+                    html = '<span class="text-nowrap">' + formatTimeForPref(schedMs, pref, eventTz) + '</span>';
+                } else if (!isNaN(predMs)) {
+                    html = '<span class="text-nowrap text-muted">~' + formatTimeForPref(predMs, pref, eventTz) + '</span>';
+                }
+
+                if (html) td.innerHTML = html;
+                // If no valid timestamps, leave server content as-is
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', reformatMatchTimes);
+        window.addEventListener('storage', reformatMatchTimes);
+    })();
 
     function reloadMatchesWithNewConfig() {
         console.log('Reloading matches with new configuration...');

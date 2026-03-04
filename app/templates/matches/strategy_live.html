@@ -220,20 +220,33 @@ function getMatchEpochMs(m) {
     return isNaN(d.getTime()) ? null : d.getTime();
 }
 
-/** Format a match time for display in the EVENT's timezone
- *  (matching how the /matches page displays times).
- *  Uses the server-provided `display_time` which is pre-formatted
- *  in the event timezone by `format_time_with_timezone`.
- *  Falls back to browser-local time if display_time is unavailable. */
+/** Format a match time for display, respecting the user's timezone preference from /settings.
+ *  Preference key: localStorage 'match_time_zone_pref'
+ *    'event' (default) — event's local timezone (matching /matches page)
+ *    'local'           — browser/device local timezone
+ *    'utc'             — UTC */
 function formatLocalTime(m) {
     if (!m) return 'Time TBD';
-    // Prefer server-provided display_time (formatted in event timezone, like /matches)
-    if (m.display_time) return m.display_time;
-    // Fallback: convert UTC epoch to event timezone on client if possible
+
+    var pref;
+    try { pref = localStorage.getItem('match_time_zone_pref') || 'event'; } catch(e) { pref = 'event'; }
+
     var epoch = getMatchEpochMs(m);
+
+    if (pref === 'utc') {
+        if (epoch == null) return m.display_time || 'Time TBD';
+        return new Date(epoch).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC';
+    }
+
+    if (pref === 'local') {
+        if (epoch == null) return m.display_time || 'Time TBD';
+        return new Date(epoch).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // 'event' mode — prefer server-provided display_time (pre-formatted in event timezone)
+    if (m.display_time) return m.display_time;
     if (epoch == null) return 'Time TBD';
     var d = new Date(epoch);
-    // If we know the event timezone, format in that timezone
     if (S.eventTimezone) {
         try {
             return d.toLocaleTimeString([], {
@@ -407,11 +420,17 @@ function pickCurrentMatch() {
 
 function renderMatchInfo(m) {
     if (!m) return '<div class="text-muted">No upcoming match found for this team.</div>';
-    // Display time in the EVENT timezone (matching /matches page behavior)
+    // Display time respecting user's timezone preference from /settings
     var timeStr = formatLocalTime(m);
-    // Show timezone label if available
+    // Show timezone label based on preference
     var tzLabel = '';
-    if (S.eventTimezone) {
+    var tzPref;
+    try { tzPref = localStorage.getItem('match_time_zone_pref') || 'event'; } catch(e) { tzPref = 'event'; }
+    if (tzPref === 'utc') {
+        tzLabel = '<br><small class="text-muted">UTC</small>';
+    } else if (tzPref === 'local') {
+        tzLabel = '<br><small class="text-muted">Local time</small>';
+    } else if (S.eventTimezone) {
         // Extract short name like "Chicago" from "America/Chicago"
         var parts = S.eventTimezone.split('/');
         tzLabel = '<br><small class="text-muted">' + parts[parts.length - 1].replace(/_/g, ' ') + '</small>';

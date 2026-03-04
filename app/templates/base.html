@@ -1434,7 +1434,7 @@
                 {% endif %}
                 {% if 'scouting_dashboard' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.index' %}active{% endif %}" href="{{ url_for('scouting.index') }}"><i class="fas fa-clipboard"></i><span>Scouting Dashboard</span></a>{% endif %}
                 {% if 'start_scouting' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.scouting_form' %}active{% endif %}" href="{{ url_for('scouting.scouting_form') }}"><i class="fas fa-rocket"></i><span>Start Scouting</span></a>{% endif %}
-                {% if 'qualitative_scouting' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.qualitative_scouting' %}active{% endif %}" href="{{ url_for('scouting.qualitative_scouting') }}"><i class="fas fa-star"></i><span>Qualitative Scouting</span></a>{% endif %}
+                {% if 'qualitative_scouting' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.qualitative_scouting' %}active{% endif %}" href="{{ url_for('scouting.qualitative_scouting') }}"><i class="fas fa-feather"></i><span>Qualitative Scouting</span></a>{% endif %}
                 {% if 'pit_scouting' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'pit_scouting.index' %}active{% endif %}" href="{{ url_for('pit_scouting.index') }}"><i class="fas fa-wrench"></i><span>Pit Scouting</span></a>{% endif %}
                 {% if 'scouting_alliances_nav' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('scouting_alliances') %}active{% endif %}" href="{{ url_for('scouting_alliances.dashboard') }}"><i class="fas fa-users"></i><span>Scouting Alliances</span></a>{% endif %}
                 {% if 'all_data' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.list_data' %}active{% endif %}" href="{{ url_for('scouting.list_data') }}"><i class="fas fa-list"></i><span>All Data</span></a>{% endif %}
@@ -1449,6 +1449,7 @@
                 <div class="nav-group-items" id="group-analytics-items">
                 {% if 'teams' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('teams') and not (request.endpoint == 'teams.ranks' or request.endpoint == 'teams.my_ranks_shares') %}active{% endif %}" href="{{ url_for('teams.index') }}"><i class="fas fa-users"></i><span>Teams</span></a>{% endif %}
                 {% if 'team_rankings' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}"><i class="fas fa-list-ol"></i><span>Team Rankings</span></a>{% endif %}
+                {% if 'qualitative_leaderboard' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.qualitative_leaderboard' %}active{% endif %}" href="{{ url_for('scouting.qualitative_leaderboard') }}"><i class="fas fa-trophy"></i><span>Qualitative Leaderboard</span></a>{% endif %}
                 {% if 'matches' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.index' %}active{% endif %}" href="{{ url_for('matches.index') }}"><i class="fas fa-gamepad"></i><span>Matches</span></a>{% endif %}
                 {% if 'alliance_selection' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" href="{{ url_for('alliances.index') }}"><i class="fas fa-handshake"></i><span>Alliance Selection</span></a>{% endif %}
                 {# Main graphs link: treat as active for top-level graphs pages, but exclude side-by-side, custom pages, scout leaderboard, and my-shares which have their own nav items #}
@@ -2493,6 +2494,8 @@
                     const selects = Array.from(document.querySelectorAll('select'));
                     await Promise.all(selects.map(async (sel) => {
                         try{
+                            // Skip selects that have explicitly opted out of option-text remapping
+                            if(sel.hasAttribute('data-no-mapped-display')) return;
                             // Determine if select looks like a team select: option dataset.teamNumber or select name/id
                             let looksLikeTeam = false;
                             for(let i=0;i<sel.options.length;i++){
@@ -2607,6 +2610,18 @@
     </script>
 
         <!-- Select mapping helper: add adjacent mapped display for native <select> elements with team options -->
+        <style>
+            /* ensure an explicit opt-out still hides any span if it somehow gets added */
+            select[data-no-mapped-display] + .select-mapped-display {
+                display: none !important;
+            }
+            /* legacy fallback: some templates (pit form) may not include opt-out
+               attribute due to caching; always hide mapped display for the main
+               pit selector by id as a belt-and-suspenders measure */
+            select#team_number + .select-mapped-display {
+                display: none !important;
+            }
+        </style>
         <script>
         (function(){
             // Debounce helper
@@ -2614,6 +2629,13 @@
 
             function isTeamSelect(sel){
                 try{
+                    // obviously skip if we've been explicitly told not to
+                    if(sel && (sel.hasAttribute('data-no-mapped-display') || (sel.dataset && ('noMappedDisplay' in sel.dataset)))) {
+                        return false;
+                    }
+                    // also skip the pit-teams dropdown by id unconditionally (belt & suspenders)
+                    if(sel && sel.id === 'team_number') return false;
+
                     // Heuristic: any option with data-team-number attribute
                     for(let i=0;i<sel.options.length;i++){
                         if(sel.options[i].dataset && sel.options[i].dataset.teamNumber) return true;
@@ -2695,7 +2717,7 @@
                         else if(node.querySelector && node.querySelector('select')) { found = true; scanAndAttach(); }
                     });
                 });
-                if(found){ try{ if(window._applyTeamNumberDebounce) clearTimeout(window._applyTeamNumberDebounce); window._applyTeamNumberDebounce = setTimeout(() => { try{ window.applyTeamNumberDisplayPreference(); }catch(e){} }, 60); }catch(e){}
+                if(found){ try{ if(window._applyTeamNumberDebounce) clearTimeout(window._applyTeamNumberDebounce); window._applyTeamNumberDebounce = setTimeout(() => { try{ window.applyTeamNumberDisplayPreference(); }catch(e){} }, 60); }catch(e){} }
             }, 60));
 
             try{ selObserver.observe(document.body, { childList: true, subtree: true }); }catch(e){}

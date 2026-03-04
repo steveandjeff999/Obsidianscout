@@ -207,49 +207,136 @@
     <!-- Create Subscription Form -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="notification-card">
-                <h3> Create Notification</h3>
-                <form id="subscription-form">
-                    <div class="form-group">
-                        <label class="form-label" for="target_team_number">Team Number *</label>
-                        <select class="form-control" id="target_team_number" name="target_team_number" required>
-                            <option value="">Select a team...</option>
-                            {% for team in available_teams %}
-                            <option value="{{ team.team_number }}">{{ team.team_number }} - {{ team.team_name }}</option>
-                            {% endfor %}
-                        </select>
+            <div class="card border-0 shadow-sm">
+                <div class="card-header d-flex align-items-center justify-content-between py-3" style="background:var(--card-bg,#fff);border-bottom:1px solid var(--border-color,#e0e0e0);">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fas fa-bell text-primary"></i>
+                        <h5 class="mb-0 fw-semibold">Create Subscription</h5>
                     </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="notification_type">Notification Type</label>
-                        <select class="form-control" id="notification_type" name="notification_type">
-                            <option value="match_strategy">Match Strategy Reminder</option>
-                            <option value="end_of_day_summary">End of Day Summary</option>
-                            <option value="match_reminder">Match Reminder</option>
-                        </select>
+                    <div class="d-flex align-items-center gap-2">
+                        {% if current_event %}
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 fw-normal">
+                            <i class="fas fa-calendar-alt me-1"></i>{{ current_event.name }}
+                        </span>
+                        {% endif %}
+                        {% if available_teams %}
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 fw-normal">
+                            <i class="fas fa-users me-1"></i>{{ available_teams|length }} teams
+                        </span>
+                        {% else %}
+                        <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 fw-normal">
+                            <i class="fas fa-exclamation-triangle me-1"></i>No event teams
+                        </span>
+                        {% endif %}
                     </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="minutes_before">Notify Before Match (minutes)</label>
-                        <input type="number" class="form-control" id="minutes_before" name="minutes_before" value="20" min="5" max="120">
+                </div>
+                <div class="card-body py-4">
+                    {% if not available_teams %}
+                    <div class="alert alert-warning d-flex align-items-center gap-2 mb-4" role="alert">
+                        <i class="fas fa-exclamation-triangle flex-shrink-0"></i>
+                        <div>
+                            No teams found for the current event
+                            {% if event_code %}<strong>({{ event_code }})</strong>{% endif %}.
+                            Ensure teams are synced in <a href="{{ url_for('teams.index') }}" class="alert-link">Teams</a> and your event is configured in <a href="{{ url_for('main.config') }}" class="alert-link">Settings</a>.
+                        </div>
                     </div>
-                    
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="email_enabled" name="email_enabled" checked>
-                            <span>Email Notifications {% if current_user.email %}({{ current_user.email }}){% else %}(No email set){% endif %}</span>
-                        </label>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="push_enabled" name="push_enabled" checked>
-                            <span>Push Notifications</span>
-                        </label>
-                    </div>
-                    
-                    <button type="submit" class="test-button btn-primary">Create Subscription</button>
-                </form>
+                    {% endif %}
+
+                    <form id="subscription-form" novalidate>
+                        <div class="row g-3">
+
+                            <!-- Team selector with live search -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-semibold" for="team-search-input">
+                                    <i class="fas fa-hashtag me-1 text-muted"></i>Team <span class="text-danger">*</span>
+                                </label>
+                                {% if available_teams %}
+                                <div class="position-relative">
+                                    <input type="text" class="form-control mb-1" id="team-search-input"
+                                           placeholder="Search teams…" autocomplete="off"
+                                           aria-label="Filter team list">
+                                    <i class="fas fa-search position-absolute text-muted" style="right:12px;top:10px;pointer-events:none;"></i>
+                                </div>
+                                <select class="form-select" id="target_team_number" name="target_team_number" required size="6"
+                                        style="height:auto;min-height:130px;">
+                                    {% for team in available_teams %}
+                                    <option value="{{ team.team_number }}">{{ team.team_number }}{% if team.team_name %} — {{ team.team_name }}{% endif %}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="invalid-feedback">Please select a team.</div>
+                                <div class="form-text" id="team-match-count"></div>
+                                {% else %}
+                                <input type="number" class="form-control" id="target_team_number" name="target_team_number"
+                                       placeholder="Enter team number manually" min="1" required>
+                                <div class="form-text text-muted">No event teams synced — enter a number directly.</div>
+                                <div class="invalid-feedback">Please enter a team number.</div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Right column -->
+                            <div class="col-12 col-md-6 d-flex flex-column gap-3">
+
+                                <div>
+                                    <label class="form-label fw-semibold" for="notification_type">
+                                        <i class="fas fa-tag me-1 text-muted"></i>Notification Type
+                                    </label>
+                                    <select class="form-select" id="notification_type" name="notification_type">
+                                        <option value="match_reminder">⏰ Match Reminder</option>
+                                        <option value="match_strategy">📋 Match Strategy Reminder</option>
+                                        <option value="end_of_day_summary">📊 End of Day Summary</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="form-label fw-semibold" for="minutes_before">
+                                        <i class="fas fa-clock me-1 text-muted"></i>Notify Before Match
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="minutes_before" name="minutes_before"
+                                               value="20" min="1" max="120">
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                    <div class="form-text text-muted">1–120 minutes before the match starts.</div>
+                                </div>
+
+                                <div class="d-flex flex-column gap-2">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch"
+                                               id="email_enabled" name="email_enabled" checked>
+                                        <label class="form-check-label" for="email_enabled">
+                                            <i class="fas fa-envelope me-1 text-muted"></i>Email
+                                            {% if current_user.email %}
+                                            <span class="text-muted small ms-1">({{ current_user.email }})</span>
+                                            {% else %}
+                                            <span class="text-warning small ms-1"><i class="fas fa-exclamation-circle me-1"></i>No email set</span>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch"
+                                               id="push_enabled" name="push_enabled" checked>
+                                        <label class="form-check-label" for="push_enabled">
+                                            <i class="fas fa-mobile-alt me-1 text-muted"></i>Push Notification
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Feedback -->
+                        <div id="subscribe-feedback" class="mt-3" style="display:none;"></div>
+
+                        <div class="d-flex align-items-center gap-3 mt-4 pt-3" style="border-top:1px solid var(--border-color,#e0e0e0);">
+                            <button type="submit" id="subscribe-btn" class="btn btn-primary px-4">
+                                <i class="fas fa-plus me-2"></i>Create Subscription
+                            </button>
+                            <span id="subscribe-spinner" class="d-none">
+                                <span class="spinner-border spinner-border-sm text-primary me-1" role="status" aria-hidden="true"></span>
+                                <span class="text-muted small">Saving…</span>
+                            </span>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -365,9 +452,9 @@
                                 {% if current_event and current_event.timezone %}
                                     Will send: <strong>{{ queue.scheduled_for.strftime('%Y-%m-%d %H:%M') }} UTC</strong> (<span class="local-time" data-utc="{{ queue.scheduled_for.isoformat() }}Z">calculating...</span>)
                                     {% if match.predicted_time %}
-                                    | Match time: ~{{ match.predicted_time | format_time_tz(current_event.timezone, '%I:%M %p %Z') }} (predicted)
+                                    | Match time: ~<span class="tz-time" data-utc-ms="{{ match.predicted_time | to_utc_ms }}" data-event-tz="{{ current_event.timezone }}">{{ match.predicted_time | format_time_tz(current_event.timezone, '%I:%M %p %Z') }}</span> (predicted)
                                     {% elif match.scheduled_time %}
-                                    | Match time: {{ match.scheduled_time | format_time_tz(current_event.timezone, '%I:%M %p %Z') }}
+                                    | Match time: <span class="tz-time" data-utc-ms="{{ match.scheduled_time | to_utc_ms }}" data-event-tz="{{ current_event.timezone }}">{{ match.scheduled_time | format_time_tz(current_event.timezone, '%I:%M %p %Z') }}</span>
                                     {% endif %}
                                 {% else %}
                                     Will send: <strong>{{ queue.scheduled_for.strftime('%Y-%m-%d %H:%M') }} UTC</strong> (<span class="local-time" data-utc="{{ queue.scheduled_for.isoformat() }}Z">calculating...</span>)
@@ -437,7 +524,7 @@
                             <br>
                             <small class="text-muted">
                                 {% if log.event_timezone %}
-                                    Sent: {{ log.sent_at | format_time_tz(log.event_timezone, '%Y-%m-%d %I:%M %p %Z') }}
+                                    Sent: <span class="tz-time" data-utc-ms="{{ log.sent_at | to_utc_ms }}" data-event-tz="{{ log.event_timezone }}" data-fmt="datetime">{{ log.sent_at | format_time_tz(log.event_timezone, '%Y-%m-%d %I:%M %p %Z') }}</span>
                                 {% else %}
                                     Sent: {{ log.sent_at.strftime('%Y-%m-%d %I:%M %p UTC') }}
                                 {% endif %}
@@ -627,41 +714,115 @@ function urlBase64ToUint8Array(base64String) {
     return outputArray;
 }
 
-// Create subscription
-document.getElementById('subscription-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const formData = new FormData(e.target);
-    const data = {
-        target_team_number: formData.get('target_team_number'),
-        notification_type: formData.get('notification_type'),
-        minutes_before: formData.get('minutes_before'),
-        email_enabled: formData.get('email_enabled') === 'on',
-        push_enabled: formData.get('push_enabled') === 'on',
-        event_code: '{{ event_code }}'
-    };
-    
-    try {
-        const response = await fetch('/notifications/subscribe', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert(' Subscription created successfully!');
-            location.reload();
-        } else {
-            alert(' Error: ' + result.error);
-        }
-    } catch (error) {
-        alert(' Error: ' + error.message);
+// ── Team live-search filter ──────────────────────────────────────────────
+(function () {
+    const searchInput = document.getElementById('team-search-input');
+    const teamSelect  = document.getElementById('target_team_number');
+    if (!searchInput || !teamSelect || teamSelect.tagName !== 'SELECT') return;
+
+    // Cache original options so we can restore them on clear
+    const allOptions = Array.from(teamSelect.options).map(o => ({
+        value: o.value,
+        text:  o.text
+    }));
+
+    function updateCount(visible) {
+        const el = document.getElementById('team-match-count');
+        if (!el) return;
+        el.textContent = visible === allOptions.length
+            ? ''
+            : `${visible} of ${allOptions.length} teams match`;
     }
-});
+
+    searchInput.addEventListener('input', function () {
+        const q = this.value.trim().toLowerCase();
+        const prev = teamSelect.value;
+
+        // Rebuild options list
+        teamSelect.innerHTML = '';
+        let shown = 0;
+        allOptions.forEach(o => {
+            if (!q || o.text.toLowerCase().includes(q) || o.value.includes(q)) {
+                const opt = new Option(o.text, o.value);
+                teamSelect.add(opt);
+                shown++;
+            }
+        });
+        updateCount(shown);
+
+        // Restore selection if still visible
+        if (prev && teamSelect.querySelector(`option[value="${prev}"]`)) {
+            teamSelect.value = prev;
+        }
+    });
+})();
+
+// ── Create subscription form ─────────────────────────────────────────────
+(function () {
+    const form      = document.getElementById('subscription-form');
+    const btn       = document.getElementById('subscribe-btn');
+    const spinner   = document.getElementById('subscribe-spinner');
+    const feedback  = document.getElementById('subscribe-feedback');
+    if (!form) return;
+
+    function showFeedback(type, msg) {
+        if (!feedback) return;
+        feedback.style.display = '';
+        feedback.innerHTML = `<div class="alert alert-${type} d-flex align-items-center gap-2 mb-0">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} flex-shrink-0"></i>
+            <span>${msg}</span>
+        </div>`;
+    }
+
+    function setLoading(loading) {
+        if (btn)     btn.disabled = loading;
+        if (spinner) spinner.classList.toggle('d-none', !loading);
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (feedback) feedback.style.display = 'none';
+
+        const teamEl = document.getElementById('target_team_number');
+        const teamVal = teamEl ? teamEl.value : '';
+        if (!teamVal) {
+            if (teamEl) teamEl.classList.add('is-invalid');
+            showFeedback('danger', 'Please select a team.');
+            return;
+        }
+        if (teamEl) teamEl.classList.remove('is-invalid');
+
+        const data = {
+            target_team_number: teamVal,
+            notification_type:  document.getElementById('notification_type')?.value || 'match_reminder',
+            minutes_before:     parseInt(document.getElementById('minutes_before')?.value || '20', 10),
+            email_enabled:      document.getElementById('email_enabled')?.checked ?? true,
+            push_enabled:       document.getElementById('push_enabled')?.checked ?? true,
+            event_code:         {{ event_code|tojson }}
+        };
+
+        setLoading(true);
+        try {
+            const resp   = await fetch('/notifications/subscribe', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify(data)
+            });
+            const result = await resp.json();
+
+            if (result.success) {
+                showFeedback('success', 'Subscription created! Reloading…');
+                setTimeout(() => location.reload(), 900);
+            } else {
+                showFeedback('danger', result.error || 'Failed to create subscription.');
+                setLoading(false);
+            }
+        } catch (err) {
+            showFeedback('danger', 'Network error: ' + err.message);
+            setLoading(false);
+        }
+    });
+})();
 
 // Delete subscription (permanently)
 async function deleteSubscription(subscriptionId) {
@@ -1234,5 +1395,34 @@ document.addEventListener('DOMContentLoaded', function() {
         // ignore errors in countdown init
     }
 });
+
+// ── Match timezone display (respects /settings preference) ──────────────
+(function(){
+    function fmtTime(ms, pref, eventTz, fmt) {
+        var d = new Date(ms);
+        var tz = pref === 'utc' ? 'UTC' : (pref === 'local' ? null : (eventTz || null));
+        var suffix = pref === 'utc' ? ' UTC' : '';
+        function tStr() { var o = {hour:'2-digit',minute:'2-digit'}; if (tz) o.timeZone = tz; try { return d.toLocaleTimeString([], o); } catch(e) { return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); } }
+        if (fmt === 'datetime') {
+            var dtOpts = {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}; if (tz) dtOpts.timeZone = tz;
+            try { return d.toLocaleString([], dtOpts) + suffix; } catch(e) { return tStr() + suffix; }
+        }
+        return tStr() + suffix;
+    }
+    function applyTzPref() {
+        var pref; try { pref = localStorage.getItem('match_time_zone_pref') || 'event'; } catch(e) { pref = 'event'; }
+        document.querySelectorAll('.tz-time').forEach(function(el) {
+            var ms = parseInt(el.getAttribute('data-utc-ms') || '', 10);
+            if (isNaN(ms)) return;
+            var eventTz = el.getAttribute('data-event-tz') || null;
+            var fmt = el.getAttribute('data-fmt') || 'short';
+            if (pref === 'event') { if (el.getAttribute('data-orig')) el.textContent = el.getAttribute('data-orig'); return; }
+            if (!el.getAttribute('data-orig')) el.setAttribute('data-orig', el.textContent);
+            el.textContent = fmtTime(ms, pref, eventTz, fmt);
+        });
+    }
+    document.addEventListener('DOMContentLoaded', applyTzPref);
+    window.addEventListener('storage', applyTzPref);
+})();
 </script>
 {% endblock %}

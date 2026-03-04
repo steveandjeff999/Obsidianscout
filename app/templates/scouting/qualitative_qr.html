@@ -11,7 +11,7 @@
             <div class="card">
                 <div class="card-header {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}bg-success{% elif entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %} text-white">
                     <h5 class="mb-0">
-                        <i class="fas fa-star me-2"></i>
+                        <i class="fas fa-feather me-2"></i>
                         {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}
                         Team {{ entry.alliance_scouted.replace('team_', '') }} - Individual Scouting
                         ({{ entry.match.match_type }} Match {{ entry.match.match_number }})

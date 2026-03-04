@@ -2059,6 +2059,18 @@ def qualitative_leaderboard():
     """Display a leaderboard of teams ranked by qualitative scouting rankings"""
     from collections import defaultdict
 
+    # sort options from query string (default to average rating desc).
+    # the leaderboard has two "logical" sort keys: avg_rating (the
+    # numeric value we compute from individual entries) and rank.  The
+    # rank column in the UI is simply the position in the list, which is
+    # derived from the average rating; therefore on the server we treat
+    # "rank" as an alias for avg_rating and honour the direction flag so
+    # clicking the header can toggle between ascending/descending.
+    sort_by = request.args.get('sort', 'avg_rating') or 'avg_rating'
+    sort_dir = request.args.get('dir', 'desc') or 'desc'
+    if sort_dir not in ('asc', 'desc'):
+        sort_dir = 'desc'
+
     # Get events that have qualitative scouting data for this team
     events_with_data = (
         Event.query
@@ -2206,14 +2218,28 @@ def qualitative_leaderboard():
                 'feeder': data.get('feeder', {})
             })
 
-    # Sort by average overall rating (5 is best), highest first
-    leaderboard.sort(key=lambda x: x['average_ranking'], reverse=True)
+    # Sort server-side according to requested parameters.  "rank" is
+    # treated as an alias for avg_rating; the template presents it as a
+    # separate column header so users can explicitly choose to order by
+    # rank (which simply toggles the direction).  Any other unknown sort
+    # key falls back to rating desc for safety.
+    if sort_by in ('avg_rating', 'rank'):
+        leaderboard.sort(key=lambda x: x['average_ranking'],
+                         reverse=(sort_dir == 'desc'))
+    elif sort_by == 'team_number':
+        leaderboard.sort(key=lambda x: int(x['team_number']),
+                         reverse=(sort_dir == 'desc'))
+    # any other sort options default to rating desc
+    else:
+        leaderboard.sort(key=lambda x: x['average_ranking'], reverse=True)
 
     return render_template('scouting/qualitative_leaderboard.html',
                          leaderboard=leaderboard,
                          total_teams=len(leaderboard),
                          events=events_with_data,
                          selected_event_id=selected_event_id,
+                         sort_by=sort_by,
+                         sort_dir=sort_dir,
                          **get_theme_context())
 
 

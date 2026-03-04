@@ -247,6 +247,16 @@ def test_mobile_qualitative_upload_sorts_entries():
             assert hasattr(resp, 'status_code')
             assert resp.status_code == 200
 
+        # also verify the main "All Data" page includes a link to the qualitative list
+        from app.routes.scouting import list_data
+        with app.test_request_context('/scouting/list'):
+            resp2 = list_data()
+            assert hasattr(resp2, 'status_code')
+            assert resp2.status_code == 200
+            # response may be a string or a Response object
+            html = resp2.get_data(as_text=True) if hasattr(resp2, 'get_data') else resp2
+            assert '/scouting/qualitative/list' in html
+
     # restore alliance-mode test header
 
 def test_mobile_alliance_mode_filters_events_teams_matches():

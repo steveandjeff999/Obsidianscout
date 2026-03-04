@@ -120,6 +120,22 @@
                 </div>
 
                 <!-- 24-hour time preference removed -->
+
+                <hr />
+                <h5 class="card-title mt-3">Match Time Display</h5>
+                <p class="text-muted">Choose which timezone is used for match times on the Matches and Live Strategy pages. Stored in your browser.</p>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="time_zone_pref" id="tz_pref_event" value="event">
+                    <label class="form-check-label" for="tz_pref_event">Event time (default) — times shown in the event's local timezone</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="time_zone_pref" id="tz_pref_local" value="local">
+                    <label class="form-check-label" for="tz_pref_local">My local time — times shown in your device's timezone</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="time_zone_pref" id="tz_pref_utc" value="utc">
+                    <label class="form-check-label" for="tz_pref_utc">UTC — times shown in Coordinated Universal Time</label>
+                </div>
             </div>
         </div>
     </div>
@@ -308,6 +324,16 @@
         try{ document.getElementById('pref_letter').checked = (current === 'letter'); }catch(e){}
         try{ var prefBothEl2 = document.getElementById('pref_both'); if(prefBothEl2) prefBothEl2.checked = (current === 'both'); }catch(e){}
 
+        // Match time zone preference
+        (function(){
+            var tzPref = localStorage.getItem('match_time_zone_pref') || 'event';
+            try{ var el = document.getElementById('tz_pref_' + tzPref); if(el) el.checked = true; else document.getElementById('tz_pref_event').checked = true; }catch(e){}
+            // Live apply on change
+            document.querySelectorAll('input[name="time_zone_pref"]').forEach(function(r){
+                r.addEventListener('change', function(){ try{ localStorage.setItem('match_time_zone_pref', r.value); showStatus('Time zone preference saved locally.', 'success'); }catch(e){} });
+            });
+        })();
+
         var status = document.getElementById('settingsStatus');
         function showStatus(msg, cls){ if(!status) return; status.className = 'mt-2 text-'+(cls||'success'); status.textContent = msg; status.classList.remove('d-none'); setTimeout(function(){ status.classList.add('d-none'); }, 2500); }
 
@@ -344,6 +370,9 @@
             // Glass preference is managed globally; settings page no longer writes it here
             // Rounded UI preference removal: handled sitewide via early script and not user-configurable here
 
+            // Match time zone preference
+            try{ var tzPrefVal = document.querySelector('input[name="time_zone_pref"]:checked'); if(tzPrefVal) localStorage.setItem('match_time_zone_pref', tzPrefVal.value); }catch(e){}
+
             // Broadcast storage event where browsers permit constructing StorageEvent
             try{ window.dispatchEvent(new Event('storage')); }catch(e){}
 
@@ -376,6 +405,7 @@
             // No longer stored via settings UI
                 /* Button shape customization removed; no-op */
             try{ localStorage.removeItem('time_format_24h'); window.TIME_FORMAT_24H = false; }catch(e){}
+            try{ localStorage.removeItem('match_time_zone_pref'); var defTz = document.getElementById('tz_pref_event'); if(defTz) defTz.checked = true; }catch(e){}
             try{ localStorage.removeItem('navbar_theme'); if(navbarThemeSelect) navbarThemeSelect.value = 'neutral'; document.documentElement.classList.remove('nav-theme-primary','nav-theme-indigo','nav-theme-green'); document.documentElement.classList.add('nav-theme-neutral'); document.body.classList.remove('nav-theme-primary','nav-theme-indigo','nav-theme-green'); document.body.classList.add('nav-theme-neutral'); }catch(e){}
 
             try{ if (typeof window.setTeamNumberDisplayPreference === 'function') window.setTeamNumberDisplayPreference('99xx'); else if (typeof window.applyTeamNumberDisplayPreference === 'function') window.applyTeamNumberDisplayPreference(); } catch(e){}
