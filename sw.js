@@ -1,7 +1,7 @@
 // Service Worker for ObsidianScout - Simplified version without offline analytics
 
 // Increment the CACHE_VERSION to force clients to update caches when you change assets
-const CACHE_VERSION = 11;
+const CACHE_VERSION = 13;
 const CACHE_NAME = `scout-app-cache-v${CACHE_VERSION}`;
 
 // Core site shell files to pre-cache. Add any top-level routes or critical files here.
@@ -28,14 +28,18 @@ const STATIC_ASSETS = [
   '/scouting/form'
 ];
 
-// Ensure we cache the graphs dashboard and related endpoints so users can
-// open them later when offline. NavigationHandler already caches pages when
-// visited, but pre-caching the base path helps for first-time installs.
+// Ensure we cache the graphs dashboard, comparison page, and settings
+// screen so users can open them later when offline. NavigationHandler
+// already caches pages when visited, but pre-caching the base paths helps
+// for first-time installs.  We also include both slash/no-slash variants to
+// remain tolerant of redirects.
 STATIC_ASSETS.push('/graphs');
 STATIC_ASSETS.push('/graphs/');
-
-
-
+STATIC_ASSETS.push('/graphs/side-by-side');
+STATIC_ASSETS.push('/graphs/side-by-side/');
+// User settings page needs fast offline availability too
+STATIC_ASSETS.push('/settings');
+STATIC_ASSETS.push('/settings/');
 // Common image fallbacks to pre-cache so we can serve a reliable placeholder
 // when individual icon requests fail. Add any frequently used icons here.
 STATIC_ASSETS.push('/static/img/avatars/default.png');
@@ -47,13 +51,13 @@ STATIC_ASSETS.push('/scouting/qualitative');
 STATIC_ASSETS.push('/teams/');
 STATIC_ASSETS.push('/sponsors/');
 STATIC_ASSETS.push('/help/');
-STATIC_ASSETS.push('/pit-scouting/');
+STATIC_ASSETS.push('/pit_scouting/');
 // Also cache no-trailing-slash variants so navigation requests match regardless of
 // whether the browser or server redirects to or from a trailing slash form.
 STATIC_ASSETS.push('/teams');
 STATIC_ASSETS.push('/sponsors');
 STATIC_ASSETS.push('/help');
-STATIC_ASSETS.push('/pit-scouting');
+STATIC_ASSETS.push('/pit_scouting');
 
 // Install event: pre-cache site shell
 self.addEventListener('install', event => {
@@ -168,16 +172,21 @@ async function networkFirst(req) {
     try { notifyClientsOffline(false); } catch (e) { /* ignore */ }
     // Cache successful responses for HTML pages as before, but also keep
     // around JSON results for graph data (and any other useful API responses).
-    // This allows the graphs dashboard to pull cached scouting metrics when
-    // the device is offline.
+    // This allows the graphs dashboard (including the side-by-side view) to
+    // pull cached scouting metrics when the device is offline.  Note that
+    // navigationHandler already caches visited HTML pages, but we add an extra
+    // guard here so that non-navigation fetches (e.g. fetch() calls) for
+    // side-by-side URLs also end up in the cache.
     if (fresh.ok) {
       const cache = await caches.open(CACHE_NAME);
       const contentType = fresh.headers.get('Content-Type') || '';
-      const isHtml = req.url.endsWith('/') || req.url.includes('.html');
+      const isHtml = req.headers.get('accept') && req.headers.get('accept').includes('text/html');
       const isGraphData = req.url.includes('/graphs/data');
       const isJson = contentType.includes('application/json');
+      const isSideBySide = req.url.includes('/graphs/side-by-side');
+      const isSettings = req.url.includes('/settings');
 
-      if (isHtml || isGraphData || isJson) {
+      if (isHtml || isGraphData || isJson || isSideBySide || isSettings) {
         cache.put(req, fresh.clone());
       }
     }

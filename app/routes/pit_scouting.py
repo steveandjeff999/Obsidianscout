@@ -11,7 +11,7 @@ from app.utils.config_manager import get_id_to_perm_id_mapping, get_effective_ga
 from app.utils.sync_manager import SyncManager
 import os
 from app.utils.theme_manager import ThemeManager
-from app.utils.config_manager import get_current_pit_config, save_pit_config, get_effective_pit_config, is_alliance_mode_active
+from app.utils.config_manager import get_current_pit_config, save_pit_config, get_effective_pit_config, is_alliance_mode_active, load_pit_config
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
     filter_events_by_scouting_team, get_event_by_code, get_all_teams_at_event
@@ -21,8 +21,7 @@ from app.utils.alliance_data import (
     get_all_teams_for_alliance
 )
 
-# blueprint for this module
-bp = Blueprint('pit_scouting', __name__, url_prefix='/pit-scouting')
+# blueprint for this module (registered under /pit_scouting)
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -400,7 +399,8 @@ def form():
 
                     # Update existing record
                     existing_data.data_json = json.dumps(form_data)
-                    existing_data.is_uploaded = False
+                    existing_data.is_uploaded = True  # Data is saved directly to server
+                    existing_data.upload_timestamp = datetime.now(timezone.utc)
                     existing_data.device_id = request.headers.get('User-Agent', 'Unknown')[:100]
                     existing_data.timestamp = datetime.now(timezone.utc)
                     db.session.commit()
@@ -454,7 +454,8 @@ def form():
                 scout_name=current_user.username,
                 scout_id=current_user.id,
                 data_json=json.dumps(form_data),
-                is_uploaded=False,
+                is_uploaded=True,  # Data is saved directly to server
+                upload_timestamp=datetime.now(timezone.utc),
                 device_id=request.headers.get('User-Agent', 'Unknown')[:100]
             )
             
@@ -582,8 +583,6 @@ def api_list():
 @login_required
 def view(id):
     """View specific pit scouting data - supports both regular and alliance shared data"""
-    pit_config = get_effective_pit_config()
-    
     alliance_id = get_active_alliance_id()
     is_alliance_mode = alliance_id is not None
     
@@ -609,10 +608,72 @@ def view(id):
                     is_active=True
                 ).first_or_404()
             else:
-                # Not found and not in alliance mode
-                from flask import abort
-                abort(404)
+                # Not found and not in alliance mode - also try without alliance filter
+                pit_data = AllianceSharedPitData.query.filter_by(
+                    id=id,
+                    is_active=True
+                ).first()
+                if not pit_data:
+                    from flask import abort
+                    abort(404)
     
+    # Load the pit config for the SUBMITTING team, not the current viewer.
+    # This ensures the view renders the correct elements matching the data.
+    source_team = getattr(pit_data, 'source_scouting_team_number', None) or getattr(pit_data, 'scouting_team_number', None)
+    if source_team:
+        try:
+            pit_config = load_pit_config(team_number=source_team)
+            # Merge with default to ensure completeness
+            default_config = load_pit_config(team_number=None)
+            from app.utils.config_manager import merge_pit_configs
+            pit_config = merge_pit_configs(default_config, pit_config)
+        except Exception:
+            pit_config = get_effective_pit_config()
+    else:
+        pit_config = get_effective_pit_config()
+    
+    # Build element lookup from config so the template can use nice labels/types
+    # when they exist, but still display ALL saved data even if config changed.
+    element_lookup = {}   # element_id -> {name, type, options, section_name, section_order}
+    section_order_map = {}  # section_name -> order index
+    try:
+        sections = pit_config.get('pit_scouting', {}).get('sections', [])
+        for s_idx, section in enumerate(sections):
+            s_name = section.get('name', f'Section {s_idx + 1}')
+            section_order_map[s_name] = s_idx
+            for element in section.get('elements', []):
+                eid = element.get('id')
+                if eid:
+                    element_lookup[eid] = {
+                        'name': element.get('name', eid),
+                        'type': element.get('type', 'text'),
+                        'options': element.get('options', []),
+                        'section_name': s_name,
+                        'section_order': s_idx,
+                    }
+    except Exception:
+        pass
+
+    # Build ordered sections from the SAVED DATA, using config for grouping/labels
+    # when available, and an "Additional Data" bucket for keys not in config.
+    saved_data = pit_data.data or {}
+    grouped = {}   # section_name -> [(key, value, element_info)]
+    ungrouped = [] # [(key, value)]
+    for key, value in saved_data.items():
+        info = element_lookup.get(key)
+        if info:
+            s_name = info['section_name']
+            grouped.setdefault(s_name, []).append((key, value, info))
+        else:
+            ungrouped.append((key, value))
+
+    # Sort sections by their config order
+    view_sections = []
+    for s_name in sorted(grouped.keys(), key=lambda n: section_order_map.get(n, 999)):
+        view_sections.append({'name': s_name, 'fields': grouped[s_name]})
+    if ungrouped:
+        view_sections.append({'name': 'Additional Data', 'fields': [(k, v, None) for k, v in ungrouped]})
+
     # Check delete permission
     can_delete = can_delete_pit_entry(pit_data, is_alliance_mode, alliance_id)
     user_is_alliance_admin = is_alliance_admin(alliance_id) if is_alliance_mode else False
@@ -620,6 +681,8 @@ def view(id):
     return render_template('scouting/pit_view.html', 
                           pit_data=pit_data,
                           pit_config=pit_config,
+                          view_sections=view_sections,
+                          element_lookup=element_lookup,
                           is_alliance_mode=is_alliance_mode,
                           alliance_id=alliance_id,
                           can_delete=can_delete,
@@ -690,7 +753,8 @@ def edit(id):
             
             # Update pit scouting data
             pit_data.data_json = json.dumps(form_data)
-            pit_data.is_uploaded = False  # Mark as needing re-upload
+            pit_data.is_uploaded = True  # Data is saved directly to server
+            pit_data.upload_timestamp = datetime.now(timezone.utc)
             
             db.session.commit()
             

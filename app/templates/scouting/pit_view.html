@@ -134,34 +134,59 @@
     </div>
 
     <div class="col-lg-8 col-md-12">
-        {% for section in pit_config.pit_scouting.sections %}
+        {# ---- Data-driven display: iterate saved data, not config ---- #}
+        {% for section in view_sections %}
         <div class="card mb-3">
             <div class="card-header">
                 <h5 class="mb-0">{{ section.name }}</h5>
             </div>
             <div class="card-body">
                 <div class="row g-3">
-                    {% for element in section.elements %}
-                        {% set value = pit_data.data.get(element.id) %}
-                        {% if value or element.type == 'boolean' %}
+                    {% for key, value, info in section.fields %}
+                        {# Determine display label and type from config lookup or auto-detect #}
+                        {% set label = info.name if info else key.replace('_',' ')|title %}
+                        {% set ftype = info.type if info else none %}
+                        {% set options = info.options if info else [] %}
+
+                        {# Auto-detect type when config info is missing #}
+                        {% if not ftype %}
+                            {% if value is sameas true or value is sameas false %}
+                                {% set ftype = 'boolean' %}
+                            {% elif value is iterable and value is not string and value is not mapping %}
+                                {% set ftype = 'multiselect' %}
+                            {% elif value is number %}
+                                {% set ftype = 'number' %}
+                            {% elif value is string and '\n' in value %}
+                                {% set ftype = 'textarea' %}
+                            {% else %}
+                                {% set ftype = 'text' %}
+                            {% endif %}
+                        {% endif %}
+
+                        {# Show field if it has a value (or is boolean) #}
+                        {% if value is not none and (value != '' or ftype == 'boolean') %}
                         <div class="col-md-6">
                             <div class="data-field">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div>
-                                        <div class="field-label small text-muted">{{ element.name }}</div>
+                                        <div class="field-label small text-muted">{{ label }}</div>
                                         <div class="field-value mt-1">
-                                            {% if element.type == 'boolean' %}
+                                            {% if ftype == 'boolean' %}
                                                 {% if value %}
                                                     <span class="badge bg-success"><i class="fas fa-check"></i> Yes</span>
                                                 {% else %}
                                                     <span class="badge bg-secondary"><i class="fas fa-times"></i> No</span>
                                                 {% endif %}
 
-                                            {% elif element.type == 'multiselect' %}
+                                            {% elif ftype == 'multiselect' %}
                                                 {% if value %}
                                                     <div class="badge-container">
                                                         {% for selected_value in value %}
-                                                            {% set option_label = element.options|selectattr('value', 'equalto', selected_value)|map(attribute='label')|first %}
+                                                            {% if options %}
+                                                                {% set option_label = options|selectattr('value', 'equalto', selected_value)|map(attribute='label')|first %}
+                                                            {% else %}
+                                                                {% set option_label = none %}
+                                                            {% endif %}
                                                             <span class="badge bg-primary me-1 mb-1">{{ option_label or selected_value }}</span>
                                                         {% endfor %}
                                                     </div>
@@ -169,14 +194,18 @@
                                                     <span class="text-muted">None</span>
                                                 {% endif %}
 
-                                            {% elif element.type == 'select' %}
-                                                {% set option_label = element.options|selectattr('value', 'equalto', value)|map(attribute='label')|first %}
+                                            {% elif ftype == 'select' %}
+                                                {% if options %}
+                                                    {% set option_label = options|selectattr('value', 'equalto', value)|map(attribute='label')|first %}
+                                                {% else %}
+                                                    {% set option_label = none %}
+                                                {% endif %}
                                                 <span class="badge bg-info">{{ option_label or value }}</span>
 
-                                            {% elif element.type == 'number' %}
+                                            {% elif ftype == 'number' %}
                                                 <div class="number-value">{{ value }}</div>
 
-                                            {% elif element.type == 'textarea' %}
+                                            {% elif ftype == 'textarea' %}
                                                 <div class="textarea-value small">
                                                     {% if value %}{{ value|replace('\n','<br>')|safe }}{% else %}<span class="text-muted">No notes</span>{% endif %}
                                                 </div>
@@ -195,10 +224,44 @@
             </div>
         </div>
         {% endfor %}
+
+        {% if not view_sections %}
+        <div class="card mb-3">
+            <div class="card-body text-center text-muted py-4">
+                <i class="fas fa-info-circle me-2"></i> No scouting data fields recorded.
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 
-<!-- Team Summary Card -->
+<!-- Team Summary Card — auto-generated from saved scalar fields -->
+{# Collect short scalar fields from view_sections (skip booleans, lists, textarea, long strings) #}
+{% set summary_fields = [] %}
+{% for section in view_sections %}
+    {% for key, value, info in section.fields %}
+        {% set ftype = info.type if info else none %}
+        {% if not ftype %}
+            {% if value is sameas true or value is sameas false %}{% set ftype = 'boolean' %}
+            {% elif value is iterable and value is not string and value is not mapping %}{% set ftype = 'multiselect' %}
+            {% elif value is string and '\n' in value %}{% set ftype = 'textarea' %}
+            {% else %}{% set ftype = 'text' %}{% endif %}
+        {% endif %}
+        {% if ftype not in ('boolean', 'multiselect', 'textarea') and value is not none and value != '' %}
+            {% set label = info.name if info else key.replace('_',' ')|title %}
+            {% set display_val = value %}
+            {% if ftype == 'select' and info and info.options %}
+                {% set opt_label = info.options|selectattr('value', 'equalto', value)|map(attribute='label')|first %}
+                {% if opt_label %}{% set display_val = opt_label %}{% endif %}
+            {% endif %}
+            {% if summary_fields|length < 8 %}
+                {% set _ = summary_fields.append({'label': label, 'value': display_val, 'type': ftype}) %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+{% endfor %}
+
+{% if summary_fields %}
 <div class="row">
     <div class="col-md-12">
         <div class="card border-success">
@@ -208,97 +271,27 @@
                 </h5>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <div class="summary-stat">
-                            <h6>Drivetrain</h6>
-                            <p class="h5">
-                                {% set drivetrain = pit_data.data.get('drivetrain_type', 'Unknown') %}
-                                <span class="badge bg-secondary">{{ drivetrain.title() }}</span>
-                            </p>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="summary-stat">
-                            <h6>Drive Motors</h6>
-                            <p class="h5">{{ pit_data.data.get('drivetrain_motors', 'Unknown') }}</p>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="summary-stat">
-                            <h6>Robot Weight</h6>
-                            <p class="h5">
-                                {% if pit_data.data.get('robot_weight') %}
-                                    {{ pit_data.data.get('robot_weight') }} lbs
+                <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 g-3">
+                    {% for stat in summary_fields %}
+                    <div class="col">
+                        <div class="summary-stat h-100">
+                            <h6>{{ stat.label }}</h6>
+                            <p class="h5 mb-0">
+                                {% if stat.type == 'number' %}
+                                    {{ stat.value }}
                                 {% else %}
-                                    Unknown
+                                    <span class="badge bg-secondary text-wrap">{{ stat.value|string|title }}</span>
                                 {% endif %}
                             </p>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <div class="summary-stat">
-                            <h6>Cycle Time</h6>
-                            <p class="h5">
-                                {% if pit_data.data.get('cycle_time') %}
-                                    {{ pit_data.data.get('cycle_time') }}s
-                                {% else %}
-                                    Unknown
-                                {% endif %}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Capabilities Overview -->
-                <div class="row mt-4">
-                    <div class="col-md-12">
-                        <h6>Game Capabilities</h6>
-                        <div class="capabilities-overview">
-                            {% if pit_data.data.get('can_score_coral') %}
-                                <div class="capability-item">
-                                    <span class="badge bg-warning text-dark me-2">CORAL Scoring</span>
-                                    {% if pit_data.data.get('coral_levels') %}
-                                        <small class="text-muted">
-                                            Levels: {{ pit_data.data.get('coral_levels')|join(', ')|upper }}
-                                        </small>
-                                    {% endif %}
-                                </div>
-                            {% endif %}
-                            
-                            {% if pit_data.data.get('can_score_algae') %}
-                                <div class="capability-item">
-                                    <span class="badge bg-success me-2">ALGAE Scoring</span>
-                                    {% if pit_data.data.get('algae_locations') %}
-                                        <small class="text-muted">
-                                            Locations: {{ pit_data.data.get('algae_locations')|join(', ')|title }}
-                                        </small>
-                                    {% endif %}
-                                </div>
-                            {% endif %}
-                            
-                            {% if pit_data.data.get('autonomous_capabilities') %}
-                                <div class="capability-item">
-                                    <span class="badge bg-primary me-2">Autonomous</span>
-                                    <small class="text-muted">
-                                        {{ pit_data.data.get('autonomous_capabilities')|join(', ')|title }}
-                                    </small>
-                                </div>
-                            {% endif %}
-                        </div>
-                        
-                        {% if not pit_data.data.get('can_score_coral') and not pit_data.data.get('can_score_algae') %}
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle me-2"></i>
-                                No game piece scoring capabilities reported.
-                            </div>
-                        {% endif %}
-                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Action Buttons -->
 <div class="row mt-4">

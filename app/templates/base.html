@@ -1458,7 +1458,7 @@
                 {% if 'config_averages' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'main.analytics_config_averages' %}active{% endif %}" href="{{ url_for('main.analytics_config_averages') }}"><i class="fas fa-calculator"></i><span>Config Averages</span></a>{% endif %}
                 {% if 'custom_pages' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.pages') %}active{% endif %}" href="{{ url_for('graphs.pages_index') }}"><i class="fas fa-file-alt"></i><span>Custom Pages</span></a>{% endif %}
                 {% if 'strategy' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy' %}active{% endif %}" href="{{ url_for('matches.strategy') }}"><i class="fas fa-chess"></i><span>Strategy</span></a>{% endif %}
-                {% if 'strategy_all' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_all' %}active{% endif %}" href="{{ url_for('matches.strategy_all') }}"><i class="fas fa-th-large"></i><span>Strategy â€” All Matches</span></a>{% endif %}
+                {% if 'strategy_all' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_all' %}active{% endif %}" href="{{ url_for('matches.strategy_all') }}"><i class="fas fa-th-large"></i><span>Strategy &mdash; All Matches</span></a>{% endif %}
                 {% if 'strategy_draw' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}" href="{{ url_for('matches.strategy_draw') }}"><i class="fas fa-pen-ruler"></i><span>Strategy Draw</span></a>{% endif %}
                 {% if 'strategy_live' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'matches.strategy_live' %}active{% endif %}" href="{{ url_for('matches.strategy_live') }}"><i class="fas fa-broadcast-tower"></i><span>Live Strategy</span></a>{% endif %}
                 {% if 'my_graph_shares' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}" href="{{ url_for('graphs.my_shares') }}"><i class="fas fa-share-alt"></i><span>My Graph Shares</span></a>{% endif %}
@@ -2006,7 +2006,7 @@
                         <span class="fw-bold">ObsidianScout</span>
                         {# On normal pages show a subtle secondary label; hide it on the login page to avoid duplication. #}
                         {% if request.endpoint != 'auth.login' %}
-                        <span class="text-muted mx-2">â€¢</span>
+                        <span class="text-muted mx-2">&bull;</span>
                         <span class="small text-muted">ObsidianScout</span>
                         {% endif %}
                     </div>
@@ -4059,6 +4059,7 @@
                     // Refresh current page if it's data-related
                     if (window.location.pathname.includes('/scouting') || 
                         window.location.pathname.includes('/analysis') || 
+                        window.location.pathname.includes('/pit_scouting') ||
                         window.location.pathname.includes('/pit-scouting')) {
                         setTimeout(() => {
                             window.location.reload();
@@ -4089,6 +4090,7 @@
                 // optionally reload
                 if (window.location.pathname.includes('/scouting') ||
                     window.location.pathname.includes('/analysis') ||
+                    window.location.pathname.includes('/pit_scouting') ||
                     window.location.pathname.includes('/pit-scouting')) {
                     setTimeout(() => window.location.reload(), 2000);
                 }
