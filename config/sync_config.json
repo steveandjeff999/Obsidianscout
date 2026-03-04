@@ -4,9 +4,9 @@
     "use_websocket_sync": true,
     "base_url": "",
     "endpoints": {
-      "upload": "/pit-scouting/upload",
-      "download": "/pit-scouting/download",
-      "sync": "/pit-scouting/sync"
+      "upload": "/pit_scouting/upload",
+      "download": "/pit_scouting/download",
+      "sync": "/pit_scouting/sync"
     },
     "auth": {
       "api_key": "[REDACTED_api_key]",

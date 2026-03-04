@@ -70,7 +70,7 @@ class SyncManager:
         if not self.is_server_available():
             raise Exception("Sync server is not available")
         
-        endpoint = self.config.get('sync_server', {}).get('endpoints', {}).get('upload', '/pit-scouting/upload')
+        endpoint = self.config.get('sync_server', {}).get('endpoints', {}).get('upload', '/pit_scouting/upload')
         url = f"{self.base_url}{endpoint}"
         
         # Prepare data for upload
@@ -124,7 +124,7 @@ class SyncManager:
         if not self.is_server_available():
             raise Exception("Sync server is not available")
         
-        endpoint = self.config.get('sync_server', {}).get('endpoints', {}).get('download', '/pit-scouting/download')
+        endpoint = self.config.get('sync_server', {}).get('endpoints', {}).get('download', '/pit_scouting/download')
         url = f"{self.base_url}{endpoint}"
         
         # Add query parameters

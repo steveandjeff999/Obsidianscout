@@ -297,7 +297,7 @@ function reloadPitIndexWithNewConfig() {
 
 // Sync status management
 document.getElementById('sync-status-btn').addEventListener('click', function() {
-    fetch('/pit-scouting/sync/status')
+    fetch('/pit_scouting/sync/status')
         .then(response => response.json())
         .then(data => {
             const progress = document.getElementById('sync-progress');
@@ -334,7 +334,7 @@ function uploadData() {
     uploadBtn.disabled = true;
     
     if (confirm('Upload all local pit scouting data to the server?')) {
-        fetch('/pit-scouting/upload', {
+        fetch('/pit_scouting/upload', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

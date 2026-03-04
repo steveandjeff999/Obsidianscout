@@ -180,12 +180,6 @@
               "min": 0,
               "max": 500
             }
-          },
-          {
-            "id": "test",
-            "perm_id": "test",
-            "name": "test",
-            "type": "text"
           }
         ]
       },

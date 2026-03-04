@@ -540,11 +540,11 @@ class PitScoutingDataDisplay {
         const td = document.createElement('td');
         // For alliance mode, pass shared_id parameter
         const viewUrl = entry.is_alliance_data 
-            ? `/pit-scouting/view/${entry.id}?shared_id=${entry.id}`
-            : `/pit-scouting/view/${entry.id}`;
+            ? `/pit_scouting/view/${entry.id}?shared_id=${entry.id}`
+            : `/pit_scouting/view/${entry.id}`;
         const editUrl = entry.is_alliance_data
-            ? `/pit-scouting/edit/${entry.id}?shared_id=${entry.id}`
-            : `/pit-scouting/edit/${entry.id}`;
+            ? `/pit_scouting/edit/${entry.id}?shared_id=${entry.id}`
+            : `/pit_scouting/edit/${entry.id}`;
         
         // Show delete button only if user can delete
         const deleteButton = entry.can_delete 
@@ -637,7 +637,7 @@ class PitScoutingDataDisplay {
         uploadBtn.disabled = true;
         
         try {
-            const response = await fetch('/pit-scouting/upload', {
+            const response = await fetch('/pit_scouting/upload', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -670,7 +670,7 @@ class PitScoutingDataDisplay {
                 ? JSON.stringify({ shared_id: this.deleteId })
                 : null;
             
-            const response = await fetch(`/pit-scouting/delete/${this.deleteId}`, {
+            const response = await fetch(`/pit_scouting/delete/${this.deleteId}`, {
                 method: 'POST',
                 headers: this.deleteIsAlliance ? {
                     'Content-Type': 'application/json',

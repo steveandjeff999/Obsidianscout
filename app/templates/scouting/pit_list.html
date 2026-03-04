@@ -278,7 +278,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Create a form to submit the DELETE request
             const form = document.createElement('form');
             form.method = 'POST';
-            form.action = '/pit-scouting/delete/' + deleteId;
+            form.action = '/pit_scouting/delete/' + deleteId;
             document.body.appendChild(form);
             form.submit();
         }
@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Export functionality
     document.getElementById('exportBtn').addEventListener('click', function() {
-        window.location.href = '/pit-scouting/export';
+        window.location.href = '/pit_scouting/export';
     });
 
     // Print functionality
@@ -304,7 +304,7 @@ document.addEventListener('DOMContentLoaded', function() {
             uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Uploading...';
             uploadBtn.disabled = true;
             
-            fetch('/pit-scouting/upload', {
+            fetch('/pit_scouting/upload', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
