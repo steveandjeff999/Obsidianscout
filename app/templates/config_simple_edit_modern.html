@@ -35,7 +35,7 @@
     </div>
 
     <!-- Main Configuration Form -->
-    <form id="config-form" novalidate>
+    <form id="config-form" method="POST" action="{{ url_for('main.save_config') }}" novalidate>
         <input type="hidden" name="simple_edit" value="true">
         <input type="hidden" name="simple_payload" id="simple_payload">
         <input type="hidden" name="skip_migration" id="skip_migration" value="">
@@ -953,21 +953,48 @@ class ConfigEditor {
             document.getElementById('mapping_suggestions').value = JSON.stringify(suggestions || {});
 
             document.getElementById('migration-skip').onclick = () => {
+                // user opted out of mapping; go through the AJAX save path as before
                 document.getElementById('skip_migration').value = 'true';
                 modal.hide();
                 this.submitForm().then(resolve);
             };
 
             document.getElementById('migration-proceed').onclick = () => {
+                // user wants to see/confirm mapping options.  Instead of using the
+                // AJAX submit we have been using everywhere else we fall back to a
+                // normal form submission so that the browser will render whatever
+                // HTML the server returns (usually the migration page).  The bug
+                // reported by the user occurred because the AJAX handler always
+                // treated a 200 response as "done" and immediately reloaded the
+                // page, so the migration UI never appeared.  A full submit lets the
+                // response replace the document.
                 document.getElementById('mapping_confirmed').value = 'true';
                 modal.hide();
-                this.submitForm().then(resolve);
+
+                // perform a standard post; the promise will never actually resolve
+                // because the page navigates away, but that's fine for our caller.
+                document.getElementById('config-form').submit();
+                resolve();
             };
         });
     }
 
     async submitForm() {
         const form = document.getElementById('config-form');
+
+        // Note: we used to special‑case mapping_confirmed by falling back to a
+        // plain form.submit() because the AJAX handler didn’t preserve HTML
+        // responses.  That was fine when the form used GET (hence the undesired
+        // URL parameters), but we’ve since added a proper POST target and the
+        // AJAX code is now capable of detecting and rendering the migration
+        // page.  The early exit is no longer necessary, but we keep it for
+        // backwards compatibility; it now simply submits as POST thanks to the
+        // form attributes defined above.
+        if (document.getElementById('mapping_confirmed').value === 'true') {
+            form.submit();
+            return;
+        }
+
         const formData = new FormData(form);
 
         try {
@@ -977,6 +1004,20 @@ class ConfigEditor {
             });
 
             if (response.ok) {
+                // if the server has sent back a migration page we need to render
+                // it ourselves rather than immediately reloading.  look for a
+                // tell‑tale marker that only the migration template contains.
+                const contentType = (response.headers.get('content-type') || '').toLowerCase();
+                if (contentType.includes('text/html')) {
+                    const text = await response.text();
+                    if (text.includes('id="migrateForm"') || text.includes('Map old scoring elements')) {
+                        document.open();
+                        document.write(text);
+                        document.close();
+                        return;
+                    }
+                }
+
                 this.updateStatus('Saved successfully', 'success');
                 this.isDirty = false;
                 setTimeout(() => window.location.reload(), 1000);

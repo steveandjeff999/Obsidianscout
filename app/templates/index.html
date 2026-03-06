@@ -140,20 +140,36 @@
             </div>
         </div>
         
-        <!-- Live Matches: fills previously empty space on the dashboard -->
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-crosshairs me-2 text-warning"></i> Live Matches</h5>
-                <small class="text-muted">Upcoming schedule</small>
-            </div>
-            <div class="card-body p-2" id="liveMatchesContainer">
-                <div class="text-center p-4 text-muted small">
-                    <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>
-                    <div class="mt-2">Loading live matches…</div>
+        <!-- Data Tools moved into main column to fill blank area -->
+        <div class="card">
+            <div class="card-header bg-gradient-info text-white"><h6 class="mb-0"><i class="fas fa-tools me-2"></i> Data Tools</h6></div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    <a href="{{ url_for('data.index') }}" class="list-group-item list-group-item-action d-flex align-items-center">
+                        <i class="fas fa-database text-primary me-3"></i>
+                        <div>
+                            <div class="fw-medium">Data Management</div>
+                            <small class="text-muted">Import & export scouting data</small>
+                        </div>
+                        <i class="fas fa-chevron-right ms-auto"></i>
+                    </a>
+                    <a href="{{ url_for('data.import_qr') }}" class="list-group-item list-group-item-action d-flex align-items-center">
+                        <i class="fas fa-qrcode text-success me-3"></i>
+                        <div>
+                            <div class="fw-medium">Scan QR Code</div>
+                            <small class="text-muted">Import via QR</small>
+                        </div>
+                        <i class="fas fa-chevron-right ms-auto"></i>
+                    </a>
+                    <a href="{{ url_for('graphs.index') }}" class="list-group-item list-group-item-action d-flex align-items-center">
+                        <i class="fas fa-chart-line text-danger me-3"></i>
+                        <div>
+                            <div class="fw-medium">Advanced Graphs</div>
+                            <small class="text-muted">Custom visualizations</small>
+                        </div>
+                        <i class="fas fa-chevron-right ms-auto"></i>
+                    </a>
                 </div>
-            </div>
-            <div class="card-footer bg-transparent text-end">
-                <a href="{{ url_for('matches.index') }}" class="btn btn-sm btn-outline-primary">View full schedule</a>
             </div>
         </div>
     </div>
@@ -189,36 +205,29 @@
                 </ul>
             </div>
         </div>
-
-        <div class="card">
-            <div class="card-header bg-gradient-info text-white"><h6 class="mb-0"><i class="fas fa-tools me-2"></i> Data Tools</h6></div>
+        <!-- recent updates card added to right column -->
+        <div class="card mb-4">
+            <div class="card-header bg-gradient-secondary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-bullhorn me-2"></i> Recent updates</h5>
+                <a href="{{ url_for('main.updates') }}" class="btn btn-sm btn-light">All</a>
+            </div>
             <div class="card-body p-0">
-                <div class="list-group list-group-flush">
-                    <a href="{{ url_for('data.index') }}" class="list-group-item list-group-item-action d-flex align-items-center">
-                        <i class="fas fa-database text-primary me-3"></i>
-                        <div>
-                            <div class="fw-medium">Data Management</div>
-                            <small class="text-muted">Import & export scouting data</small>
-                        </div>
-                        <i class="fas fa-chevron-right ms-auto"></i>
-                    </a>
-                    <a href="{{ url_for('data.import_qr') }}" class="list-group-item list-group-item-action d-flex align-items-center">
-                        <i class="fas fa-qrcode text-success me-3"></i>
-                        <div>
-                            <div class="fw-medium">Scan QR Code</div>
-                            <small class="text-muted">Import via QR</small>
-                        </div>
-                        <i class="fas fa-chevron-right ms-auto"></i>
-                    </a>
-                    <a href="{{ url_for('graphs.index') }}" class="list-group-item list-group-item-action d-flex align-items-center">
-                        <i class="fas fa-chart-line text-danger me-3"></i>
-                        <div>
-                            <div class="fw-medium">Advanced Graphs</div>
-                            <small class="text-muted">Custom visualizations</small>
-                        </div>
-                        <i class="fas fa-chevron-right ms-auto"></i>
-                    </a>
-                </div>
+                <ul class="list-group list-group-flush">
+                    {% for p in recent_updates %}
+                    <li class="list-group-item">
+                        {% if p.filename %}
+                        <a href="{{ url_for('main.update_view', filename=p.filename) }}">{{ p.title }}</a>
+                        {% elif p.slug and p.slug != '#' %}
+                        <a href="{{ p.slug }}">{{ p.title }}</a>
+                        {% else %}
+                        {{ p.title }}
+                        {% endif %}
+                        <div class="text-muted small">{{ p.date }}</div>
+                    </li>
+                    {% else %}
+                    <li class="list-group-item text-muted">No updates available</li>
+                    {% endfor %}
+                </ul>
             </div>
         </div>
     </div>

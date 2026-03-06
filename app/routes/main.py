@@ -75,6 +75,7 @@ bp = Blueprint('main', __name__)
 def index():
     """Main dashboard page"""
     from app.models import Team, Match, ScoutingData, Event
+    from app.utils import updates
     
     # Block scouts from accessing the dashboard
     if current_user.has_role('scout') and not current_user.has_role('admin') and not current_user.has_role('analytics'):
@@ -108,6 +109,12 @@ def index():
             ).first()
         except Exception:
             pass
+
+    # Get three most recent update posts (for dashboard sidebar)
+    try:
+        recent_updates = updates.list_posts(limit=3)
+    except Exception:
+        recent_updates = []
 
     # Get teams filtered by the current event
     # In alliance mode, get teams from alliance scouting data
@@ -177,6 +184,7 @@ def index():
                               matches=matches,
                               scout_entries=scout_entries,
                               total_scout_entries=total_scout_entries,
+                              recent_updates=recent_updates,
                               **get_theme_context())
     except MemoryError:
         # if rendering the dashboard itself exhausts memory, bail out with a
@@ -2332,73 +2340,50 @@ def api_brief_data():
         if current_event_code:
             current_event = get_event_by_code(current_event_code)
         
-        # Upcoming matches (next 5 matches)
+        # Upcoming matches (next 5 matches) – use the same schedule/status
+        # logic that `/matches` and `matches_data` employ so the dashboard is
+        # always in sync with the main matches page.  This removes the API
+        # check and all of the numeric-fall‑back code above.
         upcoming_matches = []
         if current_event:
-            # Try to get last completed match from API to determine starting point
-            last_completed_match_num = None
-            try:
-                from app.utils.api_utils import get_matches_dual_api
-                api_matches = get_matches_dual_api(current_event_code)
-                
-                # Find the highest match number with scores
-                for api_match in api_matches:
-                    match_num = api_match.get('match_number')
-                    red_score = api_match.get('red_score')
-                    blue_score = api_match.get('blue_score')
-
-                    # Check if this match has been scored (both scores >= 0)
-                    if match_num and red_score is not None and red_score >= 0 and blue_score is not None and blue_score >= 0:
-                        if last_completed_match_num is None or match_num > last_completed_match_num:
-                            last_completed_match_num = match_num
-                
-                if last_completed_match_num:
-                    current_app.logger.info(f"Last completed match from API: {last_completed_match_num}")
-            except Exception as e:
-                current_app.logger.warning(f"Could not fetch matches from API, using local DB: {e}")
-            
-            # Query matches starting after the last completed match (or all if no API data)
-            # Use event code matching to handle cross-team event lookups
             from sqlalchemy import func as brief_func
             brief_event_code = getattr(current_event, 'code', None)
-            
+
             def brief_event_filter(query):
-                """Apply event filter using code matching when possible"""
                 if brief_event_code:
-                    return query.join(Event, Match.event_id == Event.id).filter(brief_func.upper(Event.code) == brief_event_code.upper())
+                    return query.join(Event, Match.event_id == Event.id)\
+                        .filter(brief_func.upper(Event.code) == brief_event_code.upper())
                 return query.filter(Match.event_id == current_event.id)
-            
-            if last_completed_match_num:
-                # Get matches after the last completed one
-                matches = brief_event_filter(filter_matches_by_scouting_team())\
-                    .filter(Match.match_number > last_completed_match_num)\
-                    .order_by(*Match.schedule_order())\
-                    .limit(5).all()
-            else:
-                # Fallback to local DB logic - find last match with scores in our DB
-                last_local_match = brief_event_filter(filter_matches_by_scouting_team())\
-                    .filter(Match.red_score >= 0)\
-                    .filter(Match.blue_score >= 0)\
-                    .order_by(Match.match_number.desc())\
-                    .first()
-                
-                if last_local_match:
-                    matches = brief_event_filter(filter_matches_by_scouting_team())\
-                        .filter(Match.match_number > last_local_match.match_number)\
-                        .order_by(*Match.schedule_order())\
-                        .limit(5).all()
-                else:
-                    # No completed matches found, show first 5
-                    matches = brief_event_filter(filter_matches_by_scouting_team())\
-                        .order_by(*Match.schedule_order())\
-                        .limit(5).all()
-            
-            # If we didn't find any upcoming matches (e.g., event just started or API/DB indicates none),
-            # fall back to showing the 5 most recently played matches from the local DB.
-            if not matches:
-                matches = brief_event_filter(filter_matches_by_scouting_team())\
-                    .order_by(Match.match_number.desc())\
-                    .limit(5).all()
+
+            # fetch every match for the event/team in schedule order
+            matches = brief_event_filter(filter_matches_by_scouting_team())\
+                .order_by(*Match.schedule_order()).all()
+
+            def _is_completed(m):
+                actual = getattr(m, 'actual_time', None)
+                winner = getattr(m, 'winner', None)
+                r = m.red_score if getattr(m, 'red_score', None) is not None else None
+                b = m.blue_score if getattr(m, 'blue_score', None) is not None else None
+                if isinstance(r, int) and r < 0: r = None
+                if isinstance(b, int) and b < 0: b = None
+                if actual or winner in ('red', 'blue'):
+                    return True
+                if r is not None and b is not None and (r > 0 or b > 0):
+                    return True
+                return False
+
+            def _get_time_ms(m):
+                for attr in ('predicted_time', 'scheduled_time'):
+                    dt = getattr(m, attr, None)
+                    if dt is not None:
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        return int(dt.timestamp() * 1000)
+                return None
+
+            unplayed = [m for m in matches if not _is_completed(m)]
+            unplayed.sort(key=lambda m: (_get_time_ms(m) or float('inf'),))
+            matches = unplayed[:5]
 
             for match in matches:
                 # Calculate scout coverage
@@ -2660,58 +2645,47 @@ def api_live_matches():
 
         upcoming_matches = []
         if current_event:
-            last_completed_match_num = None
-            try:
-                from app.utils.api_utils import get_matches_dual_api
-                api_matches = get_matches_dual_api(current_event_code)
-                for api_match in api_matches:
-                    match_num = api_match.get('match_number')
-                    red_score = api_match.get('red_score')
-                    blue_score = api_match.get('blue_score')
-                    if match_num and red_score is not None and red_score >= 0 and blue_score is not None and blue_score >= 0:
-                        if last_completed_match_num is None or match_num > last_completed_match_num:
-                            last_completed_match_num = match_num
-            except Exception:
-                # Best-effort; continue with DB-only fallback
-                last_completed_match_num = None
-
-            # Use event code matching to handle cross-team event lookups
+            # find the next five unplayed matches using schedule timestamps
             from sqlalchemy import func as live_func
             live_event_code = getattr(current_event, 'code', None)
-            
             def live_event_filter(query):
-                """Apply event filter using code matching when possible"""
                 if live_event_code:
-                    return query.join(Event, Match.event_id == Event.id).filter(live_func.upper(Event.code) == live_event_code.upper())
+                    return query.join(Event, Match.event_id == Event.id)\
+                        .filter(live_func.upper(Event.code) == live_event_code.upper())
                 return query.filter(Match.event_id == current_event.id)
-            
-            if last_completed_match_num:
-                matches = live_event_filter(filter_matches_by_scouting_team())\
-                    .filter(Match.match_number > last_completed_match_num)\
-                    .order_by(Match.match_type, Match.match_number)\
-                    .limit(5).all()
-            else:
-                last_local_match = live_event_filter(filter_matches_by_scouting_team())\
-                    .filter(Match.red_score >= 0)\
-                    .filter(Match.blue_score >= 0)\
-                    .order_by(Match.match_number.desc())\
-                    .first()
-                if last_local_match:
-                    matches = live_event_filter(filter_matches_by_scouting_team())\
-                        .filter(Match.match_number > last_local_match.match_number)\
-                        .order_by(Match.match_type, Match.match_number)\
-                        .limit(5).all()
-                else:
-                    matches = live_event_filter(filter_matches_by_scouting_team())\
-                        .order_by(Match.match_type, Match.match_number)\
-                        .limit(5).all()
 
-            if not matches:
-                matches = live_event_filter(filter_matches_by_scouting_team())\
-                    .order_by(Match.match_number.desc())\
-                    .limit(5).all()
+            # fetch all matches sorted in schedule order (type, comp_level, set, number)
+            matches = live_event_filter(filter_matches_by_scouting_team())\
+                .order_by(*Match.schedule_order()).all()
 
-            for match in matches:
+            # helpers copied from strategy_live_current_match
+            def _is_completed(m):
+                actual = getattr(m, 'actual_time', None)
+                winner = getattr(m, 'winner', None)
+                r = m.red_score if getattr(m, 'red_score', None) is not None else None
+                b = m.blue_score if getattr(m, 'blue_score', None) is not None else None
+                if isinstance(r, int) and r < 0: r = None
+                if isinstance(b, int) and b < 0: b = None
+                if actual or winner in ('red', 'blue'):
+                    return True
+                if r is not None and b is not None and (r > 0 or b > 0):
+                    return True
+                return False
+
+            def _get_time_ms(m):
+                for attr in ('predicted_time', 'scheduled_time'):
+                    dt = getattr(m, attr, None)
+                    if dt is not None:
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        return int(dt.timestamp() * 1000)
+                return None
+
+            unplayed = [m for m in matches if not _is_completed(m)]
+            unplayed.sort(key=lambda m: (_get_time_ms(m) or float('inf'),))
+
+            # take first five upcoming matches
+            for match in unplayed[:5]:
                 upcoming_matches.append({
                     'id': match.id,
                     'match_type': match.match_type.title(),

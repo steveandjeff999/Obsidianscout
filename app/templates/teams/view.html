@@ -58,7 +58,8 @@
         <!-- New card for team events -->
         <div class="card mb-4">
             <div class="card-header bg-info text-white">
-                <h5 class="mb-0">Participating Events (2025) {{ help.help_icon('Events this team is scheduled to attend or has attended. Use event links to view match schedules and team lists.', 'Participating events') }}</h5>
+                {% set display_year = game_config.season or game_config.year or current_year %}
+                <h5 class="mb-0">Participating Events ({{ display_year }}) {{ help.help_icon('Events this team is scheduled to attend or has attended. Use event links to view match schedules and team lists.', 'Participating events') }}</h5>
             </div>
             <div class="card-body">
                 {% if team_events %}
@@ -87,7 +88,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-warning mb-0">
-                    <i class="fas fa-exclamation-triangle me-2"></i> No events found for this team in 2025 from the API.
+                    <i class="fas fa-exclamation-triangle me-2"></i> No events found for this team in {{ display_year }} from the API.
                 </div>
                 {% endif %}
                 
@@ -144,6 +145,56 @@
     </div>
 
     <div class="col-md-8">
+        {# show matches list before raw scouting data #}
+        {% if match_event %}
+        <div class="card mb-4">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">Matches at {{ match_event.name }}
+                    {{ help.help_icon('Schedule of matches this team is participating in. Matches without scores are shown as not played.', 'Match schedule') }}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if matches_for_event %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Match</th>
+                                <th>Alliance</th>
+                                <th>Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in matches_for_event %}
+                            <tr>
+                                <td>{{ m.match_type }} {{ m.match_number }}</td>
+                                <td>
+                                    {% if team.team_number in m.red_teams %}
+                                        <span class="badge bg-danger">Red</span>
+                                    {% else %}
+                                        <span class="badge bg-primary">Blue</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {# treat -1 as unplayed and display as 0 #}
+                                    {% set rs = 0 if m.red_score in (-1, None) else m.red_score %}
+                                    {% set bs = 0 if m.blue_score in (-1, None) else m.blue_score %}
+                                    {{ rs }} – {{ bs }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle me-2"></i> No matches found for this team at {{ match_event.name }}.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
         {% if scouting_data or qualitative_entries or pit_entries %}
         <div class="card mb-4">
             <div class="card-header bg-info text-white">

@@ -5,18 +5,36 @@ The Now Brief panel's "Upcoming Matches" section now intelligently determines wh
 
 ## How It Works
 
-### 1. API Check (Primary)
-When loading the Now Brief panel, the system:
-1. Fetches all matches for the current event from the API using `get_matches_dual_api()`
-2. Scans through the API response to find the highest match number that has final scores (`red_score` and `blue_score` are not null)
-3. Uses this match number as the starting point
-4. Queries the local database for the next 5 matches after this point
+### 1. Schedule‑Driven Selection
+Rather than relying solely on match numbers from the API, the brief panel now
+computes upcoming matches the same way the **Live Strategy** monitor does.  It:
 
-### 2. Local Database Fallback
-If the API call fails (timeout, authentication error, no data, etc.), the system:
-1. Falls back to querying the local database
-2. Finds the last match in the local DB with recorded scores
-3. Shows the next 5 matches after that point
+1. Loads every match for the current event from the local database (respecting
+   scouting‑team isolation).
+2. Sorts them by the official schedule order (`match_type`, playoff level,
+   `set_number`, then `match_number`).
+3. Marks a match "completed" only when it has a real score or an explicit
+   winner of **red** or **blue** (ties and zero‑zero rows are treated as
+   unplayed).
+4. Further orders the remaining unplayed matches by their scheduled/predicted
+   time (adjusted for any `schedule_offset`).
+5. Returns the first five entries from this sorted, unplayed list.
+
+This approach avoids a number of pitfalls:
+
+- bogus API data (zero scores or empty winners) cannot push the pointer to the
+  end of the event
+- the panel naturally advances in time order, not merely match number order
+- it remains fast since all computation is local and no heavy ScoutingData
+  aggregation is performed
+
+The old API‑based "last completed match number" logic remains only as a
+commented reference in the code for historical context but is no longer used.
+
+### 2. API / Local DB Fallback (removed)
+The previous two‑step algorithm (API first, local DB as a fallback) has been
+superseded by the schedule–based method above.  The API is still consulted in
+other areas of the app, but it no longer drives the upcoming‑matches choice.
 
 ### 3. Default Behavior
 If neither the API nor local DB have any completed matches with scores:

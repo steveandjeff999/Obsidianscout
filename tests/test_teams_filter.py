@@ -21,6 +21,25 @@ def test_teams_event_param_honored():
 
         client = app.test_client()
 
+        # create an analytics user and login; analytics_required decorator needs an
+        # authenticated user with the right role
+        from app.models import User, Role
+        # ensure role exists
+        r = Role(name='analytics')
+        db.session.add(r)
+        db.session.commit()
+        u = User(username='analyst', scouting_team_number=1)
+        u.set_password('secret')
+        u.roles.append(r)
+        db.session.add(u)
+        db.session.commit()
+        login_resp = client.post('/auth/login', data={
+            'username': 'analyst',
+            'password': 'secret',
+            'team_number': '1'
+        })
+        assert login_resp.status_code in (302, 200)
+
         # Create two events and teams
         e1 = Event(name='Current Event', code='CUR', year=2025)
         e2 = Event(name='Other Event', code='OTH', year=2025)
@@ -45,7 +64,8 @@ def test_teams_event_param_honored():
             json.dump({'current_event_code': e1.code}, f)
 
         # Request the teams page with event_id set to e2 - should show teams for e2
-        resp = client.get(f"/teams?event_id={e2.id}")
+        # include trailing slash so we don't hit a 308 redirect from Flask
+        resp = client.get(f"/teams/?event_id={e2.id}")
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
 
