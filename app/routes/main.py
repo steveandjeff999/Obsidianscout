@@ -170,13 +170,25 @@ def index():
         scout_entries = []
         total_scout_entries = 0
     
-    return render_template('index.html', 
-                          game_config=game_config,
-                          teams=teams,
-                          matches=matches,
-                          scout_entries=scout_entries,
-                          total_scout_entries=total_scout_entries,
-                          **get_theme_context())
+    try:
+        return render_template('index.html', 
+                              game_config=game_config,
+                              teams=teams,
+                              matches=matches,
+                              scout_entries=scout_entries,
+                              total_scout_entries=total_scout_entries,
+                              **get_theme_context())
+    except MemoryError:
+        # if rendering the dashboard itself exhausts memory, bail out with a
+        # very small error page rather than propagating the exception and
+        # triggering the 500 handler (which may itself blow due to DB failures)
+        current_app.logger.error("MemoryError while rendering dashboard")
+        return (
+            "<html><body><h1>Dashboard</h1>"
+            "<p>Unable to render the dashboard right now due to memory "
+            "constraints. Please restart the server.</p></body></html>",
+            200,
+        )
 
 @bp.route('/about')
 @login_required
@@ -191,17 +203,46 @@ def updates():
 
     Loads posts from instance/updates/*.json (managed by superadmins).
     No static placeholders are shown when there are no posts.
+
+    We guard against two problematic situations:
+
+    1. ``list_posts`` might run out of memory if there are an enormous number
+       of update files or individual bodies are huge.  In that case we log an
+       error and render an empty list so the page still shows a friendly
+       message rather than triggering ``MemoryError`` backtraces.
+    2. Template rendering itself could raise ``MemoryError`` if Jinja starts
+       building an excessively large string; we catch that as well and fall
+       back to a very small inline message to avoid triggering the 500 handler
+       again (which in turn can fail when the database connection is broken).
     """
     from app.utils.updates import list_posts
 
-    posts = list_posts() or []
+    try:
+        posts = list_posts() or []
+    except Exception as exc:
+        # list_posts already catches MemoryError but just in case another
+        # error happens we don't want the entire page to blow up.
+        current_app.logger.exception("failed to enumerate update posts")
+        posts = []
 
     # adapt posts so templates can link to individual view
     for p in posts:
         if p.get('filename'):
             p['slug'] = url_for('main.update_view', filename=p.get('filename'))
 
-    return render_template('updates.html', posts=posts, **get_theme_context())
+    try:
+        return render_template('updates.html', posts=posts, **get_theme_context())
+    except MemoryError:
+        current_app.logger.error("MemoryError while rendering updates template")
+        # Render a very small fallback so we don't attempt to compile the full
+        # base template again.  Avoid using ``render_template`` to keep things
+        # simple and memory-light.
+        return (
+            "<html><body><h1>Updates</h1>"
+            "<p>Unable to display updates due to memory limits."
+            " Please try again later.</p></body></html>",
+            200,
+        )
 
 
 @bp.route('/updates/<filename>')

@@ -1512,6 +1512,30 @@ def generate_match_strategy_analysis(match_id):
             red_teams.append(team)
         elif team.team_number in blue_team_numbers:
             blue_teams.append(team)
+
+    # In some cases (alliance mode, duplicates in DB, etc.) a team may appear
+    # multiple times in the same alliance data list.  These duplicates were
+    # previously harmless for UI (we already dedupe client-side) but caused
+    # predictions and other analysis routines to triple-count the same robot.
+    # Before proceeding any further we remove repeated entries so every helper
+    # downstream can assume a unique set of teams.
+    def _dedupe_alliance(teams):
+        seen = set()
+        unique = []
+        for t in teams:
+            num = getattr(t, 'team_number', None)
+            if num is None:
+                # fallback for malformed records
+                unique.append(t)
+                continue
+            if num in seen:
+                continue
+            seen.add(num)
+            unique.append(t)
+        return unique
+
+    red_teams = _dedupe_alliance(red_teams)
+    blue_teams = _dedupe_alliance(blue_teams)
     
     # Get game configuration
     game_config = get_current_game_config()
@@ -2009,7 +2033,27 @@ def _predict_strategy_outcome(red_alliance_data, blue_alliance_data, game_config
     if not red_alliance_data or not blue_alliance_data:
         return {}
     
-    # Calculate expected scores
+    # Defensive copy/dedupe in case upstream forgot (should already be handled)
+    def _unique_by_number(alliance):
+        seen = set()
+        uniq = []
+        for td in alliance:
+            team = td.get('team')
+            num = None
+            if team is not None and hasattr(team, 'team_number'):
+                num = team.team_number
+            elif 'team_number' in td:
+                num = td['team_number']
+            if num is None or num not in seen:
+                uniq.append(td)
+                if num is not None:
+                    seen.add(num)
+        return uniq
+
+    red_alliance_data = _unique_by_number(red_alliance_data)
+    blue_alliance_data = _unique_by_number(blue_alliance_data)
+
+    # Calculate expected scores (safely summing unique teams)
     red_expected = sum(team_data['metrics'].get('tot', team_data['metrics'].get('total_points', 0)) 
                       for team_data in red_alliance_data)
     blue_expected = sum(team_data['metrics'].get('tot', team_data['metrics'].get('total_points', 0)) 

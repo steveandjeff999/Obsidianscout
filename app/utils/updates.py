@@ -30,19 +30,44 @@ def _safe_filename(title: str) -> str:
     return f"{ts}_{slug}.json"
 
 
-def list_posts() -> list:
+# maximum number of posts to load into memory at once; caps to avoid excessive consumption
+_MAX_POSTS_DEFAULT = 500
+# truncate bodies when listing to avoid giant strings that are never used
+_MAX_BODY_LENGTH = 20_000
+
+def list_posts(limit: int | None = None) -> list:
     """Return list of post dicts sorted by created_at desc.
     Each dict contains: title, date, excerpt, filename, created_at, updated_at, author, published
+
+    A limit may be provided to restrict the number of posts returned.  The
+    default limit is controlled by ``_MAX_POSTS_DEFAULT`` or the
+    ``MAX_UPDATES_TO_LOAD`` configuration value.
+
+    This helper is particularly careful about *not* blowing up memory when
+    there are dozens or hundreds of very large update files on disk.  If a
+    ``MemoryError`` occurs while scanning, the exception is caught and an
+    empty list is returned so callers can continue rendering a fallback UI.
     """
     folder = _updates_folder()
-    posts = []
-    for fn in sorted(os.listdir(folder), reverse=True):
-        if not fn.lower().endswith('.json'):
-            continue
-        path = os.path.join(folder, fn)
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+
+    # determine actual limit
+    if limit is None:
+        limit = current_app.config.get('MAX_UPDATES_TO_LOAD', _MAX_POSTS_DEFAULT)
+    try:
+        posts: list = []
+        for fn in sorted(os.listdir(folder), reverse=True):
+            if len(posts) >= limit:
+                break
+            if not fn.lower().endswith('.json'):
+                continue
+            path = os.path.join(folder, fn)
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except Exception:
+                # malformed file? skip it rather than aborting the whole list
+                continue
+
             data.setdefault('filename', fn)
             # Normalize date fields
             if 'date' not in data or not data['date']:
@@ -53,23 +78,31 @@ def list_posts() -> list:
             word_count = len(re.findall(r"\w+", body))
             if word_count > 0:
                 minutes = max(1, math.ceil(word_count / 200))
-                data['read_time'] = f"{minutes} min read" if minutes > 1 else "1 min read"
+                data['read_time'] = (
+                    f"{minutes} min read" if minutes > 1 else "1 min read"
+                )
             else:
                 data['read_time'] = None
 
+            # trim body text when listing; full body is only loaded on view
+            if isinstance(data.get('body'), str) and len(data['body']) > _MAX_BODY_LENGTH:
+                data['body'] = data['body'][:_MAX_BODY_LENGTH] + ' ... [truncated]'
+
             posts.append(data)
-        except Exception:
-            continue
 
-    # Sort by created_at if present, else by filename
-    def _key(p):
-        try:
-            return p.get('created_at') or p.get('date') or p.get('filename')
-        except Exception:
-            return p.get('filename')
+        # Sort by created_at if present, else by filename
+        def _key(p):
+            try:
+                return p.get('created_at') or p.get('date') or p.get('filename')
+            except Exception:
+                return p.get('filename')
 
-    posts = sorted(posts, key=_key, reverse=True)
-    return posts
+        posts = sorted(posts, key=_key, reverse=True)
+        return posts
+    except MemoryError:
+        # bail out gracefully if we run out of memory while building the list
+        current_app.logger.error("list_posts exhausted memory, returning empty list")
+        return []
 
 
 def load_post(filename: str) -> dict | None:
