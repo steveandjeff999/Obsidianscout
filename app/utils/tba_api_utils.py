@@ -710,6 +710,15 @@ def get_tba_team_matches_at_event(team_key, event_key):
 def construct_tba_event_key(event_code, year=None):
     """Construct TBA event key from event code and year"""
     if year is None:
+        # Check for thread-local season override first (set by background sync worker)
+        try:
+            from app.utils.api_utils import _api_thread_local
+            override = getattr(_api_thread_local, 'season_override', None)
+            if override is not None:
+                year = int(override)
+        except Exception:
+            pass
+    if year is None:
         try:
             game_config = get_current_game_config()
             year = int(game_config.get('season') or game_config.get('year') or datetime.now(timezone.utc).year)

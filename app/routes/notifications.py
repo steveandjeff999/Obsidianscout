@@ -638,7 +638,7 @@ def refresh_schedule():
             return jsonify({'error': 'No current event configured'}), 400
         
         # Construct year-prefixed code for API call
-        current_year = game_config.get('season', 2026)
+        current_year = game_config.get('season') or game_config.get('year') or datetime.now().year
         event_code = f"{current_year}{raw_event_code}"
         
         # Update match times from FRC APIs (FIRST or TBA)

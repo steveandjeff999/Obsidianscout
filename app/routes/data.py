@@ -168,18 +168,41 @@ def get_or_create_event(name=None, code=None, year=None, location=None, start_da
     if code_norm:
         evt = Event.query.filter_by(code=code_norm, scouting_team_number=scouting_team_number).first()
         if evt:
-            # Update basic fields if missing
+            # Update basic fields if missing, and ALWAYS enforce year to match
+            # the caller's intended year (prevents year corruption when API
+            # data from a different season overwrites the event).
             try:
                 if not evt.name and name:
                     evt.name = name
                 if location and not evt.location:
                     evt.location = location
+                # Validate dates: only update if they belong to the correct year
+                # Also CORRECT existing wrong-year dates (don't just fill missing)
+                if year:
+                    int_year = int(year)
+                    # Fix existing wrong-year start_date
+                    if getattr(evt, 'start_date', None) and hasattr(evt.start_date, 'year') and evt.start_date.year != int_year:
+                        print(f"  get_or_create_event: Removing wrong-year start_date {evt.start_date} (year {evt.start_date.year}) from event year {int_year}")
+                        evt.start_date = None
+                    # Fix existing wrong-year end_date
+                    if getattr(evt, 'end_date', None) and hasattr(evt.end_date, 'year') and evt.end_date.year != int_year:
+                        print(f"  get_or_create_event: Removing wrong-year end_date {evt.end_date} (year {evt.end_date.year}) from event year {int_year}")
+                        evt.end_date = None
                 if start_date and not getattr(evt, 'start_date', None):
-                    evt.start_date = start_date
+                    if year and hasattr(start_date, 'year') and start_date.year != int(year):
+                        print(f"  get_or_create_event: Discarding start_date {start_date} (year {start_date.year}) - doesn't match event year {year}")
+                    else:
+                        evt.start_date = start_date
                 if end_date and not getattr(evt, 'end_date', None):
-                    evt.end_date = end_date
-                if year and not evt.year:
-                    evt.year = year
+                    if year and hasattr(end_date, 'year') and end_date.year != int(year):
+                        print(f"  get_or_create_event: Discarding end_date {end_date} (year {end_date.year}) - doesn't match event year {year}")
+                    else:
+                        evt.end_date = end_date
+                # ALWAYS update year to match the caller's intended year
+                if year:
+                    if evt.year and evt.year != int(year):
+                        print(f"  get_or_create_event: Correcting event year {evt.year} -> {year} for code {code_norm}")
+                    evt.year = int(year)
                 db.session.add(evt)
             except Exception:
                 pass
@@ -194,10 +217,17 @@ def get_or_create_event(name=None, code=None, year=None, location=None, start_da
                     evt.code = code_norm
                 if location and not evt.location:
                     evt.location = location
+                # Validate dates: only update if they belong to the correct year
                 if start_date and not getattr(evt, 'start_date', None):
-                    evt.start_date = start_date
+                    if year and hasattr(start_date, 'year') and start_date.year != int(year):
+                        print(f"  get_or_create_event: Discarding start_date {start_date} (year {start_date.year}) - doesn't match event year {year}")
+                    else:
+                        evt.start_date = start_date
                 if end_date and not getattr(evt, 'end_date', None):
-                    evt.end_date = end_date
+                    if year and hasattr(end_date, 'year') and end_date.year != int(year):
+                        print(f"  get_or_create_event: Discarding end_date {end_date} (year {end_date.year}) - doesn't match event year {year}")
+                    else:
+                        evt.end_date = end_date
                 db.session.add(evt)
             except Exception:
                 pass
@@ -212,17 +242,31 @@ def get_or_create_event(name=None, code=None, year=None, location=None, start_da
             else:
                 from datetime import datetime as _dt
                 final_year = _dt.now(timezone.utc).year
+        else:
+            final_year = int(final_year)
     except Exception:
         from datetime import datetime as _dt
         final_year = _dt.now(timezone.utc).year
+
+    # Validate dates belong to the correct year — discard wrong-year dates
+    # to prevent API data from a different season polluting the event record
+    final_start = start_date
+    final_end = end_date
+    try:
+        if final_start and hasattr(final_start, 'year') and final_start.year != final_year:
+            print(f"  get_or_create_event: Discarding start_date {final_start} (year {final_start.year}) - doesn't match event year {final_year}")
+            final_start = None
+            final_end = None
+    except Exception:
+        pass
 
     # Create new event, with normalized code if available
     new_ev = Event(
         name=name,
         code=code_norm if code_norm else code,
         location=location,
-        start_date=start_date,
-        end_date=end_date,
+        start_date=final_start,
+        end_date=final_end,
         year=final_year,
         scouting_team_number=scouting_team_number
     )

@@ -522,7 +522,22 @@ if __name__ == '__main__':
                                 raw_event_code = game_config.get('current_event_code')
                                 # Prepend year to event code so each year is treated as a different event (e.g., 2026ARLI)
                                 event_year = game_config.get('season') or game_config.get('year') or now_utc.year
+                                # Ensure event_year is an integer for consistent comparisons
+                                try:
+                                    event_year = int(event_year)
+                                except (ValueError, TypeError):
+                                    event_year = now_utc.year
                                 event_code = f"{event_year}{raw_event_code}" if raw_event_code else None
+
+                                # Set thread-local season override so all API helpers
+                                # (get_teams, get_matches, get_event_details, etc.) use
+                                # this team's season instead of the global config.
+                                try:
+                                    from app.utils.api_utils import set_season_override, clear_season_override
+                                    set_season_override(event_year)
+                                    print(f"  Season override set to {event_year} for API calls (raw_event_code={raw_event_code}, event_code={event_code})")
+                                except Exception:
+                                    pass
                                 use_cached_event = cached and (now_utc - cached.get('checked_at')).total_seconds() < CHECK_EVENT_INTERVAL and cached.get('event_code') == event_code
 
                                 # If we have a recent cached event decision, ensure the cached desired_interval
@@ -579,6 +594,23 @@ if __name__ == '__main__':
                                     func.upper(Event.code) == event_code.upper(),
                                     Event.scouting_team_number == scouting_team_number
                                 ).first()
+
+                                # If event exists, correct year and wrong-year dates
+                                if event:
+                                    try:
+                                        if event.year != event_year:
+                                            print(f"  Correcting event year {event.year} -> {event_year} for {event_code}")
+                                            event.year = event_year
+                                        if getattr(event, 'start_date', None) and hasattr(event.start_date, 'year') and event.start_date.year != event_year:
+                                            print(f"  Removing wrong-year start_date {event.start_date} from event {event_code}")
+                                            event.start_date = None
+                                        if getattr(event, 'end_date', None) and hasattr(event.end_date, 'year') and event.end_date.year != event_year:
+                                            print(f"  Removing wrong-year end_date {event.end_date} from event {event_code}")
+                                            event.end_date = None
+                                        db.session.add(event)
+                                    except Exception as yr_err:
+                                        print(f"  Warning: Could not correct event year/dates: {yr_err}")
+
                                 if not event:
                                     print(f"  Event {event_code} not found for team {scouting_team_number}, fetching from API...")
                                     try:
@@ -591,13 +623,30 @@ if __name__ == '__main__':
                                         if event_details:
                                             # Use get_or_create_event to properly handle race conditions
                                             # Store with year-prefixed event_code to differentiate years
+                                            # ALWAYS use event_year from team config, never the API-
+                                            # returned year, to prevent stale season data (e.g. 2025)
+                                            # from overriding the configured 2026 season.
+                                            #
+                                            # Also validate that API-returned dates belong to the
+                                            # correct season.  If the API returned dates from a
+                                            # different year (e.g. queried 2025 but got 2026 dates),
+                                            # discard them so we don't store wrong-year dates.
+                                            api_start = event_details.get('start_date')
+                                            api_end = event_details.get('end_date')
+                                            try:
+                                                if api_start and hasattr(api_start, 'year') and api_start.year != event_year:
+                                                    print(f"  WARNING: API start_date year ({api_start.year}) != config season ({event_year}), discarding API dates")
+                                                    api_start = None
+                                                    api_end = None
+                                            except Exception:
+                                                pass
                                             event = get_or_create_event(
                                                 name=event_details.get('name', raw_event_code),
                                                 code=event_code,
-                                                year=event_details.get('year', game_config.get('season', None) or game_config.get('year', 0)),
+                                                year=event_year,
                                                 location=event_details.get('location'),
-                                                start_date=event_details.get('start_date'),
-                                                end_date=event_details.get('end_date'),
+                                                start_date=api_start,
+                                                end_date=api_end,
                                                 scouting_team_number=scouting_team_number
                                             )
                                             # Set timezone separately if available (not in get_or_create_event params)
@@ -612,7 +661,7 @@ if __name__ == '__main__':
                                             event = get_or_create_event(
                                                 name=raw_event_code,
                                                 code=event_code,
-                                                year=game_config.get('season', None) or game_config.get('year', 0),
+                                                year=event_year,
                                                 scouting_team_number=scouting_team_number
                                             )
 
@@ -802,6 +851,13 @@ if __name__ == '__main__':
 
                             except Exception as e:
                                 print(f"  Error processing scouting team {scouting_team_number}: {e}")
+                            finally:
+                                # Always clear thread-local season override after processing each team
+                                try:
+                                    from app.utils.api_utils import clear_season_override
+                                    clear_season_override()
+                                except Exception:
+                                    pass
 
                         print("API data sync evaluation completed for all teams")
 

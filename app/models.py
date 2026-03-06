@@ -503,6 +503,14 @@ class Event(db.Model):
     schedule_offset = db.Column(db.Integer, nullable=True)  # Current schedule offset in minutes (positive = behind, negative = ahead)
     offset_updated_at = db.Column(db.DateTime, nullable=True)  # When schedule_offset was last computed
     matches = db.relationship('Match', backref='event', lazy=True, cascade='all, delete-orphan')
+    # include team list entries so SQLAlchemy will delete them when the event is removed
+    team_list_entries = db.relationship(
+        'TeamListEntry',
+        back_populates='event',
+        lazy=True,
+        cascade='all, delete-orphan',
+        passive_deletes=True,
+    )
     
     def __repr__(self):
         return f"Event: {self.name} ({self.year})"
@@ -1222,8 +1230,14 @@ class TeamListEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
     team = db.relationship('Team', backref='list_entries')
-    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
-    event = db.relationship('Event')
+    # add ondelete cascade at the database level to keep foreign keys cleaned up
+    event_id = db.Column(
+        db.Integer,
+        db.ForeignKey('event.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    # use back_populates so we can configure the pairing manually on Event
+    event = db.relationship('Event', back_populates='team_list_entries')
     reason = db.Column(db.Text)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     type = db.Column(db.String(50))  # For tracking entry type (do_not_pick or avoid)

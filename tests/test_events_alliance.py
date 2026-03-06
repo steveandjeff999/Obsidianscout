@@ -1,6 +1,6 @@
 import json
 from app import create_app, db
-from app.models import Event, Team, Match, ScoutingAlliance, ScoutingAllianceEvent, ScoutingAllianceMember
+from app.models import Event, Team, Match, ScoutingAlliance, ScoutingAllianceEvent, ScoutingAllianceMember, AllianceSelection
 from app.api_models import create_api_key
 
 
@@ -215,7 +215,11 @@ def test_delete_event_cascades_alliance_selections():
     """Deleting an event should remove any alliance selections owned by that scouting team."""
     app = create_app()
     with app.app_context():
-        # ensure clean schema
+        # ensure clean schema; drop existing objects to avoid leftover state
+        try:
+            db.drop_all()
+        except Exception:
+            pass
         try:
             db.create_all()
         except Exception:
@@ -223,29 +227,45 @@ def test_delete_event_cascades_alliance_selections():
 
         # create user and login so current_user has a scouting_team_number
         from flask_login import login_user
+        from app.models import User
         u = User(username='deleter', scouting_team_number=1234)
         u.set_password('pass')
         db.session.add(u)
-        # create event and an associated alliance selection
+        # create event and associated records (alliance selection + team list entry)
         evt = Event(name='Delete Test', code='DEL', year=2026, scouting_team_number=1234)
         db.session.add(evt)
         db.session.commit()
 
         ally = AllianceSelection(alliance_number=1, event_id=evt.id, scouting_team_number=1234)
         db.session.add(ally)
+
+        from app.models import TeamListEntry
+        tle = TeamListEntry(team_id=None, event_id=evt.id, reason='test', scouting_team_number=1234)
+        # team_id is required; create a dummy team for test
+        team = Team(team_number=9999, team_name='Dummy', scouting_team_number=1234)
+        db.session.add(team)
+        db.session.flush()
+        tle.team_id = team.id
+        db.session.add(tle)
         db.session.commit()
 
         assert AllianceSelection.query.filter_by(event_id=evt.id).count() == 1
+        assert TeamListEntry.query.filter_by(event_id=evt.id).count() == 1
 
         client = app.test_client()
         with client:
-            # log the user in so scoping works
-            login_user(u)
+            # manually inject the user id into the session so current_user works
+            with client.session_transaction() as sess:
+                sess['_user_id'] = str(u.id)
             resp = client.post(f'/events/{evt.id}/delete', follow_redirects=True)
             assert resp.status_code == 200
 
         # post-delete assertions
         assert Event.query.get(evt.id) is None
         assert AllianceSelection.query.filter_by(event_id=evt.id).count() == 0
+
+        # the team list entries associated with this event should also be gone
+        from app.models import TeamListEntry
+        assert TeamListEntry.query.filter_by(event_id=evt.id).count() == 0
 
 

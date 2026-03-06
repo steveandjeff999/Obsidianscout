@@ -577,9 +577,24 @@ def get_event_by_code(event_code):
     # First try to find with year-prefixed code in current user's events (scoped by scouting team)
     event = filter_events_by_scouting_team().filter(func.upper(Event.code) == year_prefixed_code).first()
     
-    # If not found with year prefix, try with the original code
+    # If not found with year prefix, try with the original code (backward compat with
+    # events stored without year prefix).  BUT validate the matched event's year against
+    # the expected season so we don't accidentally return a different year's event (e.g.
+    # returning 2026's OKOK when the config says season=2025).
     if not event and year_prefixed_code != event_code_upper:
-        event = filter_events_by_scouting_team().filter(func.upper(Event.code) == event_code_upper).first()
+        candidate = filter_events_by_scouting_team().filter(func.upper(Event.code) == event_code_upper).first()
+        if candidate:
+            # Determine expected season from year_prefixed_code (first 4 digits)
+            expected_year = None
+            if len(year_prefixed_code) >= 4 and year_prefixed_code[:4].isdigit():
+                expected_year = int(year_prefixed_code[:4])
+            # Accept the candidate if its year matches the expected season, or if
+            # we can't determine the expected season (fallback/backward compat)
+            if expected_year is None or getattr(candidate, 'year', None) == expected_year or not getattr(candidate, 'year', None):
+                event = candidate
+            else:
+                print(f"  get_event_by_code: Skipping event '{candidate.code}' (year={getattr(candidate, 'year', None)}) "
+                      f"because it doesn't match expected season {expected_year}")
 
     # Determine if we are in an active alliance that shares this code
     current_team = get_current_scouting_team_number()

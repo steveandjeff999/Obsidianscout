@@ -298,6 +298,10 @@ def delete(event_id):
             
             # Delete any alliance selections the current scouting team created for this event
             AllianceSelection.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).delete()
+
+            # Also remove any team list entries (do-not-pick/avoid/etc) tied to this event
+            from app.models import TeamListEntry
+            TeamListEntry.query.filter_by(event_id=event_id).delete(synchronize_session=False)
             
             # Delete all matches associated with this event (filtered by scouting team)
             filter_matches_by_scouting_team().filter_by(event_id=event_id).delete()
@@ -305,17 +309,26 @@ def delete(event_id):
             # Finally delete the event itself
             db.session.delete(event)
             db.session.commit()
-        
-        # After the bulk delete is complete, queue a single replication operation
-        from app.utils.real_time_replication import real_time_replicator
-        real_time_replicator.replicate_operation(
-            'delete', 
-            'events', 
-            {'id': event_id, 'name': event_name}, 
-            str(event_id)
-        )
-        
-        flash(f'Event "{event_name}" and all associated data deleted successfully!', 'success')
+    except IntegrityError as fk_err:
+        # some leftover foreign-key references still exist; attempt to clean automatically and retry
+        db.session.rollback()
+        try:
+            from app.models import TeamListEntry
+            TeamListEntry.query.filter_by(event_id=event_id).delete(synchronize_session=False)
+            filter_matches_by_scouting_team().filter_by(event_id=event_id).delete()
+            db.session.delete(event)
+            db.session.commit()
+            from app.utils.real_time_replication import real_time_replicator
+            real_time_replicator.replicate_operation(
+                'delete', 
+                'events', 
+                {'id': event_id, 'name': event_name}, 
+                str(event_id)
+            )
+            flash(f'Event "{event_name}" and all associated data deleted successfully (fixed FK issue)!', 'success')
+        except Exception as e2:
+            db.session.rollback()
+            flash(f'Error deleting event after attempting FK cleanup: {str(e2)}', 'danger')
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting event: {str(e)}', 'danger')
