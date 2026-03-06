@@ -745,6 +745,10 @@
                     
                     <!-- Save Button -->
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        <!-- Import from my scouting team button -->
+                        <button type="button" id="importMyTeamBtn" class="btn btn-outline-secondary me-md-2">
+                            <i class="fas fa-download me-1"></i> Import from My Scouting Team {{ help.help_icon('Load your team\'s configuration into the editor. This will overwrite any unsaved changes.', 'Import from team') }}
+                        </button>
                         <button type="button" class="btn btn-outline-warning me-md-2" data-bs-toggle="modal" data-bs-target="#resetModal">
                             <i class="fas fa-undo me-1"></i> Reset to Default {{ help.help_icon('Replace this alliance configuration with a selected default template. This is destructive and will affect all members.', 'Reset to default') }}
                         </button>
@@ -1204,6 +1208,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// handle the "Import from My Scouting Team" button by redirecting with query param
+const importBtn = document.getElementById('importMyTeamBtn');
+if (importBtn) {
+    importBtn.addEventListener('click', () => {
+        if (confirm('Import configuration from your scouting team? Unsaved changes will be lost.')) {
+            const baseUrl = '{{ url_for("scouting_alliances.edit_game_config", alliance_id=alliance.id) }}';
+            window.location.href = baseUrl + '?import_team=scouting_team';
+        }
+    });
+}
+
 </script>
 
 {% endblock %}

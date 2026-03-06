@@ -211,6 +211,7 @@ def index():
     return render_template('teams/index.html', teams=teams, events=events, selected_event=selected_event_for_dropdown, force_selected_event=force_selected_event, is_alliance_mode=alliance_id is not None, **get_theme_context())
 
 @bp.route('/sync_from_config')
+@login_required
 def sync_from_config():
     """Sync teams from FIRST API using the event code from config file"""
     try:
@@ -224,9 +225,43 @@ def sync_from_config():
         
         # Find or create the event in our database (filtered by current scouting team)
         # Use year-prefixed event code so each year is treated as a different event (e.g., 2026ARLI)
-        current_year = game_config.get('season', 2026)
+        current_year = game_config.get('season') or game_config.get('year') or datetime.now().year
+        # Ensure integer
+        try:
+            current_year = int(current_year)
+        except (ValueError, TypeError):
+            current_year = datetime.now().year
+        print(f"[teams sync] Resolved season={current_year} from config (config season={game_config.get('season')!r})")
         event_code = f"{current_year}{raw_event_code}"
+
+        # Set thread-local season override so ALL API helpers use this exact
+        # season instead of re-deriving it (which can silently fall back to
+        # datetime.now().year = wrong year).
+        from app.utils.api_utils import set_season_override, clear_season_override
+        set_season_override(current_year)
+
         event = get_event_by_code(event_code)
+
+        # If a real DB event was found, correct year and wrong-year dates
+        if event and hasattr(event, 'id') and not isinstance(getattr(event, 'id', None), str):
+            try:
+                if getattr(event, 'year', None) != current_year:
+                    print(f"[teams sync] Correcting event year {getattr(event, 'year', None)} -> {current_year} for {event_code}")
+                    event.year = current_year
+                if getattr(event, 'start_date', None) and hasattr(event.start_date, 'year') and event.start_date.year != current_year:
+                    print(f"[teams sync] Removing wrong-year start_date {event.start_date} from event {event_code}")
+                    event.start_date = None
+                if getattr(event, 'end_date', None) and hasattr(event.end_date, 'year') and event.end_date.year != current_year:
+                    print(f"[teams sync] Removing wrong-year end_date {event.end_date} from event {event_code}")
+                    event.end_date = None
+                db.session.add(event)
+                db.session.commit()
+            except Exception as yr_err:
+                print(f"[teams sync] Warning: Could not correct event year/dates: {yr_err}")
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
 
         # If `get_event_by_code` returned a synthetic alliance entry or the event exists
         # but is owned by a different scouting team, ensure we have a concrete local
@@ -255,7 +290,7 @@ def sync_from_config():
                     real_event = get_or_create_event(
                         name=event_details.get('name', f"Event {raw_event_code}") if event_details else getattr(event, 'name', f"Event {raw_event_code}"),
                         code=event_code,
-                        year=event_details.get('year', current_year) if event_details else getattr(event, 'year', current_year),
+                        year=current_year,
                         location=event_details.get('location') if event_details else getattr(event, 'location', None),
                         start_date=event_details.get('start_date') if event_details else getattr(event, 'start_date', None),
                         end_date=event_details.get('end_date') if event_details else getattr(event, 'end_date', None),
@@ -300,26 +335,20 @@ def sync_from_config():
                 from app.routes.data import get_or_create_event
                 event_details = get_event_details_dual_api(raw_event_code)
                 
-                # Convert date strings to datetime.date objects
-                start_date_str = event_details.get('dateStart')
-                end_date_str = event_details.get('dateEnd')
+                # get_event_details_dual_api returns already-parsed date objects
+                # under the keys 'start_date' and 'end_date' (NOT 'dateStart'/'dateEnd').
+                start_date = event_details.get('start_date')
+                end_date = event_details.get('end_date')
                 
-                start_date = None
-                end_date = None
-                
-                # Parse start date if present
-                if start_date_str:
-                    try:
-                        start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00')).date()
-                    except ValueError:
-                        print(f"Could not parse start date: {start_date_str}")
-                
-                # Parse end date if present
-                if end_date_str:
-                    try:
-                        end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00')).date()
-                    except ValueError:
-                        print(f"Could not parse end date: {end_date_str}")
+                # Validate that API-returned dates belong to the correct season
+                # Discard dates from the wrong year to prevent cross-season contamination
+                try:
+                    if start_date and hasattr(start_date, 'year') and start_date.year != current_year:
+                        print(f"  [teams sync] Discarding API dates (year {start_date.year}) - doesn't match config season {current_year}")
+                        start_date = None
+                        end_date = None
+                except Exception:
+                    pass
                 
                 # Get current scouting team number
                 from app.utils.team_isolation import get_current_scouting_team_number
@@ -327,10 +356,11 @@ def sync_from_config():
                 
                 # Use get_or_create_event to properly handle race conditions
                 # Store with year-prefixed event_code to differentiate years
+                # Always use current_year from config, not API-returned year
                 event = get_or_create_event(
                     name=event_details.get('name', f"Event {raw_event_code}"),
                     code=event_code,
-                    year=event_details.get('year', current_year),
+                    year=current_year,
                     location=event_details.get('location', ''),
                     start_date=start_date,
                     end_date=end_date,
@@ -461,6 +491,13 @@ def sync_from_config():
     except Exception as e:
         db.session.rollback()
         flash(f"Error syncing teams: {str(e)}", 'danger')
+    finally:
+        # Always clear the season override when done
+        try:
+            from app.utils.api_utils import clear_season_override
+            clear_season_override()
+        except Exception:
+            pass
     
     return redirect(url_for('teams.index'))
 

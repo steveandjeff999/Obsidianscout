@@ -123,7 +123,7 @@ class ScheduleOffsetScheduler:
             try:
                 game_config = load_game_config(team_number=team_number)
                 event_code = game_config.get('current_event_code')
-                season = game_config.get('season', 2026)
+                season = game_config.get('season') or game_config.get('year') or datetime.now(timezone.utc).year
                 if not event_code:
                     continue
 

@@ -19,7 +19,8 @@ def fetch_actual_times_from_first(event_code, event_timezone=None):
     Returns dict mapping (match_type, match_number) -> (scheduled_time, actual_time)
     """
     base_url = current_app.config.get('API_BASE_URL', 'https://frc-api.firstinspires.org')
-    season = get_current_game_config().get('season', 2026)
+    from app.utils.api_utils import _get_effective_season
+    season = _get_effective_season()
     headers = get_api_headers()
     
     if not headers:
@@ -88,7 +89,8 @@ def fetch_actual_times_from_tba(event_code, event_timezone=None):
     from app.utils.tba_api_utils import get_tba_api_headers, construct_tba_event_key
     
     base_url = 'https://www.thebluealliance.com/api/v3'
-    year = get_current_game_config().get('season', 2026)
+    from app.utils.api_utils import _get_effective_season
+    year = _get_effective_season()
     event_key = construct_tba_event_key(event_code, year)
     
     print(f" Fetching from TBA: event_key={event_key} (year={year}, code={event_code})")
@@ -623,11 +625,16 @@ def update_all_active_events_schedule():
     
     # For each scouting team, check their configured event
     from app.utils.team_utils import team_sort_key
+    from app.utils.api_utils import set_season_override, clear_season_override
     for team_number in sorted(team_numbers, key=team_sort_key):
         try:
             game_config = load_game_config(team_number=team_number)
             event_code = game_config.get('current_event_code')
-            season = game_config.get('season', 2026)
+            season = game_config.get('season') or game_config.get('year') or datetime.now(timezone.utc).year
+            try:
+                season = int(season)
+            except (ValueError, TypeError):
+                season = datetime.now(timezone.utc).year
             
             if event_code:
                 # Construct year-prefixed code for database lookup
@@ -637,12 +644,18 @@ def update_all_active_events_schedule():
                 else:
                     event_code_db = event_code
                 
-                print(f"\n{'='*60}")
-                print(f" Processing team {team_number}, event {event_code_db}")
-                print(f"{'='*60}")
-                
-                result = update_event_schedule(event_code_db, team_number)
-                results.append(result)
+                # Set thread-local season override so fetch_actual_times_from_first
+                # and TBA helpers use the correct season for API calls
+                set_season_override(season)
+                try:
+                    print(f"\n{'='*60}")
+                    print(f" Processing team {team_number}, event {event_code_db}")
+                    print(f"{'='*60}")
+                    
+                    result = update_event_schedule(event_code_db, team_number)
+                    results.append(result)
+                finally:
+                    clear_season_override()
         except Exception as e:
             print(f" Error updating schedule for team {team_number}: {e}")
             import traceback

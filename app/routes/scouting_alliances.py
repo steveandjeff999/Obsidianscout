@@ -1888,7 +1888,14 @@ def api_leave_alliance():
 @login_required
 @admin_required
 def edit_game_config(alliance_id):
-    """Edit alliance shared game configuration"""
+    """Edit alliance shared game configuration
+
+    An optional ``import_team`` query parameter may be supplied.  When set it
+    will be treated as the team number whose configuration should be loaded as
+    the starting point for the form instead of the existing alliance shared
+    configuration.  The special value ``"scouting_team"`` is supported and will
+    be replaced with the current user's scouting team number.
+    """
     current_team = get_current_scouting_team_number()
     
     # Check if user is admin of this alliance
@@ -1904,20 +1911,38 @@ def edit_game_config(alliance_id):
     
     alliance = ScoutingAlliance.query.get_or_404(alliance_id)
     
-    # Load current shared config or default to scouting team's config
-    if alliance.shared_game_config:
+    # Determine which configuration to show.  By default we use the shared
+    # alliance configuration (or fall back to the current team's file).  The
+    # ``import_team`` query param allows an admin to pre-populate the editor
+    # with a specific team's config (including their own scouting_team).
+    import_team = request.args.get('import_team')
+    if import_team:
+        if import_team == 'scouting_team':
+            import_team = current_team
         try:
-            config_data = json.loads(alliance.shared_game_config)
-        except json.JSONDecodeError:
-            # If JSON is invalid, fall back to scouting team's config
-            config_data = load_game_config(team_number=current_team)
+            config_data = load_game_config(team_number=int(import_team))
+        except Exception:
+            # any conversion failure just falls back to default behaviour below
+            config_data = None
+        flash(f'Imported configuration from team {import_team}.', 'info')
     else:
-        # No alliance config exists, use scouting team's config as template
-        config_data = load_game_config(team_number=current_team)
-    
-    # If still no config found, use the default
-    if not config_data:
-        config_data = load_game_config()
+        config_data = None
+
+    if config_data is None:
+        # no explicit import request or failed lookup, continue with normal flow
+        if alliance.shared_game_config:
+            try:
+                config_data = json.loads(alliance.shared_game_config)
+            except json.JSONDecodeError:
+                # If JSON is invalid, fall back to scouting team's config
+                config_data = load_game_config(team_number=current_team)
+        else:
+            # No alliance config exists, use scouting team's config as template
+            config_data = load_game_config(team_number=current_team)
+        
+        # If still no config found, use the default
+        if not config_data:
+            config_data = load_game_config()
 
     # Keep a copy of the original config before edits for potential migration comparisons
     try:
@@ -2964,133 +2989,171 @@ def perform_alliance_api_sync_for_alliance(alliance_id):
             result['message'] = 'No game config available for alliance'
             return result
         
-        # Get event code
-        event_code = (game_config.get('current_event_code') or '').strip()
-        if not event_code:
+        # Get event code and resolve season
+        raw_event_code = (game_config.get('current_event_code') or '').strip()
+        if not raw_event_code:
             result['message'] = 'No event code configured for alliance'
             return result
         
-        # Determine storage team
-        storage_team = alliance.game_config_team or (alliance.get_active_members()[0].team_number if alliance.get_active_members() else None)
-        if storage_team is None:
-            result['message'] = 'No storage team determined for alliance'
-            return result
-        
-        # Ensure event exists
-        event = Event.query.filter(
-            func.upper(Event.code) == event_code.upper(),
-            Event.scouting_team_number == storage_team
-        ).first()
-        
-        if not event:
+        # Resolve season from alliance config
+        alliance_season = game_config.get('season') or game_config.get('year') or datetime.now().year
+        try:
+            alliance_season = int(alliance_season)
+        except (ValueError, TypeError):
+            alliance_season = datetime.now().year
+
+        # Year-prefix the event code so each season is a distinct event
+        event_code = f"{alliance_season}{raw_event_code}"
+
+        # Set thread-local season override so ALL API helpers use the correct season
+        from app.utils.api_utils import set_season_override, clear_season_override
+        set_season_override(alliance_season)
+        try:
+            # Determine storage team
+            storage_team = alliance.game_config_team or (alliance.get_active_members()[0].team_number if alliance.get_active_members() else None)
+            if storage_team is None:
+                result['message'] = 'No storage team determined for alliance'
+                return result
+            
+            # Ensure event exists
+            event = Event.query.filter(
+                func.upper(Event.code) == event_code.upper(),
+                Event.scouting_team_number == storage_team
+            ).first()
+            
+            if not event:
+                try:
+                    # Use raw_event_code for API calls (external APIs don't use year-prefixed codes)
+                    event_details = get_event_details_with_alliance_fallback(raw_event_code, alliance_id)
+                    if event_details:
+                        # Validate API-returned dates match alliance season
+                        api_start = event_details.get('start_date')
+                        api_end = event_details.get('end_date')
+                        try:
+                            if api_start and hasattr(api_start, 'year') and api_start.year != alliance_season:
+                                print(f"  [alliance sync] Discarding API dates (year {api_start.year}) - doesn't match alliance season {alliance_season}")
+                                api_start = None
+                                api_end = None
+                        except Exception:
+                            pass
+                        from app.routes.data import get_or_create_event
+                        event = get_or_create_event(
+                            name=event_details.get('name', raw_event_code),
+                            code=event_code,
+                            year=alliance_season,
+                            location=event_details.get('location'),
+                            start_date=api_start,
+                            end_date=api_end,
+                            scouting_team_number=storage_team
+                        )
+                        if event_details.get('timezone') and not getattr(event, 'timezone', None):
+                            event.timezone = event_details.get('timezone')
+                            db.session.add(event)
+                        db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    result['message'] = f'Failed to create event: {str(e)}'
+                    return result
+            
+            if not event:
+                result['message'] = f'Could not find or create event {event_code}'
+                return result
+            
+            # Sync teams
             try:
-                event_details = get_event_details_with_alliance_fallback(event_code, alliance_id)
-                if event_details:
-                    from app.routes.data import get_or_create_event
-                    event = get_or_create_event(
-                        name=event_details.get('name', event_code),
-                        code=event_code,
-                        year=event_details.get('year', game_config.get('season', None) or game_config.get('year', 0)),
-                        location=event_details.get('location'),
-                        start_date=event_details.get('start_date'),
-                        end_date=event_details.get('end_date'),
-                        scouting_team_number=storage_team
-                    )
-                    if event_details.get('timezone') and not getattr(event, 'timezone', None):
-                        event.timezone = event_details.get('timezone')
-                        db.session.add(event)
-                    db.session.commit()
+                # Use raw_event_code for API calls (external APIs don't use year-prefixed codes)
+                team_data_list = get_teams_with_alliance_fallback(raw_event_code, alliance_id)
+                
+                for team_data in team_data_list:
+                    if not team_data or not team_data.get('team_number'):
+                        continue
+                    team_number = team_data.get('team_number')
+                    team = Team.query.filter_by(team_number=team_number, scouting_team_number=storage_team).first()
+                    if team:
+                        team.team_name = team_data.get('team_name', team.team_name)
+                        team.location = team_data.get('location', team.location)
+                        result['teams_updated'] += 1
+                    else:
+                        team = Team(team_number=team_number,
+                                    team_name=team_data.get('team_name'),
+                                    location=team_data.get('location'),
+                                    scouting_team_number=storage_team)
+                        db.session.add(team)
+                        result['teams_added'] += 1
+                    if event not in team.events:
+                        try:
+                            team.events.append(event)
+                        except Exception:
+                            pass
+                print(f"  Manual alliance sync (alliance {alliance_id}): {result['teams_added']} teams added, {result['teams_updated']} updated")
+            except Exception as e:
+                print(f"  Error syncing teams for alliance {alliance_id}: {str(e)}")
+            
+            # Sync matches
+            try:
+                # Use raw_event_code for API calls (external APIs don't use year-prefixed codes)
+                match_data_list = get_matches_with_alliance_fallback(raw_event_code, alliance_id)
+                
+                for match_data in match_data_list:
+                    if not match_data:
+                        continue
+                    match_number = match_data.get('match_number')
+                    match_type = match_data.get('match_type')
+                    if not match_number or not match_type:
+                        continue
+                    match = Match.query.filter_by(event_id=event.id, match_number=match_number, match_type=match_type, scouting_team_number=storage_team).first()
+                    if match:
+                        match.red_alliance = match_data.get('red_alliance', match.red_alliance)
+                        match.blue_alliance = match_data.get('blue_alliance', match.blue_alliance)
+                        match.winner = match_data.get('winner', match.winner)
+                        match.red_score = match_data.get('red_score', match.red_score)
+                        match.blue_score = match_data.get('blue_score', match.blue_score)
+                        result['matches_updated'] += 1
+                    else:
+                        match = Match(match_number=match_number,
+                                      match_type=match_type,
+                                      event_id=event.id,
+                                      red_alliance=match_data.get('red_alliance'),
+                                      blue_alliance=match_data.get('blue_alliance'),
+                                      red_score=match_data.get('red_score'),
+                                      blue_score=match_data.get('blue_score'),
+                                      winner=match_data.get('winner'),
+                                      scouting_team_number=storage_team)
+                        db.session.add(match)
+                        result['matches_added'] += 1
+                print(f"  Manual alliance sync (alliance {alliance_id}): {result['matches_added']} matches added, {result['matches_updated']} updated")
+            except Exception as e:
+                print(f"  Error syncing matches for alliance {alliance_id}: {str(e)}")
+            
+            # Commit changes
+            try:
+                db.session.commit()
+                try:
+                    from app.routes.data import merge_duplicate_events
+                    merge_duplicate_events(storage_team)
+                except Exception:
+                    pass
+                result['success'] = True
+                result['message'] = f'Alliance sync complete: {result["teams_added"]} teams added, {result["teams_updated"]} updated, {result["matches_added"]} matches added, {result["matches_updated"]} updated'
             except Exception as e:
                 db.session.rollback()
-                result['message'] = f'Failed to create event: {str(e)}'
-                return result
-        
-        if not event:
-            result['message'] = f'Could not find or create event {event_code}'
-            return result
-        
-        # Sync teams
-        try:
-            team_data_list = get_teams_with_alliance_fallback(event_code, alliance_id)
-            
-            for team_data in team_data_list:
-                if not team_data or not team_data.get('team_number'):
-                    continue
-                team_number = team_data.get('team_number')
-                team = Team.query.filter_by(team_number=team_number, scouting_team_number=storage_team).first()
-                if team:
-                    team.team_name = team_data.get('team_name', team.team_name)
-                    team.location = team_data.get('location', team.location)
-                    result['teams_updated'] += 1
-                else:
-                    team = Team(team_number=team_number,
-                                team_name=team_data.get('team_name'),
-                                location=team_data.get('location'),
-                                scouting_team_number=storage_team)
-                    db.session.add(team)
-                    result['teams_added'] += 1
-                if event not in team.events:
-                    try:
-                        team.events.append(event)
-                    except Exception:
-                        pass
-            print(f"  Manual alliance sync (alliance {alliance_id}): {result['teams_added']} teams added, {result['teams_updated']} updated")
+                result['message'] = f'Failed to commit changes: {str(e)}'
         except Exception as e:
-            print(f"  Error syncing teams for alliance {alliance_id}: {str(e)}")
-        
-        # Sync matches
-        try:
-            match_data_list = get_matches_with_alliance_fallback(event_code, alliance_id)
-            
-            for match_data in match_data_list:
-                if not match_data:
-                    continue
-                match_number = match_data.get('match_number')
-                match_type = match_data.get('match_type')
-                if not match_number or not match_type:
-                    continue
-                match = Match.query.filter_by(event_id=event.id, match_number=match_number, match_type=match_type, scouting_team_number=storage_team).first()
-                if match:
-                    match.red_alliance = match_data.get('red_alliance', match.red_alliance)
-                    match.blue_alliance = match_data.get('blue_alliance', match.blue_alliance)
-                    match.winner = match_data.get('winner', match.winner)
-                    match.red_score = match_data.get('red_score', match.red_score)
-                    match.blue_score = match_data.get('blue_score', match.blue_score)
-                    result['matches_updated'] += 1
-                else:
-                    match = Match(match_number=match_number,
-                                  match_type=match_type,
-                                  event_id=event.id,
-                                  red_alliance=match_data.get('red_alliance'),
-                                  blue_alliance=match_data.get('blue_alliance'),
-                                  red_score=match_data.get('red_score'),
-                                  blue_score=match_data.get('blue_score'),
-                                  winner=match_data.get('winner'),
-                                  scouting_team_number=storage_team)
-                    db.session.add(match)
-                    result['matches_added'] += 1
-            print(f"  Manual alliance sync (alliance {alliance_id}): {result['matches_added']} matches added, {result['matches_updated']} updated")
-        except Exception as e:
-            print(f"  Error syncing matches for alliance {alliance_id}: {str(e)}")
-        
-        # Commit changes
-        try:
-            db.session.commit()
+            result['message'] = f'Error during alliance sync: {str(e)}'
+            print(f"Error in perform_alliance_api_sync_for_alliance: {str(e)}")
+        finally:
+            # Always clear thread-local season override
             try:
-                from app.routes.data import merge_duplicate_events
-                merge_duplicate_events(storage_team)
+                from app.utils.api_utils import clear_season_override
+                clear_season_override()
             except Exception:
                 pass
-            result['success'] = True
-            result['message'] = f'Alliance sync complete: {result["teams_added"]} teams added, {result["teams_updated"]} updated, {result["matches_added"]} matches added, {result["matches_updated"]} updated'
-        except Exception as e:
-            db.session.rollback()
-            result['message'] = f'Failed to commit changes: {str(e)}'
-        
+
+        return result
     except Exception as e:
-        result['message'] = f'Error during alliance sync: {str(e)}'
-        print(f"Error in perform_alliance_api_sync_for_alliance: {str(e)}")
-    
+        result['message'] = f'Error during alliance sync setup: {str(e)}'
+        print(f"Error in perform_alliance_api_sync_for_alliance setup: {str(e)}")
+
     return result
 
 
@@ -3148,11 +3211,30 @@ def perform_periodic_alliance_api_sync():
                     if not auto_sync_enabled:
                         continue
 
-                    # Determine event_code
-                    event_code = (game_config.get('current_event_code') or '').strip()
-                    if not event_code:
+                    # Determine event_code and season from alliance game config
+                    raw_event_code = (game_config.get('current_event_code') or '').strip()
+                    if not raw_event_code:
                         # Nothing to sync
                         continue
+
+                    # Resolve season from alliance config (same logic as per-team sync)
+                    alliance_season = game_config.get('season') or game_config.get('year') or datetime.now(timezone.utc).year
+                    try:
+                        alliance_season = int(alliance_season)
+                    except (ValueError, TypeError):
+                        alliance_season = datetime.now(timezone.utc).year
+
+                    # Year-prefix the event code so each season is a distinct event
+                    event_code = f"{alliance_season}{raw_event_code}"
+
+                    # Set thread-local season override so ALL API helpers use the
+                    # alliance's configured season instead of falling through to
+                    # datetime.now().year (which could be a different year).
+                    try:
+                        from app.utils.api_utils import set_season_override, clear_season_override
+                        set_season_override(alliance_season)
+                    except Exception:
+                        pass
 
                     # Use per-alliance cache key to avoid colliding with team caches
                     cache_key = f"alliance_{alliance.id}"
@@ -3194,17 +3276,27 @@ def perform_periodic_alliance_api_sync():
                     ).first()
                     if not event:
                         try:
-                            # Use alliance fallback to get event details using any member's API if needed
-                            event_details = get_event_details_with_alliance_fallback(event_code, alliance.id)
+                            # Use raw_event_code for API calls (external APIs don't use year-prefixed codes)
+                            event_details = get_event_details_with_alliance_fallback(raw_event_code, alliance.id)
                             if event_details:
+                                # Validate API-returned dates match alliance season
+                                api_start = event_details.get('start_date')
+                                api_end = event_details.get('end_date')
+                                try:
+                                    if api_start and hasattr(api_start, 'year') and api_start.year != alliance_season:
+                                        print(f"  [alliance periodic sync] Discarding API dates (year {api_start.year}) - doesn't match alliance season {alliance_season}")
+                                        api_start = None
+                                        api_end = None
+                                except Exception:
+                                    pass
                                 from app.routes.data import get_or_create_event
                                 event = get_or_create_event(
-                                    name=event_details.get('name', event_code),
+                                    name=event_details.get('name', raw_event_code),
                                     code=event_code,
-                                    year=event_details.get('year', game_config.get('season', None) or game_config.get('year', 0)),
+                                    year=alliance_season,
                                     location=event_details.get('location'),
-                                    start_date=event_details.get('start_date'),
-                                    end_date=event_details.get('end_date'),
+                                    start_date=api_start,
+                                    end_date=api_end,
                                     scouting_team_number=storage_team
                                 )
                                 if event_details.get('timezone') and not getattr(event, 'timezone', None):
@@ -3245,8 +3337,9 @@ def perform_periodic_alliance_api_sync():
 
                     # --- Perform the actual sync for this alliance ---
                     # Use alliance fallback API functions that try member APIs if primary fails
+                    # Use raw_event_code for API calls (external APIs don't use year-prefixed codes)
                     try:
-                        team_data_list = get_teams_with_alliance_fallback(event_code, alliance.id)
+                        team_data_list = get_teams_with_alliance_fallback(raw_event_code, alliance.id)
                         teams_added = 0
                         teams_updated = 0
 
@@ -3276,7 +3369,7 @@ def perform_periodic_alliance_api_sync():
                         print(f"  Error syncing alliance teams for {alliance.id}: {str(e)}")
 
                     try:
-                        match_data_list = get_matches_with_alliance_fallback(event_code, alliance.id)
+                        match_data_list = get_matches_with_alliance_fallback(raw_event_code, alliance.id)
                         matches_added = 0
                         matches_updated = 0
                         for match_data in match_data_list:
@@ -3325,6 +3418,13 @@ def perform_periodic_alliance_api_sync():
 
                 except Exception as e:
                     print(f"  Error processing alliance {alliance.id}: {e}")
+                finally:
+                    # Always clear thread-local season override after each alliance
+                    try:
+                        from app.utils.api_utils import clear_season_override
+                        clear_season_override()
+                    except Exception:
+                        pass
 
     except Exception as e:
         print(f"Error in perform_periodic_alliance_api_sync: {str(e)}")
@@ -4642,7 +4742,7 @@ def sync_alliance_teams(alliance_id):
                 event = Event(
                     name=event_details.get('name', f'Event {event_code}'),
                     code=event_code.upper(),
-                    year=event_details.get('year', datetime.now().year),
+                    year=game_config.get('season', None) or game_config.get('year', None) or datetime.now().year,
                     location=event_details.get('venue', ''),
                     start_date=start_date,
                     end_date=end_date,
@@ -4949,7 +5049,7 @@ def add_alliance_event(alliance_id):
                 event = Event(
                     name=event_name,
                     code=event_code,
-                    year=event_details.get('year', datetime.now().year),
+                    year=datetime.now().year,
                     location=event_details.get('venue', ''),
                     start_date=start_date,
                     end_date=end_date,

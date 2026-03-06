@@ -115,9 +115,9 @@ def resolve_event_code_to_id(event_code_param, team_number):
     try:
         from app.utils.config_manager import load_game_config
         game_config = load_game_config(team_number=team_number)
-        season = game_config.get('season', 2026) if isinstance(game_config, dict) else 2026
+        season = (game_config.get('season') or game_config.get('year') or datetime.now().year) if isinstance(game_config, dict) else datetime.now().year
     except Exception:
-        season = 2026
+        season = datetime.now().year
     
     year_prefixed_code = f"{season}{event_code}"
     
@@ -2022,7 +2022,7 @@ def get_teams():
                 # Try year-prefixed code first
                 year_prefixed_code = event_code
                 if not (len(str(event_code)) >= 4 and str(event_code)[:4].isdigit()):
-                    season = game_config.get('season', 2026) if isinstance(game_config, dict) else 2026
+                    season = (game_config.get('season') or game_config.get('year') or datetime.now().year) if isinstance(game_config, dict) else datetime.now().year
                     year_prefixed_code = f"{season}{event_code}"
                 event = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=team_number).first()
                 # Fall back to raw code if year-prefixed not found
@@ -2196,7 +2196,7 @@ def get_teams_current():
             # Try year-prefixed code first
             year_prefixed_code = event_code
             if not (len(str(event_code)) >= 4 and str(event_code)[:4].isdigit()):
-                season = game_config.get('season', 2026) if isinstance(game_config, dict) else 2026
+                season = (game_config.get('season') or game_config.get('year') or datetime.now().year) if isinstance(game_config, dict) else datetime.now().year
                 year_prefixed_code = f"{season}{event_code}"
             event = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=team_number).first()
             # Fall back to raw code if year-prefixed not found
@@ -2703,7 +2703,7 @@ def get_matches():
                 # Try year-prefixed code first
                 year_prefixed_code = event_code
                 if not (len(str(event_code)) >= 4 and str(event_code)[:4].isdigit()):
-                    season = game_config.get('season', 2026) if isinstance(game_config, dict) else 2026
+                    season = (game_config.get('season') or game_config.get('year') or datetime.now().year) if isinstance(game_config, dict) else datetime.now().year
                     year_prefixed_code = f"{season}{event_code}"
                 event = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=team_number).first()
                 # Fall back to raw code if year-prefixed not found
@@ -2847,7 +2847,7 @@ def get_matches_current():
             # Try year-prefixed code first
             year_prefixed_code = event_code
             if not (len(str(event_code)) >= 4 and str(event_code)[:4].isdigit()):
-                season = game_config.get('season', 2026) if isinstance(game_config, dict) else 2026
+                season = (game_config.get('season') or game_config.get('year') or datetime.now().year) if isinstance(game_config, dict) else datetime.now().year
                 year_prefixed_code = f"{season}{event_code}"
             event = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=team_number).first()
             # Fall back to raw code if year-prefixed not found
@@ -4532,7 +4532,7 @@ def mobile_graphs_compare():
                 # Try year-prefixed code first (database stores codes like '2026OKTU')
                 from app.utils.config_manager import load_game_config
                 _cfg = load_game_config(team_number=token_team_number)
-                _season = _cfg.get('season', 2026) if isinstance(_cfg, dict) else 2026
+                _season = (_cfg.get('season') or _cfg.get('year') or datetime.now().year) if isinstance(_cfg, dict) else datetime.now().year
                 year_prefixed_code = event_identifier
                 if not (len(event_identifier) >= 4 and event_identifier[:4].isdigit()):
                     year_prefixed_code = f"{_season}{event_identifier.upper()}"
@@ -4963,7 +4963,7 @@ def mobile_graphs_image():
                 # Try year-prefixed code first (database stores codes like '2026OKTU')
                 from app.utils.config_manager import load_game_config
                 _cfg = load_game_config(team_number=token_team_number)
-                _season = _cfg.get('season', 2026) if isinstance(_cfg, dict) else 2026
+                _season = (_cfg.get('season') or _cfg.get('year') or datetime.now().year) if isinstance(_cfg, dict) else datetime.now().year
                 year_prefixed_code = event_identifier
                 if not (len(event_identifier) >= 4 and event_identifier[:4].isdigit()):
                     year_prefixed_code = f"{_season}{event_identifier.upper()}"
@@ -5317,7 +5317,7 @@ def mobile_graphs_visualize():
             # Try year-prefixed code first (database stores codes like '2026OKTU')
             year_prefixed_code = event_code
             if not (len(str(event_code)) >= 4 and str(event_code)[:4].isdigit()):
-                season = game_config.get('season', 2026) if isinstance(game_config, dict) else 2026
+                season = (game_config.get('season') or game_config.get('year') or datetime.now().year) if isinstance(game_config, dict) else datetime.now().year
                 year_prefixed_code = f"{season}{event_code}"
             event = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=token_team_number).first()
             # Fall back to raw code if year-prefixed not found

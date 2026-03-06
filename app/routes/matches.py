@@ -476,6 +476,7 @@ def index():
     return render_template('matches/index.html', matches=matches, events=events, selected_event=selected_event_for_dropdown, force_selected_event=force_selected_event, display_scores=display_scores, next_unplayed_match_id=next_unplayed_match_id, adjusted_predictions=adjusted_predictions, **get_theme_context())
 
 @bp.route('/sync_from_config')
+@login_required
 def sync_from_config():
     """Sync matches from FIRST API using the event code from config file"""
     try:
@@ -489,9 +490,44 @@ def sync_from_config():
         
         # Find or create the event in our database (filtered by scouting team)
         # Use year-prefixed event code so each year is treated as a different event (e.g., 2026ARLI)
-        current_year = game_config.get('season', 2026)
+        current_year = game_config.get('season') or game_config.get('year') or datetime.now().year
+        # Ensure integer
+        try:
+            current_year = int(current_year)
+        except (ValueError, TypeError):
+            current_year = datetime.now().year
+        print(f"[sync_from_config] Resolved season={current_year} from config (config season={game_config.get('season')!r}, year={game_config.get('year')!r})")
         event_code = f"{current_year}{raw_event_code}"
+
+        # Set thread-local season override so ALL API helpers (get_event_details,
+        # get_matches, construct_tba_event_key, etc.) use this exact season
+        # instead of re-deriving it from get_current_game_config() which can
+        # silently fall back to datetime.now().year (wrong year).
+        from app.utils.api_utils import set_season_override, clear_season_override
+        set_season_override(current_year)
+
         event = get_event_by_code(event_code)
+
+        # If a real DB event was found, correct year and wrong-year dates
+        if event and hasattr(event, 'id') and not isinstance(getattr(event, 'id', None), str):
+            try:
+                if getattr(event, 'year', None) != current_year:
+                    print(f"[matches sync] Correcting event year {getattr(event, 'year', None)} -> {current_year} for {event_code}")
+                    event.year = current_year
+                if getattr(event, 'start_date', None) and hasattr(event.start_date, 'year') and event.start_date.year != current_year:
+                    print(f"[matches sync] Removing wrong-year start_date {event.start_date} from event {event_code}")
+                    event.start_date = None
+                if getattr(event, 'end_date', None) and hasattr(event.end_date, 'year') and event.end_date.year != current_year:
+                    print(f"[matches sync] Removing wrong-year end_date {event.end_date} from event {event_code}")
+                    event.end_date = None
+                db.session.add(event)
+                db.session.commit()
+            except Exception as yr_err:
+                print(f"[matches sync] Warning: Could not correct event year/dates: {yr_err}")
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
 
         # If `get_event_by_code` returned a synthetic alliance entry (id like 'alliance_<CODE>'),
         # convert it to a real DB Event record under the current scouting team so
@@ -519,10 +555,11 @@ def sync_from_config():
                         event_details = None
 
                     # Store with year-prefixed event_code to differentiate years
+                    # Always use current_year from config, not API-returned year
                     real_event = get_or_create_event(
                         name=event_details.get('name', f"Event {raw_event_code}") if event_details else f"Event {raw_event_code}",
                         code=event_code,
-                        year=event_details.get('year', current_year) if event_details else current_year,
+                        year=current_year,
                         location=event_details.get('location') if event_details else None,
                         start_date=event_details.get('start_date') if event_details else None,
                         end_date=event_details.get('end_date') if event_details else None,
@@ -552,10 +589,11 @@ def sync_from_config():
             if event_details:
                 # Use get_or_create_event to properly handle race conditions
                 # Store with year-prefixed event_code to differentiate years
+                # Always use current_year from config, not API-returned year
                 event = get_or_create_event(
                     name=event_details.get('name', f"Event {raw_event_code}"),
                     code=event_code,
-                    year=event_details.get('year', current_year),
+                    year=current_year,
                     location=event_details.get('location'),
                     start_date=event_details.get('start_date'),
                     end_date=event_details.get('end_date'),
@@ -747,11 +785,19 @@ def sync_from_config():
     except Exception as e:
         db.session.rollback()
         flash(f"Error syncing matches: {str(e)}", 'danger')
+    finally:
+        # Always clear the season override when done
+        try:
+            from app.utils.api_utils import clear_season_override
+            clear_season_override()
+        except Exception:
+            pass
     
     return redirect(url_for('matches.index'))
 
 
 @bp.route('/update_times')
+@login_required
 def update_times():
     """Update match scheduled times from API for the current event"""
     try:
@@ -764,8 +810,16 @@ def update_times():
             return redirect(url_for('matches.index'))
         
         # Construct year-prefixed code for database lookup
-        current_year = game_config.get('season', 2026)
+        current_year = game_config.get('season') or game_config.get('year') or datetime.now().year
+        try:
+            current_year = int(current_year)
+        except (ValueError, TypeError):
+            current_year = datetime.now().year
         event_code = f"{current_year}{raw_event_code}"
+
+        # Set thread-local season override for API calls
+        from app.utils.api_utils import set_season_override, clear_season_override
+        set_season_override(current_year)
         
         # Update match times
         from app.utils.match_time_fetcher import update_match_times
@@ -778,6 +832,12 @@ def update_times():
         
     except Exception as e:
         flash(f"Error updating match times: {str(e)}", 'danger')
+    finally:
+        try:
+            from app.utils.api_utils import clear_season_override
+            clear_season_override()
+        except Exception:
+            pass
     
     return redirect(url_for('matches.index'))
 

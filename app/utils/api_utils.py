@@ -2,6 +2,7 @@ import requests
 import json
 import os
 import base64
+import threading
 from flask import current_app
 from .tba_api_utils import (
     TBAApiError, get_tba_teams_at_event, get_tba_event_matches, 
@@ -14,6 +15,54 @@ from app.utils.config_manager import get_current_game_config
 class ApiError(Exception):
     """Exception for API errors"""
     pass
+
+
+# ── Thread-local season override ──────────────────────────────────────────────
+# The background sync worker knows the correct season from each team's own
+# game_config, but many API helper functions (get_teams, get_matches,
+# get_event_details, etc.) call get_current_game_config() which falls back to
+# the *global* config when there is no logged-in user.  That global config may
+# not have a 'season' key at all, or may have a stale value, causing the FIRST/
+# TBA API calls to query the wrong season (e.g. 2025 instead of 2026).  
+#
+# Rather than changing every function signature, we use a thread-local so the
+# sync worker can set the season once and all helpers pick it up automatically.
+_api_thread_local = threading.local()
+
+def set_season_override(season):
+    """Set a thread-local season override used by all API helpers.
+    
+    Call this from the sync worker (or any background thread) before making
+    API calls so that the correct season is used even when there is no
+    logged-in user.
+    """
+    _api_thread_local.season_override = int(season) if season else None
+
+def clear_season_override():
+    """Clear the thread-local season override."""
+    _api_thread_local.season_override = None
+
+def _get_effective_season(fallback=None):
+    """Return the season that API calls should use.
+    
+    Priority:
+      1. Thread-local override (set by sync worker)
+      2. get_current_game_config()['season']
+      3. The provided fallback, or current UTC year if None
+    """
+    override = getattr(_api_thread_local, 'season_override', None)
+    if override is not None:
+        return int(override)
+    try:
+        season = get_current_game_config().get('season')
+        if season is not None:
+            return int(season)
+    except Exception:
+        pass
+    if fallback is not None:
+        return fallback
+    from datetime import datetime as _dt, timezone as _tz
+    return _dt.now(_tz.utc).year
 
 
 def safe_int_team_number(team_value):
@@ -277,7 +326,7 @@ def get_api_headers():
 def get_teams(event_code):
     """Get teams from FIRST API for a specific event"""
     base_url = current_app.config.get('API_BASE_URL', 'https://frc-api.firstinspires.org')
-    season = get_current_game_config().get('season', 2026)
+    season = _get_effective_season()
     
     # FIRST API has multiple endpoint formats for teams at an event
     # Try them in sequence until one works
@@ -483,7 +532,7 @@ def get_matches(event_code):
     This ensures we get both scheduled (upcoming) and completed matches.
     """
     base_url = current_app.config.get('API_BASE_URL', 'https://frc-api.firstinspires.org')
-    season = get_current_game_config().get('season', 2026)
+    season = _get_effective_season()
     headers = get_api_headers()
     
     print(f"Fetching matches with redundancy for event {event_code}")
@@ -765,7 +814,7 @@ def get_event_details(event_code):
     Note: FIRST API does not provide timezone directly, so we'll need to infer or get from TBA
     """
     base_url = current_app.config.get('API_BASE_URL', 'https://frc-api.firstinspires.org')
-    season = get_current_game_config().get('season', 2026)
+    season = _get_effective_season()
     
     api_url = f"{base_url}/v2.0/{season}/events?eventCode={event_code}"
     
@@ -877,8 +926,7 @@ def get_teams_dual_api(event_code):
         if preferred_source == 'tba':
             # print(f"Using TBA API for teams at event {raw_event_code}")
             # Convert event code to TBA format
-            game_config = get_current_game_config()
-            season = game_config.get('season', 2026)
+            season = _get_effective_season()
             tba_event_key = construct_tba_event_key(raw_event_code, season)
             
             # Get teams from TBA
@@ -915,8 +963,7 @@ def get_teams_dual_api(event_code):
 
         try:
             if fallback_source == 'tba':
-                game_config = get_current_game_config()
-                season = game_config.get('season', 2026)
+                season = _get_effective_season()
                 tba_event_key = construct_tba_event_key(raw_event_code, season)
 
                 tba_teams = get_tba_teams_at_event(tba_event_key)
@@ -1168,8 +1215,7 @@ def get_matches_dual_api(event_code):
         if preferred_source == 'tba':
             # print(f"Using TBA API for matches at event {raw_event_code}")
             # Convert event code to TBA format
-            game_config = get_current_game_config()
-            season = game_config.get('season', 2026)
+            season = _get_effective_season()
             tba_event_key = construct_tba_event_key(raw_event_code, season)
             
             # Get matches from TBA
@@ -1206,8 +1252,7 @@ def get_matches_dual_api(event_code):
             if not api_matches:
                 try:
                     # print("FIRST API returned no matches; attempting TBA fallback")
-                    game_config = get_current_game_config()
-                    season = game_config.get('season', 2026)
+                    season = _get_effective_season()
                     tba_event_key = construct_tba_event_key(raw_event_code, season)
 
                     tba_matches = get_tba_event_matches(tba_event_key)
@@ -1243,8 +1288,7 @@ def get_matches_dual_api(event_code):
             # Try to also fetch TBA matches to merge playoff data and avoid duplicates
             fallback_matches = []
             try:
-                game_config = get_current_game_config()
-                season = game_config.get('season', 2026)
+                season = _get_effective_season()
                 tba_event_key = construct_tba_event_key(raw_event_code, season)
                 tba_matches = get_tba_event_matches(tba_event_key)
                 for tba_match in tba_matches:
@@ -1268,8 +1312,7 @@ def get_matches_dual_api(event_code):
 
         try:
             if fallback_source == 'tba':
-                game_config = get_current_game_config()
-                season = game_config.get('season', 2026)
+                season = _get_effective_season()
                 tba_event_key = construct_tba_event_key(raw_event_code, season)
 
                 tba_matches = get_tba_event_matches(tba_event_key)
@@ -1304,8 +1347,7 @@ def get_matches_dual_api(event_code):
                 # Try TBA as secondary source to enrich playoff bracket data
                 fallback_secondary = []
                 try:
-                    game_config = get_current_game_config()
-                    season = game_config.get('season', 2026)
+                    season = _get_effective_season()
                     tba_event_key = construct_tba_event_key(raw_event_code, season)
                     for tba_match in get_tba_event_matches(tba_event_key):
                         md = tba_match_to_db_format(tba_match, None, event_key=tba_event_key)
@@ -1331,8 +1373,7 @@ def get_event_details_dual_api(event_code):
         if preferred_source == 'tba':
             # print(f"Using TBA API for event details: {raw_event_code}")
             # Convert event code to TBA format
-            game_config = get_current_game_config()
-            season = game_config.get('season', 2026)
+            season = _get_effective_season()
             tba_event_key = construct_tba_event_key(raw_event_code, season)
             
             # Get event details from TBA
@@ -1357,8 +1398,7 @@ def get_event_details_dual_api(event_code):
 
         try:
             if fallback_source == 'tba':
-                game_config = get_current_game_config()
-                season = game_config.get('season', 2026)
+                season = _get_effective_season()
                 tba_event_key = construct_tba_event_key(raw_event_code, season)
 
                 tba_event = get_tba_event_details(tba_event_key)
