@@ -168,19 +168,27 @@ def index():
             # Keep the list of matches provided by the helper (it may have times populated in-memory)
         else:
             # Build base query for this event (filtered by scouting team)
-            # Use event code matching to handle cross-team event lookups
+            # Use event.id to avoid duplicates from multiple events with the same code
             from sqlalchemy import func
             from app.utils.team_isolation import get_current_scouting_team_number
-            event_code = getattr(event, 'code', None)
             current_scouting_team = get_current_scouting_team_number()
-            
-            if event_code:
-                query = filter_matches_by_scouting_team().join(
-                    Event, Match.event_id == Event.id
-                ).filter(func.upper(Event.code) == event_code.upper())
+
+            # Gather all event IDs with the same code + scouting team to catch
+            # duplicates that haven't been merged yet
+            event_code = getattr(event, 'code', None)
+            if event_code and current_scouting_team is not None:
+                same_code_ids = [r[0] for r in db.session.query(Event.id).filter(
+                    func.upper(Event.code) == event_code.upper(),
+                    Event.scouting_team_number == current_scouting_team
+                ).all()]
+            else:
+                same_code_ids = [event.id] if event and event.id else []
+
+            if same_code_ids:
+                query = Match.query.filter(Match.event_id.in_(same_code_ids))
             else:
                 query = filter_matches_by_scouting_team().filter(Match.event_id == event.id)
-            
+
             # Defensive check: ensure we only show matches for current scouting team
             if current_scouting_team is not None:
                 query = query.filter(Match.scouting_team_number == current_scouting_team)
@@ -505,6 +513,16 @@ def sync_from_config():
         # silently fall back to datetime.now().year (wrong year).
         from app.utils.api_utils import set_season_override, clear_season_override
         set_season_override(current_year)
+
+        # Merge any duplicate events BEFORE looking up the event
+        try:
+            from app.routes.data import merge_duplicate_events, merge_duplicate_matches
+            from app.utils.team_isolation import get_current_scouting_team_number
+            _merge_team = get_current_scouting_team_number()
+            merge_duplicate_events(_merge_team)
+            merge_duplicate_matches(scouting_team_number=_merge_team)
+        except Exception as merge_err:
+            print(f"[matches sync] Warning: pre-sync merge failed: {merge_err}")
 
         event = get_event_by_code(event_code)
 
@@ -1343,18 +1361,22 @@ def strategy_live_current_match():
         if not event:
             return jsonify({'success': False, 'error': 'Event not found'}), 404
 
-        # Fetch all matches for the event
+        # Fetch all matches for the event (use event.id to avoid cross-event duplicates)
         from sqlalchemy import func as _func
-        event_code = getattr(event, 'code', None)
-        if event_code:
-            matches_q = filter_matches_by_scouting_team().join(Event, Match.event_id == Event.id).filter(
-                _func.upper(Event.code) == event_code.upper()
-            )
-        else:
-            matches_q = filter_matches_by_scouting_team().filter_by(event_id=event.id)
-
         from app.utils.team_isolation import get_current_scouting_team_number
         scouting_team = get_current_scouting_team_number()
+
+        # Gather IDs of all events with the same code + team (handles unmerged duplicates)
+        event_code = getattr(event, 'code', None)
+        if event_code and scouting_team is not None:
+            same_code_ids = [r[0] for r in db.session.query(Event.id).filter(
+                _func.upper(Event.code) == event_code.upper(),
+                Event.scouting_team_number == scouting_team
+            ).all()]
+        else:
+            same_code_ids = [event.id]
+
+        matches_q = Match.query.filter(Match.event_id.in_(same_code_ids))
         if scouting_team is not None:
             matches_q = matches_q.filter(Match.scouting_team_number == scouting_team)
         else:

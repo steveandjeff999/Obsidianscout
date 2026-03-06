@@ -495,6 +495,12 @@ if __name__ == '__main__':
                         from app.utils.team_utils import team_sort_key
                         for scouting_team_number in sorted(team_numbers, key=team_sort_key):
                             try:
+                                # Skip system accounts (scouting_team=0) — they don't have
+                                # real events configured and create ghost events that cause
+                                # duplicate matches for real teams.
+                                if scouting_team_number is not None and scouting_team_number == 0:
+                                    print(f"  Skipping API sync for system team 0")
+                                    continue
                                 if scouting_team_number is None:
                                     print("Running API sync for unassigned/default scope")
                                 else:

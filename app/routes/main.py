@@ -115,19 +115,10 @@ def index():
         if alliance_id:
             teams, _ = get_all_teams_for_alliance(event_id=current_event.id)
         else:
-            # Use event code matching to handle cross-team event lookups
-            # This ensures we find teams associated with events that have the same code
-            # even if the event record belongs to a different scouting team
-            from sqlalchemy import func
-            event_code = getattr(current_event, 'code', None)
-            if event_code:
-                teams = filter_teams_by_scouting_team().join(
-                    Team.events
-                ).filter(func.upper(Event.code) == event_code.upper()).order_by(Team.team_number).all()
-            else:
-                teams = filter_teams_by_scouting_team().join(
-                    Team.events
-                ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+            # Use event.id for precise matching (avoids duplicates from multiple events with same code)
+            teams = filter_teams_by_scouting_team().join(
+                Team.events
+            ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
     else:
         teams = []  # No teams if no current event is set
     
@@ -137,16 +128,8 @@ def index():
         if alliance_id:
             matches, _ = get_all_matches_for_alliance(event_id=current_event.id)
         else:
-            # Use event code matching to handle cross-team event lookups
-            from sqlalchemy import func
-            event_code = getattr(current_event, 'code', None)
-            if event_code:
-                matches_query = filter_matches_by_scouting_team().join(
-                    Event, Match.event_id == Event.id
-                ).filter(func.upper(Event.code) == event_code.upper())
-            else:
-                matches_query = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id)
-            matches = matches_query.all()
+            # Use event.id for precise matching (avoids duplicates from multiple events with same code)
+            matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
         # Use proper match sorting (handles X-Y playoff format)
         matches = sorted(matches, key=match_sort_key)
     else:
@@ -177,16 +160,9 @@ def index():
             scout_entries = base_q.order_by(AllianceSharedScoutingData.timestamp.desc()).limit(5).all()
             total_scout_entries = base_q.count()
         else:
-            # Normal mode - use team filtering
+            # Normal mode - use team filtering, scoped to current event_id
             from app.utils.team_isolation import filter_scouting_data_by_scouting_team
-            from sqlalchemy import func
-            event_code = getattr(current_event, 'code', None)
-            if event_code:
-                base_q = filter_scouting_data_by_scouting_team().join(Match).join(
-                    Event, Match.event_id == Event.id
-                ).filter(func.upper(Event.code) == event_code.upper())
-            else:
-                base_q = filter_scouting_data_by_scouting_team().join(Match).filter(Match.event_id == current_event.id)
+            base_q = filter_scouting_data_by_scouting_team().join(Match).filter(Match.event_id == current_event.id)
             scout_entries = base_q.order_by(ScoutingData.timestamp.desc()).limit(5).all()
             total_scout_entries = base_q.count()
     else:

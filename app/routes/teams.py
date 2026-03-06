@@ -240,6 +240,16 @@ def sync_from_config():
         from app.utils.api_utils import set_season_override, clear_season_override
         set_season_override(current_year)
 
+        # Merge any duplicate events BEFORE looking up the event
+        try:
+            from app.routes.data import merge_duplicate_events, merge_duplicate_matches
+            from app.utils.team_isolation import get_current_scouting_team_number as _get_team
+            _merge_team = _get_team()
+            merge_duplicate_events(_merge_team)
+            merge_duplicate_matches(scouting_team_number=_merge_team)
+        except Exception as merge_err:
+            print(f"[teams sync] Warning: pre-sync merge failed: {merge_err}")
+
         event = get_event_by_code(event_code)
 
         # If a real DB event was found, correct year and wrong-year dates
