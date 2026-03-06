@@ -268,18 +268,30 @@ def edit(event_id):
 
 @bp.route('/<int:event_id>/delete', methods=['POST'])
 def delete(event_id):
-    """Delete an event and all associated matches"""
+    """Delete an event and all associated matches, including duplicate events with the same code"""
     event = Event.query.get_or_404(event_id)
     event_name = event.name  # Store name before deletion
+    event_code = getattr(event, 'code', None)
+    scouting_team = getattr(current_user, 'scouting_team_number', None) if current_user else None
     
     try:
         # Import the DisableReplication context manager
         from app.utils.real_time_replication import DisableReplication
         
+        # Find ALL events with the same code + scouting team (catches unmerged duplicates)
+        all_event_ids = [event_id]
+        if event_code:
+            duplicate_events = Event.query.filter(
+                func.upper(Event.code) == event_code.upper(),
+                Event.scouting_team_number == scouting_team
+            ).all()
+            all_event_ids = list(set([e.id for e in duplicate_events]))
+        
         # Temporarily disable replication during bulk delete to prevent queue issues
         with DisableReplication():
-            # Delete all scouting data and other dependent rows associated with matches from this event
-            match_ids = [match.id for match in event.matches]
+            # Collect ALL match IDs across all duplicate events
+            all_matches = Match.query.filter(Match.event_id.in_(all_event_ids)).all()
+            match_ids = [m.id for m in all_matches]
             if match_ids:
                 ScoutingData.query.filter(ScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
                 # qualitative scouting observations
@@ -292,22 +304,25 @@ def delete(event_id):
                 # Alliance-shared copies for these matches
                 AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
             
-            # Remove event associations from teams
-            for team in event.teams:
-                team.events.remove(event)
-            
-            # Delete any alliance selections the current scouting team created for this event
-            AllianceSelection.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).delete()
+            # Process all duplicate events
+            for dup_event in Event.query.filter(Event.id.in_(all_event_ids)).all():
+                # Remove event associations from teams
+                for team in list(dup_event.teams):
+                    dup_event.teams.remove(team)
+                
+                # Delete alliance selections
+                AllianceSelection.query.filter_by(event_id=dup_event.id, scouting_team_number=scouting_team).delete()
 
-            # Also remove any team list entries (do-not-pick/avoid/etc) tied to this event
-            from app.models import TeamListEntry
-            TeamListEntry.query.filter_by(event_id=event_id).delete(synchronize_session=False)
+                # Remove team list entries
+                from app.models import TeamListEntry
+                TeamListEntry.query.filter_by(event_id=dup_event.id).delete(synchronize_session=False)
             
-            # Delete all matches associated with this event (filtered by scouting team)
-            filter_matches_by_scouting_team().filter_by(event_id=event_id).delete()
+            # Delete ALL matches across all duplicate events
+            Match.query.filter(Match.event_id.in_(all_event_ids)).delete(synchronize_session=False)
             
-            # Finally delete the event itself
-            db.session.delete(event)
+            # Delete all duplicate events
+            Event.query.filter(Event.id.in_(all_event_ids)).delete(synchronize_session=False)
+            
             db.session.commit()
     except IntegrityError as fk_err:
         # some leftover foreign-key references still exist; attempt to clean automatically and retry

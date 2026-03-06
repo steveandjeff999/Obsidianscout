@@ -48,25 +48,33 @@ def get_theme_context():
 
 
 def merge_duplicate_events(scouting_team_number=None):
-    """Merge duplicate events that have the same code, name, or year.
+    """Merge duplicate events that have the same code.
     
     This function finds and merges duplicate events by:
-    1. Finding events with the same code (normalized) - ONLY within the same scouting team
-    2. Keeping the most complete event (with most data filled in)
-    3. Moving all teams and matches to the kept event
-    4. Updating scouting_team_number on kept event to match current team
-    5. Deleting the duplicate events
+    1. Finding events with the same code (normalized) - within the same scouting team
+    2. ALSO absorbing events with scouting_team=0 or None that share the same code
+    3. Keeping the most complete event (with most data filled in)
+    4. Moving all teams and matches to the kept event
+    5. Updating scouting_team_number on kept event to match current team
+    6. Deleting the duplicate events
     
     Args:
         scouting_team_number: Optional scouting team number to set on merged event
     """
     from collections import defaultdict
-    from sqlalchemy import func
+    from sqlalchemy import func, or_
     
     try:
-        # Query events ONLY for the current scouting team to avoid cross-team contamination
+        # Query events for the current scouting team AND also scouting_team=0/None
+        # (ghost events from system accounts that should be absorbed)
         if scouting_team_number is not None:
-            all_events = Event.query.filter_by(scouting_team_number=scouting_team_number).all()
+            all_events = Event.query.filter(
+                or_(
+                    Event.scouting_team_number == scouting_team_number,
+                    Event.scouting_team_number == 0,
+                    Event.scouting_team_number.is_(None)
+                )
+            ).all()
         else:
             all_events = Event.query.filter_by(scouting_team_number=None).all()
         
@@ -82,9 +90,15 @@ def merge_duplicate_events(scouting_team_number=None):
             if len(events) <= 1:
                 continue
             
-            # Sort by completeness: prefer events with more filled fields
+            # Sort by completeness: prefer events with real scouting team and more filled fields
             def event_score(e):
                 score = 0
+                # Strongly prefer events with the real scouting team number
+                if scouting_team_number is not None and e.scouting_team_number == scouting_team_number:
+                    score += 100
+                elif e.scouting_team_number and e.scouting_team_number != 0:
+                    score += 50  # Some real team but not the target
+                # Ghost events (team=0 or None) get no bonus
                 if e.name: score += 10
                 if e.location: score += 5
                 if getattr(e, 'start_date', None): score += 5
