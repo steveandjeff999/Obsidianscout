@@ -4,7 +4,7 @@ from app.utils.statbotics_api_utils import (
     parse_team_epa,
     get_statbotics_team_epa,
 )
-from app.utils.analysis import _apply_statbotics_epa
+from app.utils.analysis import _apply_statbotics_epa, get_epa_metrics_for_team
 
 
 SAMPLE_HTML = """
@@ -196,3 +196,36 @@ def test_apply_epa_graduated_blend_2_matches(monkeypatch):
     assert round(out['metrics']['auto_points'], 1) == 17.0
     assert round(out['metrics']['total_points'], 1) == 51.0
     assert out['metrics']['_epa_source'] == 'blended'
+
+
+def test_apply_epa_negative_values_clamped(monkeypatch):
+    """Negative EPA/OPR values should be treated as zero to avoid negative
+    predicted match scores."""
+    # statbotics_only mode
+    monkeypatch.setattr('app.utils.statbotics_api_utils.get_statbotics_team_epa',
+                        lambda tn, **kw: {'auto': -5.0, 'teleop': -2.0, 'endgame': -1.0, 'total': -8.0})
+    result = {'team_number': 400, 'match_count': 0, 'metrics': {}}
+    out = _apply_statbotics_epa(result, 'statbotics_only')
+    assert out['metrics']['total_points'] == 0.0
+    assert out['metrics']['auto_points'] == 0.0
+
+    # tba_opr_only mode via analysis _apply_statbotics_epa path
+    monkeypatch.setattr('app.utils.tba_api_utils.get_tba_team_opr',
+                        lambda tn, **kw: {'total': -12.0})
+    result2 = {'team_number': 500, 'match_count': 0, 'metrics': {}}
+    out2 = _apply_statbotics_epa(result2, 'tba_opr_only')
+    assert out2['metrics']['total_points'] == 0.0
+    # auto/teleop/endgame keys should not be injected when OPR-only has no breakdown
+    assert 'auto_points' not in out2['metrics']
+
+
+def test_get_epa_metrics_for_team_clamps_negative(monkeypatch):
+    """get_epa_metrics_for_team() should never return a negative total."""
+    # patch TBA util to return negative value
+    monkeypatch.setattr('app.utils.tba_api_utils.get_tba_team_opr',
+                        lambda tn, **kw: {'total': -20.0})
+    # force EPA source to tba_opr_only so the helper returns the value
+    monkeypatch.setattr('app.utils.analysis._get_epa_source_for_team',
+                        lambda: 'tba_opr_only')
+    data = get_epa_metrics_for_team(1234)
+    assert data['total'] == 0.0

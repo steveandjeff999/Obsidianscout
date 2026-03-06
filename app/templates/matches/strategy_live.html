@@ -8,12 +8,18 @@
 {% block content %}
 <div class="container">
     <!-- ===== Controls Row ===== -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header"><strong>Select Event &amp; Team</strong></div>
-                <div class="card-body">
-                    <div class="row g-2">
+    <div class="card mb-3" id="controls_card">
+        <div class="card-header" id="controls_toggle" style="cursor:pointer;">
+            <strong>Live Strategy Controls</strong>
+            <span id="controls_chevron" class="float-end">&#x25B2;</span>
+        </div>
+        <div class="collapse show" id="controls_body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header"><strong>Select Event &amp; Team</strong></div>
+                        <div class="card-body">
+                            <div class="row g-2">
                         <div class="col-md-6 mb-2">
                             <label for="event_select" class="form-label">Event</label>
                             <select id="event_select" class="form-select">
@@ -79,6 +85,9 @@
         </div>
     </div>
 
+    </div>  <!-- end collapse #controls_body -->
+</div>  <!-- end card #controls_card -->
+
     <!-- ===== Raw Strategy JSON (fallback display) ===== -->
     <div id="strategy_json" class="row mt-3 d-none">
         <div class="col-12">
@@ -135,16 +144,19 @@
      3. Client picks the next match for the selected team from the cache
      4. 2 minutes after a match's scheduled start → advance to next match
      5. Re-fetch schedule every 15 min to pick up time changes from API sync
+     6. Refresh the strategy/predictions for the currently displayed match every
+        5 minutes without reloading the schedule (data may change frequently)
    ====================================================================== */
 (function () {
 'use strict';
 
 // ── Constants ──────────────────────────────────────────────────────────
-var SCHEDULE_REFRESH_MS = 15 * 60 * 1000;  // re-fetch schedule every 15 minutes
-var TICK_MS             = 1000;             // advance check every 1 second
-var ADVANCE_DELAY_MS    = 2 * 60 * 1000;   // advance 2 min after scheduled start
-var MANUAL_TIMEOUT_MS   = 5 * 60 * 1000;   // manual override lasts 5 minutes
-var STRATEGY_RETRIES    = 2;
+var SCHEDULE_REFRESH_MS   = 15 * 60 * 1000;  // re-fetch schedule every 15 minutes
+var PREDICTION_REFRESH_MS = 5 * 60 * 1000;   // refresh prediction/strategy for current match every 5 minutes
+var TICK_MS               = 1000;             // advance check every 1 second
+var ADVANCE_DELAY_MS      = 2 * 60 * 1000;   // advance 2 min after scheduled start
+var MANUAL_TIMEOUT_MS     = 5 * 60 * 1000;   // manual override lasts 5 minutes
+var STRATEGY_RETRIES      = 20;
 
 // ── State ──────────────────────────────────────────────────────────────
 var S = {
@@ -170,6 +182,7 @@ var S = {
 
     // Timers
     scheduleTimer:     null,    // 15-min schedule refresh
+    predictionTimer:   null,    // 5-min strategy refresh
     tickTimer:         null,    // 1-sec advance check
 
     // Strategy
@@ -455,6 +468,9 @@ function showMatch(match, advanceAt, hasNext) {
         return;
     }
 
+    // When a new match is shown automatically collapse the top controls
+    collapseControls();
+
     var changed = (match.id !== S.currentMatchId);
     S.currentMatchId = match.id;
     S.currentMatch   = match;
@@ -548,6 +564,10 @@ function stopScheduleRefresh() {
     if (S.scheduleTimer) { clearInterval(S.scheduleTimer); S.scheduleTimer = null; }
 }
 
+function stopPredictionRefresh() {
+    if (S.predictionTimer) { clearInterval(S.predictionTimer); S.predictionTimer = null; }
+}
+
 function startScheduleRefresh() {
     stopScheduleRefresh();
     S.scheduleTimer = setInterval(function () {
@@ -565,12 +585,23 @@ function startScheduleRefresh() {
     }, SCHEDULE_REFRESH_MS);
 }
 
+function startPredictionRefresh() {
+    stopPredictionRefresh();
+    S.predictionTimer = setInterval(function () {
+        if (S.isRunning && S.currentMatchId) {
+            console.log('[LiveStrategy] 5-min prediction refresh for match', S.currentMatchId);
+            loadStrategy(S.currentMatchId);
+        }
+    }, PREDICTION_REFRESH_MS);
+}
+
 // ── Main Start / Stop ──────────────────────────────────────────────────
 
 function stopAll() {
     S.isRunning = false;
     stopTick();
     stopScheduleRefresh();
+    stopPredictionRefresh();
 }
 
 function startLive() {
@@ -598,6 +629,10 @@ function startLive() {
         startTick();
         // Start the 15-minute schedule refresh
         startScheduleRefresh();
+        // Start periodic prediction refresh (without touching schedule)
+        startPredictionRefresh();
+        // Set up collapse toggle for controls header
+        setupControlsCollapse();
     });
 }
 
@@ -656,6 +691,36 @@ function loadStrategy(matchId) {
     }
 
     doAttempt();
+}
+
+// ── Controls collapse helpers ─────────────────────────────────────────
+
+function updateChevron() {
+    var ch = $('controls_chevron');
+    var body = $('controls_body');
+    if (!ch || !body) return;
+    // show arrow up when expanded, down when collapsed
+    ch.textContent = body.classList.contains('show') ? '\u25B2' : '\u25BC';
+}
+
+function collapseControls() {
+    var body = $('controls_body');
+    if (!body) return;
+    var bs = bootstrap.Collapse.getOrCreateInstance(body);
+    if (body.classList.contains('show')) bs.hide();
+}
+
+function setupControlsCollapse() {
+    var header = $('controls_toggle');
+    var body = $('controls_body');
+    if (!header || !body) return;
+    header.addEventListener('click', function () {
+        var bs = bootstrap.Collapse.getOrCreateInstance(body);
+        bs.toggle();
+    });
+    body.addEventListener('hidden.bs.collapse', updateChevron);
+    body.addEventListener('shown.bs.collapse', updateChevron);
+    updateChevron();
 }
 
 // ── Manual Match Select ────────────────────────────────────────────────
@@ -999,6 +1064,9 @@ document.addEventListener('DOMContentLoaded', function () {
     var startBtn = $('start_btn');
 
     S.eventId = eventSel.value || null;
+
+    // initialize collapse header so user can expand/collapse controls
+    setupControlsCollapse();
 
     // ── Event change: reload page so server populates teams for new event ──
     eventSel.addEventListener('change', function () {

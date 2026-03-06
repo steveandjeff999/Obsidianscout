@@ -964,8 +964,12 @@ def view(team_number):
     # Get events this team is competing at from the API
     team_events = []
     try:
-        # Use current year (2025 based on context)
-        current_year = datetime.now().year
+        # Determine year to query from the active game configuration.  The
+        # config may specify "season" or an older "year" field; fall back to
+        # the current calendar year if neither is present.  This ensures the
+        # card header and API request stay in sync with whatever is set in
+        # game_config.json, instead of being hardcoded to 2025.
+        current_year = game_config.get('season') or game_config.get('year') or datetime.now().year
         team_key = f"frc{team_number}"
         api_events = get_tba_team_events(team_key, current_year)
         
@@ -993,6 +997,63 @@ def view(team_number):
         print(f"Unexpected error fetching events for team {team_number}: {e}")
         team_events = []
     
+    # --- determine which event we should show matches for ---
+    match_event = None
+    matches_for_event = []
+    try:
+        # try to honor the current_event_code from game config first
+        cfg_code = game_config.get('current_event_code')
+        if cfg_code:
+            evt = get_event_by_code(cfg_code)
+            if evt:
+                # query for any matches involving this team at that event
+                from sqlalchemy import or_
+                matches_for_event = Match.query.filter(
+                    Match.event_id == evt.id,
+                    or_(
+                        Match.red_alliance.like(f"%{team_number}%"),
+                        Match.blue_alliance.like(f"%{team_number}%")
+                    )
+                ).order_by(*Match.schedule_order()).all()
+                if matches_for_event:
+                    match_event = evt
+        # if we still don't have an event with matches, fall back to the most
+        # recent event that the team actually has matches in (or is associated
+        # with via the event relationship)
+        if not match_event:
+            # gather candidate events from the team's matches (ignore None)
+            evt_set = set()
+            for m in team.matches:
+                if m.event is not None:
+                    evt_set.add(m.event)
+            # also include events from the team.events relationship as a safety
+            for ev in getattr(team, 'events', []) or []:
+                if ev is not None:
+                    evt_set.add(ev)
+            if evt_set:
+                # sort by year/start_date descending
+                sorted_evts = sorted(
+                    evt_set,
+                    key=lambda e: ((getattr(e, 'year', None) or 0),
+                                   (getattr(e, 'start_date', None) or datetime.min)),
+                    reverse=True
+                )
+                match_event = sorted_evts[0]
+                # re-run the query against this event just in case
+                from sqlalchemy import or_
+                matches_for_event = Match.query.filter(
+                    Match.event_id == match_event.id,
+                    or_(
+                        Match.red_alliance.like(f"%{team_number}%"),
+                        Match.blue_alliance.like(f"%{team_number}%")
+                    )
+                ).order_by(*Match.schedule_order()).all()
+    except Exception as e:
+        # don't crash the page if match lookup fails
+        print(f"Error determining matches for team {team_number}: {e}")
+        match_event = None
+        matches_for_event = []
+
     return render_template(
         'teams/view.html', 
         team=team, 
@@ -1006,6 +1067,9 @@ def view(team_number):
         total_metric_id=total_metric_id,
         total_metric_name=total_metric_name,
         team_events=team_events,
+        current_year=current_year,
+        match_event=match_event,
+        matches_for_event=matches_for_event,
         **get_theme_context()
     )
 

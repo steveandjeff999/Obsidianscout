@@ -81,6 +81,9 @@
                                 Your scouted data is used whenever available. For teams with <strong>no scouted matches</strong>,
                                 The Blue Alliance OPR values are substituted automatically. OPR is event-specific and requires
                                 a TBA API key and current event to be configured.
+                                <br><strong>Note:</strong> OPR values are calculated from match scores, so they are often
+                                inaccurate at the very start of an event (before several matches have been played).
+                                Early-event OPR may be very low or even negative until more data is available.
                             </p>
                         </div>
 
@@ -96,6 +99,9 @@
                                 All graphs, predictions, and simulations use TBA OPR data exclusively.
                                 Requires a TBA API key and a current event code in your game configuration.
                                 OPR only provides a total score estimate — no auto/teleop/endgame breakdown.
+                                <br><strong>Warning:</strong> Early in an event the OPR figures may not be reliable,
+                                since the underlying calculations need several matches to stabilise.  Values
+                                can look anomalously low or negative until the event progresses.
                             </p>
                         </div>
 

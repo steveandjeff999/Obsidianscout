@@ -133,6 +133,17 @@ def _apply_statbotics_epa(result, epa_source):
         print(f"    No external metric data available for team {team_number} (source={epa_source})")
         return result
 
+    # Clamp any negative EPA/OPR values to zero so predictions never go below 0.
+    # Negative OPR is possible for very weak teams, but treating them as
+    # negative in metrics would lead to nonsensical match score predictions.
+    for _k in ('auto', 'teleop', 'endgame', 'total'):
+        try:
+            if epa.get(_k) is not None and epa[_k] < 0:
+                print(f"    Clamping negative {source_tag} {_k} value {epa[_k]} to 0 for team {team_number}")
+                epa[_k] = 0.0
+        except Exception:
+            pass
+
     # ---- Determine blend weight (EPA fraction) --------------------------
     #   match_count  |  epa_weight  | meaning
     #   -------------|--------------|-------------------------------------
@@ -281,7 +292,11 @@ def get_epa_metrics_for_team(team_number):
             from app.utils.tba_api_utils import get_tba_team_opr
             opr = get_tba_team_opr(team_number)
             if opr:
-                result['total'] = opr.get('total')
+                total_val = opr.get('total')
+                # clamp negative OPR to zero
+                if total_val is not None and total_val < 0:
+                    total_val = 0.0
+                result['total'] = total_val
                 # OPR has no auto/teleop/endgame breakdown
         except Exception:
             pass
@@ -1395,6 +1410,14 @@ def predict_match_outcome(match_id):
 
     expected_red = sim.get('expected_red', red_alliance_score)
     expected_blue = sim.get('expected_blue', blue_alliance_score)
+    # clamp to zero to prevent negative predictions (defensive)
+    try:
+        if expected_red is not None and expected_red < 0:
+            expected_red = 0.0
+        if expected_blue is not None and expected_blue < 0:
+            expected_blue = 0.0
+    except Exception:
+        pass
     red_win_prob = sim.get('red_win_prob', 0.5)
     blue_win_prob = sim.get('blue_win_prob', 1.0 - red_win_prob)
     tie_prob = sim.get('tie_prob', 0.0)
