@@ -1521,7 +1521,23 @@ def create_app(test_config=None, use_postgres=False):
             if app.debug:
                 stack = traceback.format_exc()
         app.logger.error('Internal server error: %s', error_msg, exc_info=True)
-        return render_template('errors/500.html', error=error_msg, stacktrace=stack), 500
+
+        # Attempt to render the normal 500 page, but guard against any further
+        # rendering errors (memory, broken DB, etc.).  If rendering fails we fall
+        # back to a tiny inline response so that the error handler itself never
+        # propagates.
+        try:
+            return render_template('errors/500.html', error=error_msg, stacktrace=stack), 500
+        except Exception as render_exc:
+            app.logger.error('Error while rendering 500 template: %s', render_exc)
+            # Simple HTML response; avoids referencing current_user or other
+            # context that might trigger DB activity.
+            body = (
+                '<html><body><h1>Internal Server Error</h1>'
+                '<p>An unexpected error occurred. Please check the server logs.</p>'
+                '</body></html>'
+            )
+            return body, 500
     
     # Add a context processor to make integrity status available in templates
     @app.context_processor
@@ -1707,6 +1723,39 @@ def create_app(test_config=None, use_postgres=False):
             return {'use_postgres': app.config.get('USE_POSTGRES', False)}
         except Exception:
             return {'use_postgres': False}
+
+    @app.context_processor
+    def inject_safe_current_user():
+        """Override ``current_user`` in templates with a proxy that never raises.
+
+        Flask-Login normally adds ``current_user`` to every template, but
+        accessing attributes such as ``is_authenticated`` can trigger lazy
+        database loads.  If the database connection is already broken (as in
+        the stack trace shown during the 500 handler) those property lookups
+        will raise an exception, which then causes further template rendering
+        errors.  By wrapping the real ``current_user`` in a guard we ensure
+        templates can safely ask the common questions without risking another
+        crash while handling an error.
+        """
+        from flask_login import current_user as _cu
+
+        class _SafeProxy:
+            def __getattr__(self, name):
+                try:
+                    return getattr(_cu, name)
+                except Exception:
+                    # return benign defaults for the attributes we know
+                    if name in ('is_authenticated', 'is_active', 'is_anonymous'):
+                        return False
+                    return None
+
+            def has_role(self, role):
+                try:
+                    return _cu.has_role(role)
+                except Exception:
+                    return False
+
+        return {'current_user': _SafeProxy()}
 
     # Initialize real-time replication system
     try:
