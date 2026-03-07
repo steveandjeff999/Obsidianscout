@@ -1225,8 +1225,10 @@ def mobile_login():
                 'error_code': 'ACCOUNT_INACTIVE'
             }), 401
         
-        # Update last login
-        user.last_login = datetime.now(timezone.utc)
+        # Update last login and mark account as used
+        now = datetime.now(timezone.utc)
+        user.last_login = now
+        user.last_used = now
         db.session.commit()
         
         # Create token

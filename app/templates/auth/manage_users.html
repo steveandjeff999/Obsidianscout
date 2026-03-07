@@ -124,7 +124,10 @@
                                     </td>
                                     <td class="align-middle">
                                         {# Display last login time or 'Never' if null. Use simple formatting to avoid introducing new filters. #}
-                                        {% if user.last_login %}
+                                        {# Prefer new last_used field; fall back to legacy last_login if necessary #}
+                                        {% if user.last_used %}
+                                            {{ user.last_used.strftime('%Y-%m-%d %H:%M:%S') }}
+                                        {% elif user.last_login %}
                                             {{ user.last_login.strftime('%Y-%m-%d %H:%M:%S') }}
                                         {% else %}
                                             <span class="text-muted">Never</span>

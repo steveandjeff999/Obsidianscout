@@ -133,8 +133,10 @@ def login():
             flash('Your account has been deactivated. Please contact an administrator.', 'error')
             return redirect(url_for('auth.login'))
         
-        # Update last login time
-        user.last_login = datetime.now(timezone.utc)
+        # Update last login *and* last-used time
+        now = datetime.now(timezone.utc)
+        user.last_login = now
+        user.last_used = now
         db.session.commit()
         
         login_user(user, remember=remember_me)
@@ -1311,7 +1313,9 @@ def delete_user(user_id):
     if hasattr(user, 'updated_at'):
         user.updated_at = datetime.now(timezone.utc)
     elif hasattr(user, 'last_login'):
-        user.last_login = datetime.now(timezone.utc)  # Use as modification timestamp
+        now = datetime.now(timezone.utc)
+        user.last_login = now  # Use as modification timestamp
+        user.last_used = now
     
     db.session.commit()
     # Manual soft delete change tracking fallback

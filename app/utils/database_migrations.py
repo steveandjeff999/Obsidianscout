@@ -99,6 +99,7 @@ MIGRATIONS = [
     ('user', 'only_password_reset_emails', 'BOOLEAN DEFAULT 0', 'users'),
     ('user', 'scouting_team_number', 'INTEGER', 'users'),
     ('user', 'last_login', 'DATETIME', 'users'),
+    ('user', 'last_used', 'DATETIME', 'users'),
     ('user', 'created_at', 'DATETIME', 'users'),
     ('user', 'updated_at', 'DATETIME', 'users'),
     
@@ -385,9 +386,14 @@ def add_column(engine, table_name, column_name, column_sql):
     # other dialects could be handled here in future
 
     try:
+        # Postgres (and others) require quoting when table/column names are
+        # reserved words; use the dialect preparer for safety.
+        preparer = engine.dialect.identifier_preparer
+        tbl = preparer.quote(table_name)
+        col = preparer.quote(column_name)
         with engine.connect() as conn:
             # generic ALTER TABLE syntax works on SQLite, Postgres, MySQL, etc.
-            sql = f'ALTER TABLE {table_name} ADD COLUMN {column_name} {col_sql}'
+            sql = f'ALTER TABLE {tbl} ADD COLUMN {col} {col_sql}'
             conn.execute(text(sql))
             conn.commit()
         return True
@@ -468,6 +474,25 @@ def run_all_migrations(db):
         print(f"Database migration complete: {total_columns_added} columns added, {altered} columns widened")
     else:
         print("Database schema is up to date")
+
+    # Phase 2: data migrations for newly added columns
+    try:
+        # copy existing last_login values into last_used so the new column
+        # has meaningful data immediately.
+        # only do this if the column exists.
+        from sqlalchemy import inspect
+        engine = get_engine_for_bind(db, 'users')
+        cols = inspect(engine).get_columns('user')
+        col_names = [c['name'] for c in cols]
+        if 'last_used' in col_names:
+            with engine.begin() as conn:
+                conn.execute(db.text(
+                    'UPDATE "user" SET last_used = last_login '
+                    'WHERE last_used IS NULL AND last_login IS NOT NULL'
+                ))
+            print("  Data migration: copied last_login -> last_used for users")
+    except Exception as e:
+        print(f"  Warning: could not migrate last_login to last_used: {e}")
     
     return total_columns_added
 

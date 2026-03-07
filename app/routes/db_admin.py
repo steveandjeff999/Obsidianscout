@@ -561,6 +561,7 @@ def import_database():
                 'created_at': superadmin_user.created_at,
                 'updated_at': superadmin_user.updated_at,
                 'last_login': superadmin_user.last_login,
+                'last_used': getattr(superadmin_user, 'last_used', None),
                 'roles': [role.name for role in superadmin_user.roles]
             }
         
@@ -693,7 +694,7 @@ def import_database():
                             if hasattr(record, key):
                                 # Handle datetime fields
                                 datetime_field_names = [
-                                    'created_at', 'updated_at', 'last_login', 'timestamp',
+                                    'created_at', 'updated_at', 'last_login', 'last_used', 'timestamp',
                                     'locked_at', 'upload_timestamp', 'last_updated', 
                                     'joined_at', 'responded_at', 'added_at', 'last_sync',
                                     'activated_at', 'deactivated_at', 'expires_at'
@@ -832,7 +833,8 @@ def import_database():
                         profile_picture=superadmin_info.get('profile_picture'),
                         created_at=superadmin_info.get('created_at'),
                         updated_at=superadmin_info.get('updated_at'),
-                        last_login=superadmin_info.get('last_login')
+                        last_login=superadmin_info.get('last_login'),
+                        last_used=superadmin_info.get('last_used')
                     )
                     
                     # Recreate superadmin roles

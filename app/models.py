@@ -44,8 +44,28 @@ class User(UserMixin, ConcurrentModelMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    last_login = db.Column(db.DateTime)
+    # retain original column for backward compatibility; we'll expose a
+    # property named ``last_login`` that prefers ``last_used`` when set.
+    _last_login = db.Column('last_login', db.DateTime)
+    # new column that will track the last time the account was used for any
+    # authenticated request.  This replaces/re-frames the old "last_login"
+    # semantics.  Data will be migrated on startup; existing values will be
+    # copied from ``last_login`` into this column automatically.
+    last_used = db.Column(db.DateTime)
     profile_picture = db.Column(db.String(256), nullable=True, default='img/avatars/default.png')
+
+    @property
+    def last_login(self):
+        # maintain compatibility for any remaining references to last_login
+        # during the transition period.  Prefer the new column when set.
+        return self.last_used or self._last_login
+
+    @last_login.setter
+    def last_login(self, value):
+        # update both columns so legacy writes continue to work and the
+        # more accurate field stays in sync.
+        self.last_used = value
+        self._last_login = value
     must_change_password = db.Column(db.Boolean, default=False)
     # Allow users to opt out of general emails and only receive password resets
     only_password_reset_emails = db.Column(db.Boolean, default=False, nullable=False)
