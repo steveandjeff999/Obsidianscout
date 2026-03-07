@@ -51,6 +51,7 @@ print("Loading application modules...", end=" ", flush=True)
 from app import create_app, socketio, db
 print("core", end=" ", flush=True)
 from flask import redirect, url_for, request, flash
+from flask_login import current_user
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy import func
 print("flask", end=" ", flush=True)
@@ -70,7 +71,7 @@ USE_WAITRESS = False
 #   2. Create the application role and databases if needed
 #   3. Use PostgreSQL connection URIs for all SQLAlchemy binds
 # When False (default) the app continues using local SQLite files.
-USE_POSTGRES = False
+USE_POSTGRES = True
 
 # Default port for the server. Change this at the top of the file to
 # run the app on a different port. Environment variable `PORT` will still
@@ -146,6 +147,17 @@ def mobile_api_file_log(prefix, message):
 def check_first_run():
     # Log basic request info so we can debug API vs app origins of failures
     try:
+        # record last-used timestamp for authenticated users (any request counts)
+        if current_user and getattr(current_user, 'is_authenticated', False):
+            try:
+                current_user.last_used = datetime.now(timezone.utc)
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
         remote = request.remote_addr or request.environ.get('REMOTE_ADDR')
         auth = request.headers.get('Authorization')
         content_type = request.headers.get('Content-Type')

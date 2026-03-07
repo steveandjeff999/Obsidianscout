@@ -678,9 +678,11 @@ def _handle_ws_login_inner(data, _emit):
         _emit('ws_login_result', {'success': False, 'error': 'Your account has been deactivated. Please contact an administrator.'})
         return
 
-    # Update last login timestamp
+    # Update last login timestamp and last-used field
     try:
-        user.last_login = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        user.last_login = now
+        user.last_used = now
         db.session.commit()
     except Exception:
         try:
