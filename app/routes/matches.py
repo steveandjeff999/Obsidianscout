@@ -1627,49 +1627,75 @@ def strategy_all():
     # Attempt to generate compact summaries for each match. If analysis fails for a match,
     # include minimal info and continue so the page always renders.
     if matches:
-        from app.utils.analysis import generate_match_strategy_analysis
-        # Prepare display scores (prefer API-provided scores, fall back to local scouting data)
+        from app.utils.analysis import generate_match_strategy_analysis, get_current_epa_source, get_epa_metrics_for_team
+
+        # determine environment
         try:
             scouting_team_number = current_user.scouting_team_number if getattr(current_user, 'is_authenticated', False) else None
         except Exception:
             scouting_team_number = None
+        alliance_id = get_active_alliance_id()
 
-        def _compute_local_scores_for_match(m):
-            # Check if alliance mode is active
-            alliance_id = get_active_alliance_id()
-            from app.utils.analysis import get_current_epa_source, get_epa_metrics_for_team
-            epa_source = get_current_epa_source()
-            use_epa = epa_source in ('scouted_with_statbotics', 'statbotics_only', 'tba_opr_only', 'scouted_with_tba_opr')
-            statbotics_only = epa_source in ('statbotics_only', 'tba_opr_only')
+        # cache all teams that belong to the current scouting team so lookups are O(1)
+        team_cache = {}
+        try:
+            for t in filter_teams_by_scouting_team().all():
+                team_cache[str(t.team_number)] = t
+        except Exception:
+            team_cache = {}
 
-            entries = []
-            if not statbotics_only:
-                if alliance_id:
-                    # Alliance mode - query from shared tables by match_number and event_code
-                    # since match IDs differ across alliance members
-                    from sqlalchemy import func
-                    event = Event.query.get(m.event_id)
-                    entries = AllianceSharedScoutingData.query.join(
-                        Match, AllianceSharedScoutingData.match_id == Match.id
-                    ).join(
-                        Event, Match.event_id == Event.id
+        # pre‑compute the set of team numbers for each match to avoid reparsing strings
+        match_team_sets = {}
+        for m in matches:
+            red_nums = set([t.strip() for t in str(m.red_alliance or '').split(',') if t.strip()])
+            blue_nums = set([t.strip() for t in str(m.blue_alliance or '').split(',') if t.strip()])
+            match_team_sets[m.id] = (red_nums, blue_nums)
+
+        # load all relevant scouting entries in one go and group them by match id
+        entries_by_match = {}
+        if alliance_id:
+            from sqlalchemy import func
+            # shared data uses match_number/type and event code to join
+            query = AllianceSharedScoutingData.query.join(
+                Match, AllianceSharedScoutingData.match_id == Match.id
+            ).join(
+                Event, Match.event_id == Event.id
+            ).filter(
+                AllianceSharedScoutingData.alliance_id == alliance_id,
+                AllianceSharedScoutingData.is_active == True
+            )
+            # restrict by our matches' numbers/types or event id for performance
+            match_keys = {(m.match_number, m.match_type) for m in matches}
+            # the query returns records for other events as well; filter in Python
+            for e in query.all():
+                key = (e.match.match_number, e.match.match_type)
+                if key not in match_keys:
+                    continue
+                entries_by_match.setdefault(e.match_id, []).append(e)
+        else:
+            if scouting_team_number is not None:
+                from sqlalchemy import or_
+                ids = [m.id for m in matches if m.id]
+                if ids:
+                    all_entries = ScoutingData.query.filter(
+                        ScoutingData.match_id.in_(ids),
+                        ScoutingData.scouting_team_number == scouting_team_number
                     ).filter(
-                        Match.match_number == m.match_number,
-                        Match.match_type == m.match_type,
-                        func.upper(Event.code) == func.upper(event.code) if event and event.code else Match.event_id == m.event_id,
-                        AllianceSharedScoutingData.alliance_id == alliance_id,
-                        AllianceSharedScoutingData.is_active == True
-                    ).all()
-                elif scouting_team_number:
-                    # Exclude alliance-copied data when not in alliance mode
-                    from sqlalchemy import or_
-                    entries = ScoutingData.query.filter_by(match_id=m.id, scouting_team_number=scouting_team_number).filter(
                         or_(
                             ScoutingData.scout_name == None,
                             ~ScoutingData.scout_name.like('[Alliance-%')
                         )
                     ).all()
+                    for e in all_entries:
+                        entries_by_match.setdefault(e.match_id, []).append(e)
 
+        # helper that consumes our preloaded caches instead of querying each time
+        def _compute_local_scores_for_match(m):
+            epa_source = get_current_epa_source()
+            use_epa = epa_source in ('scouted_with_statbotics', 'statbotics_only', 'tba_opr_only', 'scouted_with_tba_opr')
+            statbotics_only = epa_source in ('statbotics_only', 'tba_opr_only')
+
+            entries = entries_by_match.get(m.id, [])
             if not entries and not use_epa:
                 return (None, None)
 
@@ -1682,11 +1708,9 @@ def strategy_all():
             red_sum = 0
             blue_sum = 0
             any_points = False
-            # m.red_alliance/blue_alliance stored as comma-separated strings of team numbers
-            red_team_numbers = set([t.strip() for t in str(m.red_alliance or '').split(',') if t.strip()])
-            blue_team_numbers = set([t.strip() for t in str(m.blue_alliance or '').split(',') if t.strip()])
+            red_team_numbers, blue_team_numbers = match_team_sets.get(m.id, (set(), set()))
             scored_team_numbers = set()
-            has_scout_data = False  # True only when real scouting entries contributed
+            has_scout_data = False
 
             for e in latest_by_team.values():
                 try:
@@ -1710,8 +1734,6 @@ def strategy_all():
                     scored_team_numbers.add(tn)
                     has_scout_data = True
 
-            # EPA fallback for teams without scouting data
-            # Note: EPA scores are predictions only and must NOT be stored as actual match outcomes
             epa_contributed = False
             if use_epa:
                 all_match_teams = red_team_numbers | blue_team_numbers
@@ -1730,20 +1752,32 @@ def strategy_all():
 
             if not any_points and not epa_contributed:
                 return (None, None, None)
-            # 'local' = real scouting data present; 'epa' = EPA/OPR prediction only
             score_source = 'local' if has_scout_data else 'epa'
             return (red_sum, blue_sum, score_source)
+
+        # parsing helper uses the cached team objects
+        def _parse_alliance(alliance_str):
+            teams_out = []
+            if not alliance_str:
+                return teams_out
+            for tn in [t.strip() for t in str(alliance_str).split(',') if t.strip()]:
+                team_obj = team_cache.get(tn)
+                teams_out.append({
+                    'team_number': tn,
+                    'team_id': team_obj.id if team_obj else None,
+                    'team_name': team_obj.team_name if team_obj and getattr(team_obj, 'team_name', None) else None
+                })
+            return teams_out
+
         for m in matches:
             try:
                 data = generate_match_strategy_analysis(m.id)
                 pred = data.get('predicted_outcome', {}) if isinstance(data, dict) else {}
                 winner = pred.get('predicted_winner') if isinstance(pred, dict) else None
-                # Confidence may be named differently across versions; try common keys
                 confidence = None
                 if isinstance(pred, dict):
                     confidence = pred.get('confidence') or pred.get('confidence_level') or pred.get('win_probability')
 
-                # Determine display scores (prefer API-defined match scores)
                 red_score = norm_db_score(m.red_score)
                 blue_score = norm_db_score(m.blue_score)
                 _local_epa_red = None
@@ -1751,21 +1785,16 @@ def strategy_all():
                 if red_score is None and blue_score is None:
                     rloc, bloc, score_src = _compute_local_scores_for_match(m)
                     if score_src == 'epa':
-                        # EPA/OPR data is a prediction — do NOT treat as actual match outcome
                         _local_epa_red = rloc
                         _local_epa_blue = bloc
                     else:
                         red_score = rloc if rloc is not None else None
                         blue_score = bloc if bloc is not None else None
 
-                # Track whether we used predicted scores from analysis
                 predicted_scores_used = False
-
-                # Pull predicted scores from analysis (always include for comparison when available)
                 predicted_red_score = None
                 predicted_blue_score = None
                 if isinstance(pred, dict):
-                    # Predicted outcome commonly provides 'red_score' and 'blue_score'
                     p_red = pred.get('red_score') or pred.get('predicted_red') or pred.get('predicted_score')
                     p_blue = pred.get('blue_score') or pred.get('predicted_blue') or pred.get('predicted_score')
                     try:
@@ -1779,8 +1808,6 @@ def strategy_all():
                     except Exception:
                         predicted_blue_score = p_blue if p_blue is not None else None
 
-                    # If we still don't have any actual/local scores, prefer predicted outcome scores
-                    # then EPA/OPR local predictions (clearly labelled as predictions, not outcomes)
                     if (red_score is None or blue_score is None):
                         try:
                             if red_score is None and predicted_red_score is not None:
@@ -1798,7 +1825,6 @@ def strategy_all():
                             if blue_score is None and predicted_blue_score is not None:
                                 blue_score = predicted_blue_score
                                 predicted_scores_used = True
-                        # Last fallback: EPA/OPR local estimates (only if no other prediction available)
                         if red_score is None and _local_epa_red is not None:
                             predicted_scores_used = True
                             if predicted_red_score is None:
@@ -1807,25 +1833,6 @@ def strategy_all():
                             predicted_scores_used = True
                             if predicted_blue_score is None:
                                 predicted_blue_score = _local_epa_blue
-
-                # Parse alliance team strings into structured lists with optional team lookup
-                def _parse_alliance(alliance_str):
-                    teams_out = []
-                    if not alliance_str:
-                        return teams_out
-                    for tn in [t.strip() for t in str(alliance_str).split(',') if t.strip()]:
-                        team_obj = None
-                        try:
-                            tn_int = int(tn)
-                            team_obj = filter_teams_by_scouting_team().filter(Team.team_number == tn_int).first()
-                        except Exception:
-                            team_obj = None
-                        teams_out.append({
-                            'team_number': tn,
-                            'team_id': team_obj.id if team_obj else None,
-                            'team_name': team_obj.team_name if team_obj and getattr(team_obj, 'team_name', None) else None
-                        })
-                    return teams_out
 
                 summaries.append({
                     'match_id': m.id,
@@ -1845,13 +1852,11 @@ def strategy_all():
                     'error': None
                 })
             except Exception as e:
-                # Keep a minimal fallback so UI can at least show match and teams
-                # Attempt to at least include parsed team lists and any available scores
                 r_score = norm_db_score(m.red_score)
                 b_score = norm_db_score(m.blue_score)
                 if r_score is None and b_score is None:
                     rloc, bloc, score_src = _compute_local_scores_for_match(m)
-                    if score_src != 'epa':  # EPA-only must not become an actual match score
+                    if score_src != 'epa':
                         r_score = rloc if rloc is not None else None
                         b_score = bloc if bloc is not None else None
 
