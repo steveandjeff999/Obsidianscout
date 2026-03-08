@@ -1,5 +1,5 @@
 {
-  "integrity_password_hash": "scrypt:32768:8:1$UNYTz9PNioCNp4xj$460b479b0242227f017fa9bcb7228920505b940984b5e5dde9495294742cba788cb27e4ca301132cf597f1e993a5c3778d1247b0bc0601eda3f98cb1dbcfae0b",
+  "integrity_password_hash": "[REDACTED_integrity_password_hash]",
   "warning_only_mode": true,
-  "created": "2026-03-07T00:59:21.091957+00:00"
+  "created": "2026-03-08T02:34:09.399843+00:00"
 }
