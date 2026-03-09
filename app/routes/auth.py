@@ -893,10 +893,10 @@ def manage_users():
             )
 
     if not current_user.has_role('superadmin'):
-        # Non-superadmin admins only see users on their own team; no team pagination needed
+        # Non-superadmin admins only see users on their own team
         query = query.filter_by(scouting_team_number=current_user.scouting_team_number)
 
-    # Compute counts: for superadmins show global totals; for regular admins show team-limited totals
+    # Compute overall totals for display (ignore search)
     if current_user.has_role('superadmin'):
         total_users = User.query.count()
         active_users = User.query.filter_by(is_active=True).count()
@@ -904,60 +904,39 @@ def manage_users():
         total_users = User.query.filter_by(scouting_team_number=current_user.scouting_team_number).count()
         active_users = User.query.filter_by(scouting_team_number=current_user.scouting_team_number, is_active=True).count()
 
-    # --- Team pagination for superadmins: show teams 5 at a time when not searching ---
-    users = None
-    team_page = 1
-    total_team_pages = 1
-    total_teams = 0
-    team_start = 0
-    team_end = 0
-    PAGE_SIZE = 10
-
-    if current_user.has_role('superadmin') and not search:
-        # Get distinct team numbers across users
-        team_numbers = [t[0] for t in User.query.with_entities(User.scouting_team_number).distinct().all()]
-        # Sort with None at the end (use robust sort for mixed types)
-        from app.utils.team_utils import team_sort_key
-        team_numbers = sorted(set(team_numbers), key=team_sort_key)
-        total_teams = len(team_numbers)
-        import math
-        total_team_pages = max(1, math.ceil(total_teams / PAGE_SIZE))
-        try:
-            team_page = int(request.args.get('team_page', 1))
-        except Exception:
-            team_page = 1
-        if team_page < 1:
-            team_page = 1
-        if team_page > total_team_pages:
-            team_page = total_team_pages
-
-        start_idx = (team_page - 1) * PAGE_SIZE
-        end_idx = start_idx + PAGE_SIZE
-        teams_to_show = team_numbers[start_idx:end_idx]
-
-        # Build filter to include teams (including None)
-        filters = []
-        non_null_teams = [t for t in teams_to_show if t is not None]
-        if non_null_teams:
-            filters.append(User.scouting_team_number.in_(non_null_teams))
-        if None in teams_to_show:
-            filters.append(User.scouting_team_number.is_(None))
-
-        if filters:
-            users = query.filter(or_(*filters)).all()
-        else:
-            users = []
-
-        team_start = start_idx + 1 if total_teams > 0 else 0
-        team_end = min(end_idx, total_teams)
+    # --- Sorting support ---
+    sort = request.args.get('sort', 'username')
+    order = request.args.get('order', 'asc')
+    if sort == 'team':
+        sort_col = User.scouting_team_number
+    elif sort == 'last_used':
+        # default last_used falling back to last_login for nulls if needed
+        sort_col = User.last_used
     else:
-        # Not a paginated view (either admin scoped view or search results)
-        users = query.all()
-        # For non-superadmins, compute team counts for display
-        if not current_user.has_role('superadmin'):
-            total_teams = 1
-            team_start = 1
-            team_end = 1
+        sort_col = User.username
+
+    if order == 'desc':
+        query = query.order_by(sort_col.desc())
+    else:
+        query = query.order_by(sort_col.asc())
+
+    # --- User-based pagination ---
+    try:
+        page = int(request.args.get('page', 1))
+    except Exception:
+        page = 1
+    if page < 1:
+        page = 1
+    PER_PAGE = 50
+    pagination = query.paginate(page=page, per_page=PER_PAGE, error_out=False)
+    users = pagination.items
+
+    # compute display range for template
+    user_start = (pagination.page - 1) * PER_PAGE + 1 if pagination.total > 0 else 0
+    user_end = user_start + len(users) - 1
+
+    # expose pagination object to template
+    # (other team-related variables are no longer needed)
 
     all_roles = Role.query.all()
     # These are superadmin/admin pages that should render with the global chrome
@@ -967,8 +946,8 @@ def manage_users():
     ctx['no_chrome'] = False
     return render_template('auth/manage_users.html', users=users, all_roles=all_roles, search=search,
                            total_users=total_users, active_users=active_users,
-                           team_page=team_page, total_team_pages=total_team_pages, total_teams=total_teams,
-                           team_start=team_start, team_end=team_end,
+                           pagination=pagination, user_start=user_start, user_end=user_end,
+                           sort=sort, order=order,
                            **ctx)
 
 @bp.route('/add_user', methods=['GET', 'POST'])

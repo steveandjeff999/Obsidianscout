@@ -16,6 +16,34 @@
         FORM_HTML_TEMPLATE: 'scouting_form_html_template'  // Single universal form template
     };
 
+    /**
+     * Remove duplicate <option> elements from a select based on value.
+     * This helps guard against stale cached pages that accidentally
+     * contain the same match row multiple times.  Call early on page load
+     * so the user never sees repeated entries even if the HTML was wrong.
+     */
+    function dedupeSelectOptions(select) {
+        if (!select) return;
+        const seen = new Set();
+        const toRemove = [];
+        Array.from(select.options).forEach(opt => {
+            const val = opt.value;
+            if (val && seen.has(val)) {
+                toRemove.push(opt);
+            } else {
+                seen.add(val);
+            }
+        });
+        toRemove.forEach(opt => opt.remove());
+        // if a custom wrapper exists keep it in sync
+        if (select._customWrapper) {
+            try { syncCustomSelectVisibilityForNative(select); } catch (e) { /* ignore */ }
+        }
+        if (toRemove.length) {
+            console.log('[Offline Manager] removed', toRemove.length, 'duplicate option(s) from', select.id);
+        }
+    }
+
     const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
     /**
@@ -28,6 +56,16 @@
         }
 
         console.log('[Offline Manager] Initializing offline cache for scouting form...');
+
+        // Before doing anything else, dedupe selectors in case the cached
+        // HTML contained duplicate entries (offline bug reports).  We run
+        // this unconditionally so even online loads are cleaned up quickly.
+        try {
+            const matchSel = document.getElementById('match-selector');
+            if (matchSel) dedupeSelectOptions(matchSel);
+            const teamSel = document.getElementById('team-selector');
+            if (teamSel) dedupeSelectOptions(teamSel);
+        } catch (e) { /* ignore */ }
 
         // Cache data on page load if online
         if (navigator.onLine) {
@@ -112,7 +150,7 @@
             // Cache matches data with alliance information
             const matchesSelect = document.getElementById('match-selector');
             if (matchesSelect) {
-                const matches = Array.from(matchesSelect.options)
+                let matches = Array.from(matchesSelect.options)
                     .filter(opt => opt.value)
                     .map(opt => ({
                         id: opt.value,
@@ -123,8 +161,20 @@
                         text: opt.textContent
                     }));
                 
+                // dedupe by id to avoid storing repeated entries caused by stale cached
+                // HTML or other bugs (fix for offline duplicate/triplicate matches)
+                const unique = [];
+                const seen = new Set();
+                matches.forEach(m => {
+                    if (!seen.has(m.id)) {
+                        seen.add(m.id);
+                        unique.push(m);
+                    }
+                });
+                matches = unique;
+
                 localStorage.setItem(CACHE_KEYS.MATCHES, JSON.stringify(matches));
-                console.log(`[Offline Manager] Cached ${matches.length} matches with alliance data`);
+                console.log(`[Offline Manager] Cached ${matches.length} unique matches with alliance data`);
             }
 
             // Cache game config if available in the page
