@@ -425,7 +425,18 @@ def index():
         match_type_order.get(m.match_type.lower(), 99),  # Unknown types go to the end
         m.match_number
     ))
-    
+
+    # Deduplicate matches by (match_type, match_number) to avoid showing the same
+    # logical match twice when duplicate DB records exist (e.g. from sync/import).
+    _seen_match_keys = set()
+    _deduped_matches = []
+    for _m in matches:
+        _mk = (_m.match_type.lower(), _m.match_number)
+        if _mk not in _seen_match_keys:
+            _seen_match_keys.add(_mk)
+            _deduped_matches.append(_m)
+    matches = _deduped_matches
+
     # Get recent scouting data - use alliance data if alliance mode is active
     if is_alliance_mode:
         recent_scouting_data = AllianceSharedScoutingData.query.filter_by(
@@ -545,7 +556,18 @@ def scouting_form():
         match_type_order.get(m.match_type.lower(), 99),  # Unknown types go to the end
         m.match_number
     ))
-    
+
+    # Deduplicate matches by (match_type, match_number) to avoid showing the same
+    # logical match twice when duplicate DB records exist (e.g. from sync/import).
+    _seen_match_keys = set()
+    _deduped_matches = []
+    for _m in matches:
+        _mk = (_m.match_type.lower(), _m.match_number)
+        if _mk not in _seen_match_keys:
+            _seen_match_keys.add(_mk)
+            _deduped_matches.append(_m)
+    matches = _deduped_matches
+
     # For AJAX team/match selection
     if request.method == 'POST' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         current_app.logger.info(f"AJAX form request received - User: {current_user.username}")
