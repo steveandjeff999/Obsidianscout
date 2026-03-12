@@ -1474,6 +1474,38 @@ class StrategyDrawing(db.Model):
         self.data_json = json.dumps(value)
 
 
+class AutoPathDrawing(db.Model):
+    """Model to store an individual robot's auto‑path sketch for a specific match."""
+    __tablename__ = 'auto_path_drawing'
+
+    id = db.Column(db.Integer, primary_key=True)
+    match_id = db.Column(db.Integer, db.ForeignKey('match.id'), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
+    data_json = db.Column(db.Text, nullable=False)  # JSON-encoded drawing data
+    last_updated = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Ensure only one drawing per match/team pair
+    __table_args__ = (db.UniqueConstraint('match_id', 'team_id', name='uix_match_team'),)
+
+    match = db.relationship('Match', backref=db.backref('auto_path_drawings', cascade='all, delete-orphan'))
+    team = db.relationship('Team')
+
+    def __repr__(self):
+        return f"<AutoPathDrawing match={self.match_id} team={self.team_id}>"
+
+    @property
+    def data(self):
+        try:
+            return json.loads(self.data_json)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @data.setter
+    def data(self, value):
+        self.data_json = json.dumps(value)
+
+
 class QualitativeScoutingData(db.Model):
     """Model to store qualitative scouting observations for entire alliances in a match"""
     __tablename__ = 'qualitative_scouting_data'

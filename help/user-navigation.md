@@ -72,6 +72,7 @@ Key scout pages and how to reach them:
 - After login (scout-only accounts): you are redirected to the scouting dashboard: `/scouting/`
 - Scouting dashboard (overview): `/scouting/`
 - Scouting form (select team & match then scout): `/scouting/form`
+- Auto path scouting (select team & match then draw field path): `/scouting/auto_path`
   - The form can be loaded via AJAX by posting `team_id` and `match_id` to `/scouting/form` (XHR)
 - Generate/Display QR / Data Matrix for a saved scouting record:
   - Friendly display (query params): `/scouting/qr?team_id=<id>&match_id=<id>`

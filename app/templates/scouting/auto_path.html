@@ -1,0 +1,412 @@
+{% extends 'base.html' %}
+
+{% block title %}Auto Path Scouting{% endblock %}
+{% block heading %}Auto Path Scouting{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/scouting_form.css') }}">
+<style>
+.canvas-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+.img-no-drag { -webkit-user-drag: none; -khtml-user-drag: none; -moz-user-drag: none; -o-user-drag: none; user-drag: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+    <p><a href="{{ url_for('scouting.auto_path_list') }}" class="btn btn-sm btn-outline-secondary mb-3">View saved paths</a></p>
+    <!-- Team and Match Selection (same as scouting form) -->
+    <div class="card mb-4 navbar-glass">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Select Event, Team and Match</h5>
+            </div>
+            <div class="card-body">
+                <form id="team-match-form" aria-label="Event, team and match selection">
+                    <div class="row">
+                        <div class="col-md-4 mb-2">
+                            <label for="event-selector" class="form-label">Select Event</label>
+                            <select id="event-selector" class="form-select form-select-sm" name="event_id" onchange="this.form.submit()">
+                                <option value="">-- Current Event --</option>
+                                {% for ev in events|dedupe_events %}
+                                <option value="{{ ev.id }}" {% if selected_event and selected_event.id == ev.id %}selected{% endif %}>{{ ev.name }} ({{ ev.year }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label for="match-selector" class="form-label">Select Match</label>
+                            <div class="input-group mb-1">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="search" id="match-search" class="form-control form-control-sm" placeholder="Search matches by type or number" aria-label="Search matches">
+                            </div>
+                            <select class="form-select" id="match-selector" name="match_id" required aria-required="true" aria-label="Match selector">
+                                <option value="">-- Select Match --</option>
+                                {% for match_option in matches %}
+                                <option value="{{ match_option.id }}" data-match-type="{{ match_option.match_type }}" data-match-number="{{ match_option.match_number }}" data-red-alliance="{{ match_option.red_alliance }}" data-blue-alliance="{{ match_option.blue_alliance }}" {% if selected_match and selected_match.id == match_option.id %}selected{% endif %}>
+                                    {% set code = match_option.event.code if match_option.event and match_option.event.code else '' %}
+                                    {% if code %}{{ code|upper }} {% endif %}{{ match_option.match_type }} {{ match_option.match_number }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <label for="team-selector" class="form-label">Select Team</label>
+                            <div class="input-group mb-1">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="search" id="team-search" class="form-control form-control-sm" placeholder="Search teams by number or name" aria-label="Search teams">
+                            </div>
+                            <select class="form-select" id="team-selector" name="team_id" required aria-label="Team selector" data-no-mapped-display="1">
+                                <option value="">-- Select Team --</option>
+                                {% for team_option in teams|dedupe_teams %}
+                                <option value="{{ team_option.id }}" data-team-number="{{ team_option.team_number }}" data-team-name="{{ team_option.team_name }}" {% if selected_team and selected_team.id == team_option.id %}selected{% endif %}>
+                                    {{ team_option.team_number }} - {{ team_option.team_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Drawing Area -->
+        <div id="drawing-container">
+            <!-- always render drawing area elements; JS will show/hide alert based on selection -->
+            <div id="drawing-elements">
+            <div class="position-relative u-max-w-900 mx-auto">
+                <img id="field-image" src="{{ url_for('static', filename='Feild-2025.png') }}" alt="Field" class="img-no-drag" draggable="false">
+                <canvas id="drawing-canvas" class="canvas-overlay"></canvas>
+                <input type="text" id="text-input-overlay" class="d-none" maxlength="200" aria-label="Canvas text input">
+                <button id="delete-text" class="d-none" aria-label="Delete text">✕</button>
+            </div>
+            <div class="mt-3 text-center">
+                <button id="clear-canvas" class="btn btn-warning">Clear Drawing</button>
+                <button id="undo-drawing" class="btn btn-secondary ms-2">Undo</button>
+                <button id="redo-drawing" class="btn btn-secondary ms-1">Redo</button>
+                <button id="save-drawing" class="btn btn-primary ms-2">Save Drawing</button>
+                <span id="save-status" class="ms-3 text-muted">Use the controls above to record the auto path.</span>
+            </div>
+            <div class="mt-2 text-center text-muted">
+                <small>Double-click (or tap) to add a scoring location. Drag to draw a path.</small>
+            </div>
+            <div class="mt-2 text-center">
+                <small class="text-muted">Draw the robot's autonomous path; the drawing will save automatically when you click "Save Drawing".</small>
+            </div>
+            </div>
+            <div id="selection-alert" class="alert alert-info text-center py-4" style="display:none;">
+                <i class="fas fa-info-circle fa-3x mb-3"></i>
+                <h4>Please select a team and match above</h4>
+                <p class="mb-0">The drawing area will appear once both are chosen.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // keep game config around if needed for offline (not strictly used here)
+    window.gameConfig = {{ game_config | tojson | safe }};
+</script>
+<script>
+// copy relevant drawing logic from strategy_draw.html but simplified for auto-path
+const fieldImage = document.getElementById('field-image');
+const canvas = document.getElementById('drawing-canvas');
+const ctx = canvas ? canvas.getContext('2d') : null;
+const clearBtn = document.getElementById('clear-canvas');
+const matchSelect = document.getElementById('match-selector');
+const teamSelect = document.getElementById('team-selector');
+let drawing = false;
+let dragOccurred = false;
+let lastX = 0, lastY = 0;
+let currentColor = '#ff0000';
+let currentMatchId = matchSelect ? matchSelect.value : null;
+let currentTeamId = teamSelect ? teamSelect.value : null;
+let drawingData = [];
+let undoStack = [];
+let redoStack = [];
+const UNDO_LIMIT = 30;
+let drawingLastUpdated = null;
+
+function resizeCanvas() {
+    if (!canvas || !fieldImage) return;
+    canvas.width = fieldImage.clientWidth;
+    canvas.height = fieldImage.clientHeight;
+    try { fieldImage.style.pointerEvents = 'none'; } catch(e){}
+    redraw();
+}
+
+function redraw() {
+    if (!canvas || !ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for (const item of drawingData) {
+        if (!item) continue;
+        if (item.type === 'erase') {
+            ctx.save();
+            ctx.globalCompositeOperation='destination-out';
+            ctx.lineJoin='round'; ctx.lineCap='round';
+            const size = item.size || 20;
+            ctx.lineWidth = size;
+            if (item.points && item.points.length) {
+                ctx.beginPath();
+                ctx.moveTo(item.points[0].x*rect.width, item.points[0].y*rect.height);
+                for (let i=1;i<item.points.length;i++) {
+                    ctx.lineTo(item.points[i].x*rect.width, item.points[i].y*rect.height);
+                }
+                ctx.stroke();
+                for (const p of item.points) {
+                    ctx.beginPath();
+                    ctx.arc(p.x*rect.width, p.y*rect.height, size/2,0,Math.PI*2);
+                    ctx.fill();
+                }
+            }
+            ctx.restore();
+            continue;
+        }
+        if (item.type === 'score') {
+            // blue circle for scoring
+            ctx.fillStyle = '#007bff';
+            const cx = item.x * rect.width;
+            const cy = item.y * rect.height;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 6, 0, Math.PI*2);
+            ctx.fill();
+        } else if (item.type === 'intake') {
+            // green triangle for intake
+            ctx.fillStyle = '#28a745';
+            const cx = item.x * rect.width;
+            const cy = item.y * rect.height;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - 6);
+            ctx.lineTo(cx - 5, cy + 4);
+            ctx.lineTo(cx + 5, cy + 4);
+            ctx.closePath();
+            ctx.fill();
+        } else if (item.points && item.points.length) {
+            ctx.strokeStyle = item.color;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(item.points[0].x*rect.width, item.points[0].y*rect.height);
+            for (let i=1;i<item.points.length;i++) {
+                ctx.lineTo(item.points[i].x*rect.width, item.points[i].y*rect.height);
+            }
+            ctx.stroke();
+        }
+    }
+}
+
+function pushUndoSnapshot() {
+    try {
+        const snap = JSON.parse(JSON.stringify(drawingData||[]));
+        undoStack.push(snap);
+        if (undoStack.length>UNDO_LIMIT) undoStack.shift();
+        redoStack = [];
+    } catch(e){ }
+}
+
+function startDraw(e) {
+    if (!canvas || !ctx) return;
+    if (e.type && e.type.startsWith('touch')) e.preventDefault();
+    drawing=true;
+    dragOccurred = false;             // reset drag flag
+    const {x,y} = getPos(e);
+    lastX=x; lastY=y;
+    pushUndoSnapshot();
+    drawingData.push({color: currentColor, points:[{x,y}]});
+}
+
+function handleClick(e) {
+    // add scoring location
+    const {x,y} = getPos(e);
+    pushUndoSnapshot();
+    drawingData.push({type:'score', x,y});
+    redraw();
+    sendDrawingUpdate();
+}
+
+function handleDoubleClick(e) {
+    const {x,y} = getPos(e);
+    pushUndoSnapshot();
+    drawingData.push({type:'intake', x,y});
+    redraw();
+    sendDrawingUpdate();
+}
+function draw(e) {
+    if (!drawing) return;
+    dragOccurred = true;
+    if (e.type && e.type.startsWith('touch')) e.preventDefault();
+    const {x,y} = getPos(e);
+    const line = drawingData[drawingData.length-1];
+    if (line && line.points) line.points.push({x,y});
+    redraw();
+    lastX=x; lastY=y;
+}
+function endDraw() {
+    if (drawing) {
+        drawing=false;
+        // if we didn't actually move, treat as a click marker
+        if (!dragOccurred) {
+            handleClick({});
+        } else {
+            sendDrawingUpdate();
+        }
+    }
+}
+function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    let clientX,clientY;
+    if (e.touches && e.touches.length) {
+        clientX = e.touches[0].clientX; clientY = e.touches[0].clientY;
+    } else {
+        clientX = e.clientX; clientY = e.clientY;
+    }
+    const x = (clientX - rect.left)/rect.width;
+    const y = (clientY - rect.top)/rect.height;
+    return {x,y};
+}
+
+function sendDrawingUpdate() {
+    if (currentMatchId && currentTeamId) {
+        fetch(`/scouting/api/auto_path/${currentMatchId}/${currentTeamId}`, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({data:drawingData})
+        }).then(r=>r.json()).then(resp=>{
+            if (!resp || resp.error) {
+                console.warn('save failed',resp);
+            } else {
+                // give the user some feedback that their drawing persisted
+                if (typeof showToast === 'function') {
+                    showToast('Auto path saved!', 'success');
+                }
+                const statusEl = document.getElementById('save-status');
+                if (statusEl) {
+                    const now = new Date();
+                    statusEl.textContent = 'Saved at ' + now.toLocaleTimeString();
+                }
+            }
+        });
+    }
+}
+
+function clearDrawing() {
+    if (!drawingData.length) return;
+    pushUndoSnapshot();
+    drawingData=[];
+    redraw();
+    sendDrawingUpdate();
+}
+
+function undo() {
+    if (!undoStack.length) return;
+    redoStack.push(JSON.parse(JSON.stringify(drawingData)));
+    drawingData = undoStack.pop();
+    redraw();
+}
+function redo() {
+    if (!redoStack.length) return;
+    undoStack.push(JSON.parse(JSON.stringify(drawingData)));
+    drawingData = redoStack.pop();
+    redraw();
+}
+
+function loadDrawing(matchId, teamId) {
+    if (!matchId || !teamId) return;
+    fetch(`/scouting/api/auto_path/${matchId}/${teamId}`)
+        .then(r=>r.json())
+        .then(data=>{
+            const incoming = data.data || [];
+            if (JSON.stringify(incoming) !== JSON.stringify(drawingData)) {
+                drawingData = incoming;
+                redraw();
+            }
+        });
+}
+
+function updateVisibility() {
+    const mid = matchSelect.value;
+    const tid = teamSelect.value;
+    const alert = document.getElementById('selection-alert');
+    const drawEls = document.getElementById('drawing-elements');
+    if (mid && tid) {
+        alert.style.display = 'none';
+        drawEls.style.display = '';
+    } else {
+        alert.style.display = '';
+        drawEls.style.display = 'none';
+    }
+}
+
+function selectionChanged() {
+    const mid = matchSelect.value;
+    const tid = teamSelect.value;
+    // if both selected, reload page with query params to render server side content
+    if (mid && tid) {
+        window.location = `/scouting/auto_path?team_id=${tid}&match_id=${mid}`;
+    } else {
+        updateVisibility();
+    }
+}
+
+if (matchSelect) matchSelect.addEventListener('change', selectionChanged);
+if (teamSelect) teamSelect.addEventListener('change', selectionChanged);
+
+// on initial load set visibility and fetch existing drawing if parameters exist
+document.addEventListener('DOMContentLoaded', function() {
+    updateVisibility();
+    if (matchSelect && teamSelect && matchSelect.value && teamSelect.value) {
+        currentMatchId = matchSelect.value;
+        currentTeamId = teamSelect.value;
+        loadDrawing(currentMatchId, currentTeamId);
+    }
+});
+let clearPending = false;
+if (clearBtn) clearBtn.addEventListener('click', function(e){
+    if (!clearPending) {
+        clearPending = true;
+        clearBtn.textContent = 'Confirm Clear';
+        clearBtn.classList.add('btn-danger');
+        clearBtn.classList.remove('btn-warning');
+        setTimeout(()=>{
+            clearPending = false;
+            clearBtn.textContent = 'Clear Drawing';
+            clearBtn.classList.remove('btn-danger');
+            clearBtn.classList.add('btn-warning');
+        }, 3000);
+    } else {
+        clearPending = false;
+        clearBtn.textContent = 'Clear Drawing';
+        clearBtn.classList.remove('btn-danger');
+        clearBtn.classList.add('btn-warning');
+        clearDrawing();
+    }
+});
+if (document.getElementById('undo-drawing')) document.getElementById('undo-drawing').addEventListener('click', undo);
+if (document.getElementById('redo-drawing')) document.getElementById('redo-drawing').addEventListener('click', redo);
+if (document.getElementById('save-drawing')) document.getElementById('save-drawing').addEventListener('click', sendDrawingUpdate);
+
+window.addEventListener('resize', resizeCanvas);
+fieldImage && fieldImage.addEventListener('load', resizeCanvas);
+
+// attach drawing event listeners so user can sketch
+canvas && canvas.addEventListener('mousedown', startDraw);
+canvas && canvas.addEventListener('touchstart', startDraw);
+canvas && canvas.addEventListener('mousemove', draw);
+canvas && canvas.addEventListener('touchmove', draw);
+canvas && canvas.addEventListener('mouseup', endDraw);
+canvas && canvas.addEventListener('mouseleave', endDraw);
+canvas && canvas.addEventListener('touchend', endDraw);
+// double-click for intake marker (click handled by endDraw only when no drag)
+canvas && canvas.addEventListener('dblclick', function(e){
+    if (!dragOccurred) handleDoubleClick(e);
+});
+
+// initialize canvas size if already loaded
+if (fieldImage && fieldImage.complete) resizeCanvas();
+</script>
+{% endblock %}

@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
-from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingData, AllianceSharedQualitativeData, QualitativeScoutingData, ScoutingTeamSettings
+from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingData, AllianceSharedQualitativeData, QualitativeScoutingData, ScoutingTeamSettings, AutoPathDrawing
 from app import db, socketio
 import json
 from datetime import datetime, timezone
@@ -886,6 +886,322 @@ def scouting_form():
                               match=None,
                               show_team_match_selection=True,
                               **get_theme_context())  # Flag to show selection form
+
+
+# ---------------------------------------------------------------------------
+# Auto-path scouting drawing
+# ---------------------------------------------------------------------------
+@bp.route('/auto_path')
+@login_required
+def auto_path():
+    """Page that lets a scout draw an autonomous path for a robot in a match.
+
+    The UI is similar to the regular scouting form (team + match selector), but
+    instead of the form fields it renders a field image with a drawing canvas.
+    The data is stored in a new AutoPathDrawing model keyed by (match_id, team_id).
+    """
+    # fetch game config early (used below for default event)
+    game_config = get_effective_game_config()
+
+    # allow optional event selection like the list page
+    events = get_combined_dropdown_events()
+    selected_event = None
+    event_id = request.args.get('event_id', type=int)
+    if event_id:
+        selected_event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+    elif game_config.get('current_event_code'):
+        selected_event = get_event_by_code(game_config.get('current_event_code'))
+
+    # sort matches for usability
+    matches = filter_matches_by_scouting_team().all()
+    if selected_event:
+        matches = [m for m in matches if m.event_id == selected_event.id]
+    else:
+        current_event_code = game_config.get('current_event_code')
+        if current_event_code:
+            season = game_config.get('season') or game_config.get('year') or datetime.now().year
+            desired_code = f"{season}{str(current_event_code).upper()}"
+            matches = [m for m in matches if m.event and (m.event.code or '').upper() == desired_code]
+    # restrict to current event if set in game config
+
+    # for auto_path page only show teams from the current-event match list
+    teams = []
+    if matches:
+        nums = set()
+        for m in matches:
+            if m.red_alliance:
+                for tnum in str(m.red_alliance).split(','):
+                    try:
+                        nums.add(int(tnum.strip()))
+                    except ValueError:
+                        pass
+            if m.blue_alliance:
+                for tnum in str(m.blue_alliance).split(','):
+                    try:
+                        nums.add(int(tnum.strip()))
+                    except ValueError:
+                        pass
+        if nums:
+            teams = Team.query.filter(Team.team_number.in_(nums)).order_by(Team.team_number).all()
+    # avoid showing duplicates by team number
+    seen = set()
+    unique_teams = []
+    for t in teams:
+        if t.team_number not in seen:
+            seen.add(t.team_number)
+            unique_teams.append(t)
+    teams = unique_teams
+    # get game config now so we can filter (needed for offline caching)
+    game_config = get_effective_game_config()
+    from app.routes.matches import match_sort_key
+    # sort matches and collapse duplicates by type/number only
+    matches = sorted(matches, key=match_sort_key)
+    seen = set()
+    unique = []
+    for m in matches:
+        mt = (m.match_type or '').strip().lower()
+        # ignore event when deduplicating - we only care about type+number display
+        key = (mt, m.match_number)
+        if key not in seen:
+            seen.add(key)
+            unique.append(m)
+    matches = unique
+
+    # game configuration is needed for offline caching in the template
+    game_config = get_effective_game_config()
+
+    selected_team = None
+    selected_match = None
+    drawing = None
+
+    team_id = request.args.get('team_id', type=int)
+    match_id = request.args.get('match_id', type=int)
+    if team_id:
+        selected_team = Team.query.get_or_404(team_id)
+    if match_id:
+        selected_match = Match.query.get_or_404(match_id)
+
+    if selected_team and selected_match:
+        drawing = AutoPathDrawing.query.filter_by(match_id=match_id, team_id=team_id).first()
+
+    return render_template(
+        'scouting/auto_path.html',
+        teams=teams,
+        matches=matches,
+        selected_event=selected_event,
+        events=events,
+        selected_team=selected_team,
+        selected_match=selected_match,
+        drawing=drawing,
+        game_config=game_config,
+        **get_theme_context()
+    )
+
+
+@bp.route('/api/auto_path/list')
+@login_required
+def api_auto_path_list():
+    """Return JSON list of saved auto-paths for current scouting team and optional event filter."""
+    event_id = request.args.get('event_id', type=int)
+    drawings = AutoPathDrawing.query.join(Match, AutoPathDrawing.match_id == Match.id)
+    # restrict to matches visible to scouting team
+    match_ids = [m.id for m in filter_matches_by_scouting_team().all()]
+    if match_ids:
+        drawings = drawings.filter(AutoPathDrawing.match_id.in_(match_ids))
+    if event_id:
+        drawings = drawings.filter(Match.event_id == event_id)
+    result = []
+    for d in drawings.all():
+        result.append({
+            'match_id': d.match_id,
+            'team_id': d.team_id,
+            'team_number': d.team.team_number,
+            'match_type': d.match.match_type,
+            'match_number': d.match.match_number,
+            'data': d.data
+        })
+    return jsonify(result)
+
+
+@bp.route('/auto_path/view/<int:match_id>/<int:team_id>')
+@login_required
+
+def auto_path_view(match_id, team_id):
+    """Show a read-only view of a saved auto path."""
+    match = Match.query.get_or_404(match_id)
+    team = Team.query.get_or_404(team_id)
+    drawing = AutoPathDrawing.query.filter_by(match_id=match_id, team_id=team_id).first()
+    game_config = get_effective_game_config()
+    return render_template(
+        'scouting/auto_path_view.html',
+        match=match,
+        team=team,
+        drawing=drawing,
+        game_config=game_config,
+        **get_theme_context()
+    )
+
+
+@bp.route('/api/auto_path/<int:match_id>/<int:team_id>', methods=['GET'])
+@login_required
+def get_auto_path(match_id, team_id):
+    drawing = AutoPathDrawing.query.filter_by(match_id=match_id, team_id=team_id).first()
+    if drawing:
+        return jsonify({'data': drawing.data})
+    else:
+        return jsonify({'data': None})
+
+
+@bp.route('/api/auto_path/<int:match_id>/<int:team_id>', methods=['POST'])
+@login_required
+def save_auto_path(match_id, team_id):
+    try:
+        payload = request.get_json(force=True)
+    except Exception:
+        return jsonify({'error': 'Invalid JSON payload'}), 400
+
+    data = payload.get('data') if payload else None
+    if data is None:
+        return jsonify({'error': 'Missing drawing data'}), 400
+
+    try:
+        drawing = AutoPathDrawing.query.filter_by(match_id=match_id, team_id=team_id).first()
+        if not drawing:
+            drawing = AutoPathDrawing(match_id=match_id, team_id=team_id, data_json='{}')
+            db.session.add(drawing)
+        drawing.data = data
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.exception('Failed to save auto path drawing')
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/auto_paths')
+@login_required
+
+def auto_path_list():
+    """Show a paginated list of saved drawings for the current scouting team's matches.
+
+    Supports optional sorting and filtering by team. A `sort=team` query parameter will
+    order by team number instead of the default match order. A `team_id` parameter will
+    restrict results to a specific team.
+    """
+    game_config = get_effective_game_config()
+
+    # allow event selection via query param; default to config value
+    events = get_combined_dropdown_events()
+    selected_event = None
+    event_id = request.args.get('event_id', type=int)
+    if event_id:
+        selected_event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+    elif game_config.get('current_event_code'):
+        # use effective game config as fallback
+        selected_event = get_event_by_code(game_config.get('current_event_code'))
+
+    # start with the same match filtering logic used by /auto_path
+    matches = filter_matches_by_scouting_team().all()
+    # restrict to selected event if available
+    if selected_event:
+        matches = [m for m in matches if m.event_id == selected_event.id]
+    else:
+        # fall back to config-coded filtering (previous behavior)
+        current_event_code = game_config.get('current_event_code')
+        if current_event_code:
+            season = game_config.get('season') or game_config.get('year') or datetime.now().year
+            desired_code = f"{season}{str(current_event_code).upper()}"
+            matches = [m for m in matches if m.event and (m.event.code or '').upper() == desired_code]
+    from app.routes.matches import match_sort_key
+    matches = sorted(matches, key=match_sort_key)
+    seen = set()
+    unique = []
+    for m in matches:
+        mt = (m.match_type or '').strip().lower()
+        key = (mt, m.match_number)
+        if key not in seen:
+            seen.add(key)
+            unique.append(m)
+    matches = unique
+
+    match_ids = [m.id for m in matches]
+    # when building list page we also want to pass events/selected_event for dropdown
+    drawings = []
+    if match_ids:
+        drawings = AutoPathDrawing.query.filter(AutoPathDrawing.match_id.in_(match_ids)).all()
+
+    # optional team filter
+    team_filter = request.args.get('team_id', type=int)
+    if team_filter:
+        # Get the team number from the selected team_id
+        selected_team = Team.query.get(team_filter)
+        if selected_team:
+            # Filter by team_number instead of team_id to handle duplicate Team records
+            target_team_number = selected_team.team_number
+            drawings = [d for d in drawings if d.team.team_number == target_team_number]
+        else:
+            # If team not found, show no results
+            drawings = []
+
+    # optional search query
+    search_query = request.args.get('q', '').strip().lower()
+    if search_query:
+        filtered = []
+        for d in drawings:
+            team_num_str = str(d.team.team_number or '')
+            match_type = (d.match.match_type or '').lower()
+            match_num_str = str(d.match.match_number or '')
+            if (search_query in team_num_str or 
+                search_query in match_type or 
+                search_query in match_num_str):
+                filtered.append(d)
+        drawings = filtered
+
+    # optional sort order
+    sort = request.args.get('sort')
+    if sort == 'team':
+        drawings.sort(key=lambda d: d.team.team_number or 0)
+    else:
+        # default sort by match order (match_sort_key available on match)
+        drawings.sort(key=lambda d: (d.match.match_type or '', d.match.match_number or 0))
+
+    # build list of ALL teams from matches for dropdown (not just teams with drawings)
+    all_match_teams = set()
+    for match in matches:
+        # extract team numbers from red/blue alliance strings
+        if match.red_alliance:
+            for team_str in str(match.red_alliance).split(','):
+                try:
+                    all_match_teams.add(int(team_str.strip()))
+                except ValueError:
+                    pass
+        if match.blue_alliance:
+            for team_str in str(match.blue_alliance).split(','):
+                try:
+                    all_match_teams.add(int(team_str.strip()))
+                except ValueError:
+                    pass
+    # fetch actual Team objects for these numbers
+    team_options = []
+    if all_match_teams:
+        teams = Team.query.filter(Team.team_number.in_(all_match_teams)).order_by(Team.team_number).all()
+        # Deduplicate by team_number (keep first occurrence of each)
+        seen_numbers = set()
+        for team in teams:
+            if team.team_number not in seen_numbers:
+                seen_numbers.add(team.team_number)
+                team_options.append(team)
+
+    return render_template(
+        'scouting/auto_path_list.html',
+        drawings=drawings,
+        game_config=game_config,
+        team_options=team_options,
+        selected_team=team_filter,
+        sort=sort,
+        events=events,
+        selected_event=selected_event,
+        **get_theme_context()
+    )
 
 @bp.route('/qr')
 def qr_code_display():

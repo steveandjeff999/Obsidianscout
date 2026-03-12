@@ -83,6 +83,32 @@ catch {
     exit 1
 }
 
+# Check if requirements.txt has changed since last install
+$hashFile = Join-Path $venvPath "requirements.hash"
+$reqHash = (Get-FileHash (Join-Path $scriptPath "requirements.txt") -Algorithm MD5).Hash
+
+$oldHash = ""
+if (Test-Path $hashFile) {
+    $oldHash = (Get-Content $hashFile -Raw).Trim()
+}
+
+if ($reqHash -ne $oldHash) {
+    Write-Host "requirements.txt has changed - updating dependencies..." -ForegroundColor Yellow
+    Write-Host ""
+    & "$venvPath\Scripts\pip.exe" install -r requirements.txt
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: Failed to update dependencies" -ForegroundColor Red
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
+    $reqHash | Set-Content $hashFile
+    Write-Host "Dependencies updated successfully" -ForegroundColor Green
+    Write-Host ""
+} else {
+    Write-Host "Dependencies are up to date" -ForegroundColor Green
+    Write-Host ""
+}
+
 # Check if required files exist
 $runPy = Join-Path $scriptPath "run.py"
 if (-not (Test-Path $runPy)) {
