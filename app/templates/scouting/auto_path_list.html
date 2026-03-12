@@ -121,8 +121,9 @@
         <div class="card-body text-center p-2">
           <canvas class="preview img-fluid" width="400" height="267" data-drawing='{{ d.data|tojson|safe }}' style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;"></canvas>
         </div>
-        <div class="card-footer bg-light">
-          <a href="{{ url_for('scouting.auto_path_view', match_id=d.match_id, team_id=d.team_id) }}" class="btn btn-sm btn-primary w-100"><i class="fas fa-eye me-2"></i>View</a>
+        <div class="card-footer bg-light d-flex gap-2">
+          <a href="{{ url_for('scouting.auto_path_view', match_id=d.match_id, team_id=d.team_id) }}" class="btn btn-sm btn-primary flex-grow-1"><i class="fas fa-eye me-2"></i>View</a>
+          <a href="{{ url_for('scouting.delete_auto_path', match_id=d.match_id, team_id=d.team_id) }}" class="btn btn-sm btn-danger"><i class="fas fa-trash me-2"></i>Delete</a>
         </div>
       </div>
     </div>
