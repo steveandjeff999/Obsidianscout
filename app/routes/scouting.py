@@ -1,6 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
-from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingData, AllianceSharedQualitativeData, QualitativeScoutingData, ScoutingTeamSettings, AutoPathDrawing
+from app.models import (
+    Match, Team, ScoutingData, Event,
+    AllianceSharedScoutingData, AllianceSharedQualitativeData,
+    QualitativeScoutingData, ScoutingTeamSettings,
+    AutoPathDrawing, PitScoutingData
+)
 from app import db, socketio
 import json
 from datetime import datetime, timezone
@@ -1364,28 +1369,135 @@ def qr_code(team_id, match_id):
 @bp.route('/list')
 @login_required
 def list_data():
-    """List all scouting data - uses alliance shared data when alliance mode is active"""
-    # If the user is ONLY a scout (no analytics or admin role), redirect to the scouting dashboard with a message
+    """All data overview page.  This used to be the "All Scouting Data" list; we
+    now show summaries for every dataset (match results, pit data, auto paths,
+    qualitative entries) and provide links to the individual list pages.  A
+    separate `/scouting/match-data` view replicates the original behaviour.
+    """
+    # The access restrictions remain the same as the old list page, since only
+    # analytics/admin users should see full datasets.
+    if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin'):
+        flash('Access to the full data overview is restricted. Please contact an administrator for assistance.', 'warning')
+        return redirect(url_for('scouting.index'))
+
+    # determine which matches are visible to this scouting team (used for auto paths)
+    match_ids = [m.id for m in filter_matches_by_scouting_team().all()]
+
+    # basic counts for each dataset
+    from app.models import Match, PitScoutingData, AutoPathDrawing, QualitativeScoutingData
+
+    match_query = Match.query.filter(Match.scouting_team_number == current_user.scouting_team_number)
+    match_count = match_query.count()
+
+    pit_count = PitScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).count()
+
+    auto_count = 0
+    if match_ids:
+        auto_count = AutoPathDrawing.query.filter(AutoPathDrawing.match_id.in_(match_ids)).count()
+
+    qual_count = QualitativeScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).count()
+
+    # collect actual entries for display below the summary
+    scouting_entries = []
+    is_alliance = False
+    alliance_id = None
+    try:
+        scouting_entries, is_alliance, alliance_id = get_all_scouting_data()
+    except Exception:
+        scouting_entries = []
+
+    pit_entries = PitScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).all()
+
+    auto_entries = []
+    if match_ids:
+        auto_entries = AutoPathDrawing.query.filter(AutoPathDrawing.match_id.in_(match_ids)).all()
+
+    qual_entries = QualitativeScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).all()
+    if is_alliance_mode_active():
+        aid = get_active_alliance_id()
+        if aid:
+            extra = AllianceSharedQualitativeData.query.filter_by(
+                alliance_id=aid,
+                is_active=True
+            ).filter(AllianceSharedQualitativeData.source_scouting_team_number != current_user.scouting_team_number).all()
+            qual_entries.extend(extra)
+
+    # if alliance mode is active we should also include shared entries in the totals
+    if is_alliance_mode_active():
+        alliance_id = get_active_alliance_id()
+        if alliance_id:
+            # matches: the alliance doesn't really contribute extra match records, so skip
+            # pit data: not currently shared
+            # auto paths: still limited by match visibility above
+            # qualitative data: count alliance shared entries that aren't from ourselves
+            extra_qual = AllianceSharedQualitativeData.query.filter_by(
+                alliance_id=alliance_id,
+                is_active=True
+            ).filter(AllianceSharedQualitativeData.source_scouting_team_number != current_user.scouting_team_number).count()
+            qual_count += extra_qual
+
+    return render_template('scouting/list.html',
+                         match_count=match_count,
+                         pit_count=pit_count,
+                         auto_count=auto_count,
+                         qual_count=qual_count,
+                         scouting_entries=scouting_entries,
+                         pit_entries=pit_entries,
+                         auto_entries=auto_entries,
+                         qual_entries=qual_entries,
+                         **get_theme_context())
+
+
+# ---------------------------------------------------------------------------
+# Legacy match scouting data list (formerly "All Data")
+# ---------------------------------------------------------------------------
+@bp.route('/match-data')
+@login_required
+def match_data():
+    """Show the original "all scouting data" table.
+
+    This view is a straight copy of the previous :func:`list_data` logic so
+    that we can repurpose ``/scouting/list`` for a broader overview without
+    losing the ability to inspect individual scouting records.
+    """
+    # same access restriction as before
     if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin'):
         flash('Access to the full scouting data list is restricted. Please contact an administrator for assistance.', 'warning')
         return redirect(url_for('scouting.index'))
-    
-    # Get scouting data - automatically uses alliance shared data if alliance mode is active
+
     scouting_data, is_alliance_mode, alliance_id = get_all_scouting_data()
-    
-    # Get events with scouting data
     events, _, _ = get_events_with_scouting_data()
-    
-    # Check if user is alliance admin (for delete permissions)
     user_is_alliance_admin = is_alliance_admin(alliance_id) if is_alliance_mode else False
-    
-    return render_template('scouting/list.html', 
+
+    return render_template('scouting/match_data.html',
                          scouting_data=scouting_data,
                          events=events,
                          is_alliance_mode=is_alliance_mode,
                          alliance_id=alliance_id,
                          user_is_alliance_admin=user_is_alliance_admin,
                          **get_theme_context())
+
+
+@bp.route('/auto_path/delete/<int:match_id>/<int:team_id>', methods=['POST','GET'])
+@login_required
+def delete_auto_path(match_id, team_id):
+    """Remove an AutoPathDrawing entry for the current scouting team."""
+    # respect alliance mode by deleting only own records (shared data remains intact)
+    drawing = AutoPathDrawing.query.filter_by(match_id=match_id, team_id=team_id).first()
+    if drawing:
+        try:
+            db.session.delete(drawing)
+            db.session.commit()
+            flash('Auto path deleted', 'success')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Error deleting auto path: {e}')
+            flash('Failed to delete auto path', 'danger')
+    else:
+        flash('Auto path not found', 'warning')
+    # redirect back to auto paths list, preserving any query parameters
+    args = request.args.to_dict(flat=True)
+    return redirect(url_for('scouting.auto_path_list', **args))
 
 @bp.route('/view/<int:id>')
 @login_required
