@@ -74,6 +74,32 @@ if errorlevel 1 (
 echo Virtual environment activated: %VIRTUAL_ENV%
 echo.
 
+REM Check if requirements.txt has changed since last install
+set HASH_FILE=.venv\requirements.hash
+python -c "import hashlib; print(hashlib.md5(open('requirements.txt','rb').read()).hexdigest())" > "%TEMP%\obsidian_req_hash.txt"
+set /p NEW_HASH=<"%TEMP%\obsidian_req_hash.txt"
+del "%TEMP%\obsidian_req_hash.txt" >nul 2>&1
+
+set OLD_HASH=
+if exist "%HASH_FILE%" set /p OLD_HASH=<"%HASH_FILE%"
+
+if not "%NEW_HASH%"=="%OLD_HASH%" (
+    echo requirements.txt has changed - updating dependencies...
+    echo.
+    .venv\Scripts\pip.exe install -r requirements.txt
+    if errorlevel 1 (
+        echo ERROR: Failed to update dependencies
+        pause
+        exit /b 1
+    )
+    echo %NEW_HASH%> "%HASH_FILE%"
+    echo Dependencies updated successfully
+    echo.
+) else (
+    echo Dependencies are up to date
+    echo.
+)
+
 REM Check if required files exist
 if not exist "run.py" (
     echo ERROR: run.py not found!
