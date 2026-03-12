@@ -24,10 +24,17 @@ def test_form_prefills_when_team_selected():
             follow_redirects=True
         )
         assert login_resp.status_code in (200, 302)
+        with client.session_transaction() as sess:
+            sess['_user_id'] = str(u.id)
+            sess['_fresh'] = True
 
         # create a team and associated pit data for this user
         team = Team(team_number=7777, team_name='SevenSeven', scouting_team_number=55555)
         db.session.add(team)
+        db.session.commit()
+
+        # ensure no leftover pit data for our test identifier
+        PitScoutingData.query.filter_by(local_id='test-local').delete()
         db.session.commit()
 
         pd = PitScoutingData(
@@ -41,7 +48,7 @@ def test_form_prefills_when_team_selected():
         db.session.commit()
 
         # hit the form with ?team=7777 and ensure we see edit heading and team number selected
-        resp = client.get('/pit_scouting/form?team=7777')
+        resp = client.get('/pit_scouting/form?team=7777', follow_redirects=True)
         assert resp.status_code == 200
         page = resp.data.decode('utf-8')
         assert 'Edit Pit Scouting' in page
@@ -53,7 +60,7 @@ def test_form_prefills_when_team_selected():
         assert 'data-no-mapped-display' in page
 
         # verify ajax endpoint returns the same data
-        resp2 = client.get('/pit_scouting/form?team=7777&ajax=1')
+        resp2 = client.get('/pit_scouting/form?team=7777&ajax=1', follow_redirects=True)
         assert resp2.status_code == 200
         jsondata = resp2.get_json()
         assert jsondata['success']
@@ -84,6 +91,10 @@ def test_ajax_endpoint_returns_empty_for_unscouted_team():
                 data={'username': 'pit_tester', 'password': 'pass', 'team_number': 55555},
                 follow_redirects=True
             )
+        # mark user logged in in session
+        with client.session_transaction() as sess:
+            sess['_user_id'] = str(u.id)
+            sess['_fresh'] = True
 
         # make sure team 9999 exists but no pit data for this user
         t2 = Team.query.filter_by(team_number=9999).first()
@@ -92,7 +103,7 @@ def test_ajax_endpoint_returns_empty_for_unscouted_team():
             db.session.add(t2)
             db.session.commit()
 
-        resp3 = client.get('/pit_scouting/form?team=9999&ajax=1')
+        resp3 = client.get('/pit_scouting/form?team=9999&ajax=1', follow_redirects=True)
         assert resp3.status_code == 200
         j3 = resp3.get_json()
         assert j3['success']
