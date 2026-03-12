@@ -5,7 +5,8 @@ from app.models import (
     Team, Match, Event, ScoutingData, StrategyDrawing, PitScoutingData,
     AllianceSelection, DoNotPickEntry, AvoidEntry,
     TeamListEntry, StrategyShare, SharedGraph, SharedTeamRanks, team_event,
-    AllianceSharedScoutingData, AllianceSharedPitData, AllianceSharedQualitativeData, QualitativeScoutingData
+    AllianceSharedScoutingData, AllianceSharedPitData, AllianceSharedQualitativeData, QualitativeScoutingData,
+    AutoPathDrawing
 )
 from app import db
 import pandas as pd
@@ -1697,6 +1698,79 @@ def import_qr():
     """Import data from QR codes (manual entry or upload)"""
     if request.method == 'POST':
         # Improve: Handle API request with JSON data (supports single item or list of items)
+        def import_auto_path_payload(auto_path_json):
+            team = None
+            match = None
+
+            team_id = auto_path_json.get('team_id')
+            if team_id is not None:
+                team = Team.query.get(team_id)
+
+            if not team:
+                team_number = auto_path_json.get('team_number')
+                if not team_number:
+                    return {'success': False, 'message': 'Invalid auto path QR data: missing team'}
+                team = Team.query.filter_by(team_number=team_number).first()
+                if not team:
+                    team = Team(team_number=team_number, team_name=auto_path_json.get('team_name') or f'Team {team_number}')
+                    db.session.add(team)
+                    db.session.flush()
+
+            match_id = auto_path_json.get('match_id')
+            if match_id is not None:
+                match = Match.query.get(match_id)
+
+            if not match:
+                match_number = auto_path_json.get('match_number')
+                match_type = auto_path_json.get('match_type', 'Qualification')
+                if not match_number:
+                    return {'success': False, 'message': 'Invalid auto path QR data: missing match'}
+
+                match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
+                if not match:
+                    game_config = get_effective_game_config()
+                    event_code = auto_path_json.get('event_code')
+                    event_name = auto_path_json.get('event_name') or event_code or 'Unknown Event'
+                    event = None
+                    if event_code:
+                        event = Event.query.filter_by(code=event_code).first()
+                    if not event:
+                        event = get_or_create_event(name=event_name, year=game_config['season'], code=event_code)
+
+                    match = Match(
+                        match_number=match_number,
+                        match_type=match_type,
+                        event_id=event.id
+                    )
+                    db.session.add(match)
+                    db.session.flush()
+
+            drawing_data = auto_path_json.get('drawing_data')
+            if drawing_data is None:
+                drawing_data = auto_path_json.get('data')
+            if drawing_data is None:
+                return {'success': False, 'message': 'Invalid auto path QR data: missing drawing data'}
+
+            existing_drawing = AutoPathDrawing.query.filter_by(
+                match_id=match.id,
+                team_id=team.id
+            ).first()
+
+            if existing_drawing:
+                existing_drawing.data = drawing_data
+                db.session.commit()
+                return {'success': True, 'message': f'Updated auto path for Team {team.team_number} in Match {match.match_number}'}
+
+            new_drawing = AutoPathDrawing(
+                match_id=match.id,
+                team_id=team.id,
+                data_json='[]'
+            )
+            new_drawing.data = drawing_data
+            db.session.add(new_drawing)
+            db.session.commit()
+            return {'success': True, 'message': f'Added auto path for Team {team.team_number} in Match {match.match_number}'}
+
         def process_single_qr(qr_text):
             """Process a single QR payload string; returns dict {success: bool, message: str}."""
             try:
@@ -1705,6 +1779,9 @@ def import_qr():
                 return {'success': False, 'message': 'Invalid QR code data format. Expected JSON.'}
 
             try:
+                if scouting_data_json.get('auto_path_generated') is True or scouting_data_json.get('export_type') == 'auto_path':
+                    return import_auto_path_payload(scouting_data_json)
+
                 # Check if this is qualitative scouting data
                 if scouting_data_json.get('qualitative') is True:
                     from app.models import QualitativeScoutingData
@@ -1924,6 +2001,13 @@ def import_qr():
         try:
             # Parse QR data (assuming it's JSON)
             scouting_data_json = json.loads(qr_data)
+
+            if scouting_data_json.get('auto_path_generated') is True or scouting_data_json.get('export_type') == 'auto_path':
+                result = import_auto_path_payload(scouting_data_json)
+                if request.is_json:
+                    return result
+                flash(result['message'], 'success' if result.get('success') else 'error')
+                return redirect(request.url)
             
             # Detect the format of the QR code
             if 'offline_generated' in scouting_data_json:

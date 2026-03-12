@@ -96,6 +96,19 @@
             <div class="mt-2 text-center">
                 <small class="text-muted">Draw the robot's autonomous path; the drawing will save automatically when you click "Save Drawing".</small>
             </div>
+            <div class="mt-4 u-max-w-600 mx-auto">
+                <div class="d-grid gap-2">
+                    <button type="button" id="generate-auto-path-qr" class="btn btn-success btn-lg">
+                        <i class="fas fa-qrcode me-2"></i>Generate QR Code
+                    </button>
+                    <button type="button" id="export-auto-path-json" class="btn btn-info btn-lg">
+                        <i class="fas fa-file-export me-2"></i>Export JSON
+                    </button>
+                </div>
+                <div class="mt-2 text-center small text-muted">
+                    Export this auto path for QR transfer or save it as JSON for manual import.
+                </div>
+            </div>
             </div>
             <div id="selection-alert" class="alert alert-info text-center py-4" style="display:none;">
                 <i class="fas fa-info-circle fa-3x mb-3"></i>
@@ -105,6 +118,31 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="autoPathQrModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-qrcode me-2"></i>QR Code for Auto Path
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body qr-modal-body">
+                <div class="qr-container">
+                    <div id="auto-path-qrcode"></div>
+                    <div id="autoPathQrDownloadContainer" class="text-center d-none mt-3">
+                        <button type="button" id="download-auto-path-qr" class="btn btn-primary">
+                            <i class="fas fa-download me-2"></i>Download QR Code
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
 {% endblock %}
 
 {% block extra_js %}
@@ -120,6 +158,12 @@ const ctx = canvas ? canvas.getContext('2d') : null;
 const clearBtn = document.getElementById('clear-canvas');
 const matchSelect = document.getElementById('match-selector');
 const teamSelect = document.getElementById('team-selector');
+const eventSelect = document.getElementById('event-selector');
+const generateQrBtn = document.getElementById('generate-auto-path-qr');
+const exportJsonBtn = document.getElementById('export-auto-path-json');
+const qrCodeContainer = document.getElementById('auto-path-qrcode');
+const qrDownloadContainer = document.getElementById('autoPathQrDownloadContainer');
+const downloadQrBtn = document.getElementById('download-auto-path-qr');
 let drawing = false;
 let dragOccurred = false;
 let lastX = 0, lastY = 0;
@@ -131,6 +175,238 @@ let undoStack = [];
 let redoStack = [];
 const UNDO_LIMIT = 30;
 let drawingLastUpdated = null;
+let autoPathQrModal = null;
+
+function showToast(message, type = 'info') {
+    const toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) return;
+
+    const variant = type === 'error' ? 'danger' : type;
+    const toastEl = document.createElement('div');
+    toastEl.className = `toast align-items-center text-white bg-${variant} border-0`;
+    toastEl.setAttribute('role', 'alert');
+    toastEl.setAttribute('aria-live', 'assertive');
+    toastEl.setAttribute('aria-atomic', 'true');
+    toastEl.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    `;
+    toastContainer.appendChild(toastEl);
+
+    const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+    toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+    toast.show();
+}
+
+function getSelectedOptionData(selectEl) {
+    if (!selectEl || !selectEl.selectedOptions || !selectEl.selectedOptions.length) return null;
+    return selectEl.selectedOptions[0];
+}
+
+function getCurrentAutoPathPayload() {
+    const teamOption = getSelectedOptionData(teamSelect);
+    const matchOption = getSelectedOptionData(matchSelect);
+    const eventOption = getSelectedOptionData(eventSelect);
+
+    if (!currentTeamId || !currentMatchId || !teamOption || !matchOption) {
+        throw new Error('Select a team and match before exporting.');
+    }
+
+    return {
+        auto_path_generated: true,
+        export_type: 'auto_path',
+        team_id: Number(currentTeamId),
+        team_number: Number(teamOption.dataset.teamNumber || 0),
+        team_name: teamOption.dataset.teamName || '',
+        match_id: Number(currentMatchId),
+        match_number: Number(matchOption.dataset.matchNumber || 0),
+        match_type: matchOption.dataset.matchType || 'Qualification',
+        event_id: eventSelect && eventSelect.value ? Number(eventSelect.value) : null,
+        event_name: eventOption ? eventOption.textContent.trim() : '',
+        drawing_data: drawingData,
+        generated_at: new Date().toISOString(),
+        offline_generated: true
+    };
+}
+
+function getAutoPathExportFilename(extension) {
+    const payload = getCurrentAutoPathPayload();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0];
+    const matchType = String(payload.match_type || 'match').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    return `auto-path-team-${payload.team_number || 'unknown'}-${matchType}-${payload.match_number || 'unknown'}-${timestamp}.${extension}`;
+}
+
+function downloadBlob(content, mimeType, fileName) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+function exportAutoPathJson() {
+    try {
+        const payload = getCurrentAutoPathPayload();
+        if (!Array.isArray(payload.drawing_data) || !payload.drawing_data.length) {
+            showToast('Draw an auto path before exporting.', 'warning');
+            return;
+        }
+
+        const originalText = exportJsonBtn ? exportJsonBtn.innerHTML : '';
+        if (exportJsonBtn) {
+            exportJsonBtn.disabled = true;
+            exportJsonBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Exporting...';
+        }
+
+        downloadBlob(JSON.stringify(payload, null, 2), 'application/json', getAutoPathExportFilename('json'));
+        showToast('Auto path exported successfully!', 'success');
+
+        if (exportJsonBtn) {
+            exportJsonBtn.disabled = false;
+            exportJsonBtn.innerHTML = originalText;
+        }
+    } catch (error) {
+        console.error('Error exporting auto path JSON:', error);
+        if (exportJsonBtn) {
+            exportJsonBtn.disabled = false;
+            exportJsonBtn.innerHTML = '<i class="fas fa-file-export me-2"></i>Export JSON';
+        }
+        showToast(error.message || 'Error exporting auto path JSON.', 'error');
+    }
+}
+
+function generateAutoPathQRCode() {
+    if (!qrCodeContainer) return;
+
+    let payload;
+    try {
+        payload = getCurrentAutoPathPayload();
+    } catch (error) {
+        qrCodeContainer.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+        if (qrDownloadContainer) qrDownloadContainer.classList.add('d-none');
+        return;
+    }
+
+    if (!Array.isArray(payload.drawing_data) || !payload.drawing_data.length) {
+        qrCodeContainer.innerHTML = '<div class="alert alert-warning">Draw an auto path before generating a QR code.</div>';
+        if (qrDownloadContainer) qrDownloadContainer.classList.add('d-none');
+        return;
+    }
+
+    qrCodeContainer.innerHTML = '<div class="d-flex justify-content-center my-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+    if (typeof QRCode === 'undefined') {
+        qrCodeContainer.innerHTML = '<div class="alert alert-danger">QR Code library not loaded.</div>';
+        if (qrDownloadContainer) qrDownloadContainer.classList.add('d-none');
+        return;
+    }
+
+    const jsonString = JSON.stringify(payload);
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const availableWidth = Math.max(180, viewportWidth - 40);
+    const availableHeight = Math.max(180, viewportHeight - 160);
+    let qrSize = viewportWidth <= 640
+        ? Math.floor(Math.min(availableWidth * 0.92, availableHeight * 0.78))
+        : Math.floor(Math.min(availableWidth * 0.7, 520));
+    qrSize = Math.max(180, Math.min(qrSize, 720));
+
+    setTimeout(() => {
+        qrCodeContainer.innerHTML = '';
+
+        const qrWrapper = document.createElement('div');
+        qrWrapper.style.cssText = `
+            width: 100%;
+            max-width: ${qrSize}px;
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            padding: 16px;
+            box-sizing: border-box;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        `;
+        qrCodeContainer.appendChild(qrWrapper);
+
+        new QRCode(qrWrapper, {
+            text: jsonString,
+            width: qrSize - 32,
+            height: qrSize - 32,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M,
+            typeNumber: 0
+        });
+
+        setTimeout(() => {
+            const qrCanvas = qrWrapper.querySelector('canvas');
+            const qrImg = qrWrapper.querySelector('img');
+            const useCanvas = /Android/i.test(navigator.userAgent);
+            const primaryElement = useCanvas ? qrCanvas : (qrImg || qrCanvas);
+            const redundantElement = useCanvas ? qrImg : qrCanvas;
+
+            if (redundantElement && redundantElement.parentNode) {
+                redundantElement.parentNode.removeChild(redundantElement);
+            }
+
+            if (primaryElement) {
+                primaryElement.style.cssText = `width: 100%; height: auto; display: block; margin: 0 auto; image-rendering: pixelated;`;
+            }
+
+            if (downloadQrBtn) {
+                downloadQrBtn.onclick = () => {
+                    let href = '';
+                    if (primaryElement && primaryElement.tagName === 'CANVAS') {
+                        href = primaryElement.toDataURL('image/png');
+                    } else if (primaryElement && primaryElement.tagName === 'IMG') {
+                        href = primaryElement.src;
+                    }
+
+                    if (!href) {
+                        showToast('Unable to download QR code.', 'error');
+                        return;
+                    }
+
+                    const link = document.createElement('a');
+                    link.href = href;
+                    link.download = getAutoPathExportFilename('png');
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                };
+            }
+
+            if (qrDownloadContainer) qrDownloadContainer.classList.remove('d-none');
+        }, 150);
+    }, 100);
+}
+
+function initializeExportControls() {
+    const qrModalElement = document.getElementById('autoPathQrModal');
+    if (qrModalElement) {
+        autoPathQrModal = new bootstrap.Modal(qrModalElement);
+    }
+
+    if (generateQrBtn) {
+        generateQrBtn.addEventListener('click', () => {
+            if (autoPathQrModal) autoPathQrModal.show();
+            generateAutoPathQRCode();
+        });
+    }
+
+    if (exportJsonBtn) {
+        exportJsonBtn.addEventListener('click', exportAutoPathJson);
+    }
+}
 
 function resizeCanvas() {
     if (!canvas || !fieldImage) return;
@@ -347,7 +623,11 @@ function selectionChanged() {
     const tid = teamSelect.value;
     // if both selected, reload page with query params to render server side content
     if (mid && tid) {
-        window.location = `/scouting/auto_path?team_id=${tid}&match_id=${mid}`;
+        const params = new URLSearchParams({ team_id: tid, match_id: mid });
+        if (eventSelect && eventSelect.value) {
+            params.set('event_id', eventSelect.value);
+        }
+        window.location = `/scouting/auto_path?${params.toString()}`;
     } else {
         updateVisibility();
     }
@@ -358,6 +638,7 @@ if (teamSelect) teamSelect.addEventListener('change', selectionChanged);
 
 // on initial load set visibility and fetch existing drawing if parameters exist
 document.addEventListener('DOMContentLoaded', function() {
+    initializeExportControls();
     updateVisibility();
     if (matchSelect && teamSelect && matchSelect.value && teamSelect.value) {
         currentMatchId = matchSelect.value;

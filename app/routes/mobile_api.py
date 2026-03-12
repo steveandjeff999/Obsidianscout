@@ -18,7 +18,7 @@ import math
 import statistics
 
 from app.models import (
-    User, Team, Event, Match, ScoutingData, PitScoutingData, 
+    User, Team, Event, Match, ScoutingData, PitScoutingData, AutoPathDrawing,
     DoNotPickEntry, AvoidEntry, ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceInvitation, ScoutingAllianceEvent,
     ScoutingAllianceChat, TeamAllianceStatus, ScoutingDirectMessage, db, Role,
     AllianceSharedScoutingData, AllianceSharedPitData
@@ -3044,6 +3044,50 @@ def _process_qualitative_entry(entry, user, team_number):
         current_app.logger.error(f"Error processing qualitative entry: {e}")
         return False, str(e), None
 
+
+# helper for auto path entries (used by mobile API)
+def _process_auto_path_entry(payload, user, team_number, envelope_team=None, envelope_match=None):
+    """Process an auto-path payload coming from mobile client.
+
+    *payload* is the JSON object from the "data" field of the request.  It
+    should contain drawing_data and may include metadata.  *envelope_team* and
+    *envelope_match* are the numeric IDs supplied at the top level of the
+    request body; we trust those for lookup since the mobile app always sets
+    them, but fall back to payload values if missing.
+    Returns (success:bool, message:str, drawing_id:int|None).
+    """
+    try:
+        team_id = envelope_team or payload.get('team_id')
+        match_id = envelope_match or payload.get('match_id')
+        if not team_id or not match_id:
+            return False, 'Missing team or match ID for auto path', None
+        team = Team.query.get(team_id)
+        match = Match.query.get(match_id)
+        if not team or not match:
+            return False, 'Team or match not found', None
+        drawing_data = payload.get('drawing_data') or payload.get('data')
+        if drawing_data is None:
+            return False, 'No drawing data provided', None
+        existing = AutoPathDrawing.query.filter_by(
+            match_id=match.id, team_id=team.id
+        ).first()
+        if existing:
+            existing.data = drawing_data
+            db.session.commit()
+            return True, 'Updated auto path entry', existing.id
+        new = AutoPathDrawing(match_id=match.id, team_id=team.id, data_json='[]')
+        new.data = drawing_data
+        db.session.add(new)
+        db.session.commit()
+        return True, 'Created auto path entry', new.id
+    except Exception as e:
+        current_app.logger.error(f"Error processing auto path entry: {e}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return False, str(e), None
+
 @mobile_api.route('/scouting/submit', methods=['POST'])
 @token_required
 def submit_scouting_data():
@@ -3081,6 +3125,27 @@ def submit_scouting_data():
                 'error': 'No data provided',
                 'error_code': 'MISSING_DATA'
             }), 400
+
+        # detect auto-path entries first; these should bypass normal scouting logic
+        _auto_payload = None
+        if isinstance(data.get('data'), dict) and (
+            data['data'].get('auto_path_generated') is True
+            or data['data'].get('export_type') == 'auto_path'
+        ):
+            _auto_payload = data['data']
+        elif data.get('auto_path_generated') is True or data.get('export_type') == 'auto_path':
+            # if the envelope accidentally included flags
+            _auto_payload = data
+        if _auto_payload is not None:
+            ok, msg, did = _process_auto_path_entry(
+                _auto_payload, user, team_number,
+                envelope_team=data.get('team_id'),
+                envelope_match=data.get('match_id')
+            )
+            if ok:
+                return jsonify({'success': True, 'auto_path_id': did}), 201
+            else:
+                return jsonify({'success': False, 'error': msg}), 400
 
         # handle qualitative-style payloads specially.
         # The mobile app wraps the payload in the standard envelope:
@@ -3206,6 +3271,29 @@ def bulk_submit_scouting_data():
         
         for entry in data['entries']:
             try:
+                # Auto-path upload handling (same marker used in QR export)
+                _auto_entry = None
+                if isinstance(entry.get('data'), dict) and (
+                    entry['data'].get('auto_path_generated') is True
+                    or entry['data'].get('export_type') == 'auto_path'
+                ):
+                    _auto_entry = entry['data']
+                elif entry.get('auto_path_generated') is True or entry.get('export_type') == 'auto_path':
+                    _auto_entry = entry
+                if _auto_entry is not None:
+                    ok, msg, did = _process_auto_path_entry(
+                        _auto_entry, user, team_number,
+                        envelope_team=entry.get('team_id'),
+                        envelope_match=entry.get('match_id')
+                    )
+                    if ok:
+                        results.append({'offline_id': entry.get('offline_id'), 'success': True, 'auto_path_id': did})
+                        submitted_count += 1
+                    else:
+                        results.append({'offline_id': entry.get('offline_id'), 'success': False, 'error': msg})
+                        failed_count += 1
+                    continue
+
                 # Qualitative upload handling.
                 # Support both direct format (entry has qualitative:true at top level)
                 # and the standard wrapped envelope (qualitative:true is inside entry["data"]).
