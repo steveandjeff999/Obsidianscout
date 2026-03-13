@@ -328,6 +328,11 @@ MIGRATIONS = [
     ('statbotics_cache', 'rank_country', 'INTEGER', None),
     ('statbotics_cache', 'fetched_at', 'DATETIME', None),
     ('statbotics_cache', 'is_miss', 'BOOLEAN DEFAULT 0', None),
+
+    # -------------------------------------------------------------------------
+    # AutoPathDrawing table migrations (default bind)
+    # -------------------------------------------------------------------------
+    ('auto_path_drawing', 'scouting_team_number', 'INTEGER', None),
 ]
 
 

@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from app.models import (
     Match, Team, ScoutingData, Event,
-    AllianceSharedScoutingData, AllianceSharedQualitativeData,
+    AllianceSharedScoutingData, AllianceSharedQualitativeData, AllianceSharedAutoPathData,
     QualitativeScoutingData, ScoutingTeamSettings,
     AutoPathDrawing, PitScoutingData
 )
@@ -297,6 +297,115 @@ def auto_sync_alliance_qualitative_data(qualitative_data_entry):
             
     except Exception as e:
         current_app.logger.error(f"Error in auto-sync alliance qualitative data: {str(e)}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        # Don't raise the exception to prevent disrupting the main save operation
+
+
+def auto_sync_alliance_auto_path_data(auto_path_entry):
+    """Automatically sync new auto path data to alliance members if alliance mode is active"""
+    try:
+        if not is_alliance_mode_active():
+            current_app.logger.debug('Auto-path auto-sync skipped because alliance mode not active')
+            return
+
+        # Import here to avoid circular imports
+        from app.models import TeamAllianceStatus, ScoutingAllianceMember, ScoutingAllianceSync
+
+        current_team = current_user.scouting_team_number
+        alliance_status = TeamAllianceStatus.query.filter_by(
+            team_number=current_team,
+            is_alliance_mode_active=True
+        ).first()
+
+        if not alliance_status or not alliance_status.active_alliance:
+            current_app.logger.debug(f'Auto-path auto-sync skipped because no active alliance status for team {current_team}')
+            return
+
+        alliance = alliance_status.active_alliance
+
+        current_member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance.id,
+            team_number=current_team,
+            status='accepted'
+        ).first()
+        if current_member and not getattr(current_member, 'is_data_sharing_active', True):
+            current_app.logger.debug(f'Auto-path auto-sync skipped because data sharing disabled for team {current_team}')
+            return
+
+        existing_shared = AllianceSharedAutoPathData.query.filter_by(
+            alliance_id=alliance.id,
+            original_auto_path_id=auto_path_entry.id,
+            is_active=True
+        ).first()
+
+        if existing_shared:
+            existing_shared.data_json = auto_path_entry.data_json
+            existing_shared.last_edited_by_team = current_team
+            existing_shared.last_edited_at = datetime.now(timezone.utc)
+        else:
+            shared_data = AllianceSharedAutoPathData.create_from_auto_path(
+                auto_path_entry, alliance.id, current_team
+            )
+            db.session.add(shared_data)
+
+        alliance_events = alliance.get_shared_events()
+        match_event_code = None
+        try:
+            match_event_code = auto_path_entry.match.event.code if auto_path_entry.match and auto_path_entry.match.event else None
+        except Exception:
+            match_event_code = None
+
+        if alliance_events and match_event_code and match_event_code not in alliance_events:
+            current_app.logger.debug(f"Auto-path auto-sync skipped for match event '{match_event_code}' not in shared events {alliance_events}")
+            db.session.commit()
+            return
+
+        sync_data = {
+            'match_id': auto_path_entry.match_id,
+            'match_number': auto_path_entry.match.match_number if auto_path_entry.match else None,
+            'match_type': auto_path_entry.match.match_type if auto_path_entry.match else None,
+            'event_code': match_event_code or '',
+            'team_number': auto_path_entry.team.team_number if auto_path_entry.team else None,
+            'team_id': auto_path_entry.team_id,
+            'data': auto_path_entry.data,
+            'last_updated': auto_path_entry.last_updated.isoformat() if auto_path_entry.last_updated else None
+        }
+
+        sync_count = 0
+        for member in alliance.get_active_members():
+            if member.team_number != current_team:
+                sync_record = ScoutingAllianceSync(
+                    alliance_id=alliance.id,
+                    from_team_number=current_team,
+                    to_team_number=member.team_number,
+                    data_type='auto_path',
+                    data_count=1
+                )
+                db.session.add(sync_record)
+                sync_count += 1
+
+                payload = {
+                    'from_team': current_team,
+                    'alliance_name': alliance.alliance_name,
+                    'scouting_data': [],
+                    'pit_data': [],
+                    'qualitative_data': [],
+                    'auto_path_data': [sync_data],
+                    'sync_id': sync_record.id,
+                    'type': 'auto_sync'
+                }
+                socketio.emit('alliance_data_sync_auto', payload, room=f'team_{member.team_number}')
+                socketio.emit('alliance_data_sync_auto', payload, room=f'alliance_{alliance.id}')
+
+        if sync_count > 0:
+            current_app.logger.debug(f"Auto-synced auto path data for Match {auto_path_entry.match_id} Team {auto_path_entry.team_id} to {sync_count} alliance members")
+        db.session.commit()
+
+    except Exception as e:
+        current_app.logger.error(f"Error in auto-sync alliance auto path data: {str(e)}")
         try:
             db.session.rollback()
         except Exception:
@@ -911,16 +1020,30 @@ def auto_path():
     # allow optional event selection like the list page
     events = get_combined_dropdown_events()
     selected_event = None
-    event_id = request.args.get('event_id', type=int)
-    if event_id:
-        selected_event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+    event_id_arg = request.args.get('event_id')
+    if event_id_arg:
+        # Support both numeric event IDs and synthetic alliance event IDs (e.g. "alliance_2026XYZ").
+        if isinstance(event_id_arg, str) and event_id_arg.startswith('alliance_'):
+            selected_event = next((e for e in events if str(getattr(e, 'id', '')) == event_id_arg), None)
+        else:
+            try:
+                event_id = int(event_id_arg)
+                selected_event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+            except (TypeError, ValueError):
+                selected_event = None
     elif game_config.get('current_event_code'):
         selected_event = get_event_by_code(game_config.get('current_event_code'))
 
     # sort matches for usability
     matches = filter_matches_by_scouting_team().all()
     if selected_event:
-        matches = [m for m in matches if m.event_id == selected_event.id]
+        # For synthetic alliance events, `selected_event.id` is not a real DB id,
+        # so filter by event code instead
+        if isinstance(selected_event.id, str) and selected_event.id.startswith('alliance_'):
+            desired_code = (getattr(selected_event, 'code', '') or '').upper()
+            matches = [m for m in matches if m.event and (m.event.code or '').upper() == desired_code]
+        else:
+            matches = [m for m in matches if m.event_id == selected_event.id]
     else:
         current_event_code = game_config.get('current_event_code')
         if current_event_code:
@@ -1075,7 +1198,14 @@ def save_auto_path(match_id, team_id):
             drawing = AutoPathDrawing(match_id=match_id, team_id=team_id, data_json='{}')
             db.session.add(drawing)
         drawing.data = data
+        # Track which scouting team created/last updated this drawing
+        if not drawing.scouting_team_number:
+            drawing.scouting_team_number = current_user.scouting_team_number
         db.session.commit()
+
+        # Auto-sync saved auto path to alliance members when alliance mode is active
+        auto_sync_alliance_auto_path_data(drawing)
+
         return jsonify({'success': True})
     except Exception as e:
         current_app.logger.exception('Failed to save auto path drawing')
@@ -1097,9 +1227,17 @@ def auto_path_list():
     # allow event selection via query param; default to config value
     events = get_combined_dropdown_events()
     selected_event = None
-    event_id = request.args.get('event_id', type=int)
-    if event_id:
-        selected_event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+    event_id_arg = request.args.get('event_id')
+    if event_id_arg:
+        # Support numeric event IDs and alliance synthetic event IDs (e.g. "alliance_2026XYZ")
+        if isinstance(event_id_arg, str) and event_id_arg.startswith('alliance_'):
+            selected_event = next((e for e in events if str(getattr(e, 'id', '')) == event_id_arg), None)
+        else:
+            try:
+                event_id = int(event_id_arg)
+                selected_event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+            except (TypeError, ValueError):
+                selected_event = None
     elif game_config.get('current_event_code'):
         # use effective game config as fallback
         selected_event = get_event_by_code(game_config.get('current_event_code'))
@@ -1108,7 +1246,13 @@ def auto_path_list():
     matches = filter_matches_by_scouting_team().all()
     # restrict to selected event if available
     if selected_event:
-        matches = [m for m in matches if m.event_id == selected_event.id]
+        # Synthetic alliance events have an id like "alliance_2026XYZ" so we must
+        # filter using the event code rather than an integer event_id.
+        if isinstance(selected_event.id, str) and selected_event.id.startswith('alliance_'):
+            desired_code = (getattr(selected_event, 'code', '') or '').upper()
+            matches = [m for m in matches if m.event and (m.event.code or '').upper() == desired_code]
+        else:
+            matches = [m for m in matches if m.event_id == selected_event.id]
     else:
         # fall back to config-coded filtering (previous behavior)
         current_event_code = game_config.get('current_event_code')
