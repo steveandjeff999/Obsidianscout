@@ -27,8 +27,10 @@
 }
 
 /* Minimal Bootstrap fixes */
+/* Avoid forcing a global GPU layer on every dropdown; this can cause stale paints
+   on some mobile GPUs during momentum scrolling. */
 .dropdown-menu {
-    transform: translateZ(0);
+    transform: none;
 }
 
 .modal-backdrop {
@@ -80,9 +82,9 @@
     /* Prevent background scroll when dropdown is open */
     body.select2-dropdown-open {
         overflow: hidden !important;
-        position: fixed !important;
-        width: 100% !important;
-        height: 100% !important;
+        position: static !important;
+        width: auto !important;
+        height: auto !important;
     }
     
     /* Make selection area more touch-friendly */

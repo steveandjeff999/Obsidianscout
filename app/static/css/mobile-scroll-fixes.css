@@ -1,0 +1,27 @@
+/* Sitewide mobile momentum-scroll and paint stability fixes */
+
+@media (hover: none) and (pointer: coarse) {
+	html,
+	body {
+		overscroll-behavior-y: contain;
+		overflow-anchor: auto;
+	}
+
+	body.liquid-glass-buttons .btn,
+	.table .btn,
+	.table .btn-group .btn,
+	.match-actions .btn {
+		-webkit-backdrop-filter: none !important;
+		backdrop-filter: none !important;
+		will-change: auto !important;
+		transform: none !important;
+		-webkit-transform: none !important;
+		-webkit-backface-visibility: visible !important;
+		backface-visibility: visible !important;
+	}
+
+	.table-responsive {
+		transform: none !important;
+		-webkit-transform: none !important;
+	}
+}
