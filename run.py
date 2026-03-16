@@ -101,7 +101,17 @@ if USE_POSTGRES:
             print("[3/4] PostgreSQL is running and databases are provisioned.", flush=True)
             # Optionally auto-migrate existing SQLite data on first use
             _pg_flag = os.path.join(script_dir, 'instance', '.pg_initial_migration_done')
-            if not os.path.exists(_pg_flag):
+            # Log flag status for debugging why migrations may rerun
+            flag_exists = os.path.exists(_pg_flag)
+            print(f"[Postgres] Migration flag file: {_pg_flag} (exists={flag_exists})", flush=True)
+            if flag_exists:
+                try:
+                    st = os.stat(_pg_flag)
+                    print(f"[Postgres]   Flag file mode={oct(st.st_mode)} uid={st.st_uid} gid={st.st_gid}", flush=True)
+                except Exception as _st_err:
+                    print(f"[Postgres]   Could not stat flag file: {_st_err}", flush=True)
+
+            if not flag_exists:
                 print("[4/4] First-time migration: copying SQLite data to PostgreSQL...", flush=True)
                 try:
                     from app.utils.db_migrate import migrate_sqlite_to_postgres
