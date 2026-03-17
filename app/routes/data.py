@@ -3718,17 +3718,51 @@ def delete_entry(entry_id):
     return redirect(url_for('data.manage_entries'))
 
 @bp.route('/wipe_database', methods=['POST'])
+@login_required
 def wipe_database():
     """Wipe all data for the current scouting team from the database with automatic foreign key constraint handling"""
     import traceback
     from sqlalchemy import text
     
     try:
+        # Require explicit form confirmation in non-test environments
+        if not current_app.config.get('TESTING', False) and not request.form.get('confirm_wipe'):
+            current_app.logger.warning(
+                f"Blocked unconfirmed wipe_database request from user={getattr(current_user, 'username', 'unknown')}"
+            )
+            flash("Wipe cancelled: confirmation checkbox is required.", "warning")
+            return redirect(url_for('data.index'))
+
+        # Extra safety: block destructive wipe on PostgreSQL unless explicitly enabled
+        allow_postgres_wipe = os.environ.get('ALLOW_POSTGRES_WIPE', '').strip().lower() in ('1', 'true', 'yes', 'on')
+        if current_app.config.get('USE_POSTGRES', False) and not allow_postgres_wipe:
+            current_app.logger.error(
+                f"Blocked wipe_database on PostgreSQL for user={getattr(current_user, 'username', 'unknown')} "
+                f"team={getattr(current_user, 'scouting_team_number', None)} (ALLOW_POSTGRES_WIPE not set)"
+            )
+            flash(
+                "Wipe is disabled while using PostgreSQL. Set ALLOW_POSTGRES_WIPE=1 to enable it intentionally.",
+                "danger"
+            )
+            return redirect(url_for('data.index'))
+
         scouting_team_number = current_user.scouting_team_number
         
         # Check if scouting team number is None or empty string (but allow 0 for admin/superadmin)
         if scouting_team_number is None or scouting_team_number == '':
             flash("Error: No scouting team number found for current user.", "danger")
+            return redirect(url_for('data.index'))
+
+        # Additional guardrail: team 0 can be broad/shared data; require explicit opt-in
+        allow_team_zero_wipe = os.environ.get('ALLOW_TEAM_ZERO_WIPE', '').strip().lower() in ('1', 'true', 'yes', 'on')
+        if str(scouting_team_number) == '0' and not allow_team_zero_wipe:
+            current_app.logger.error(
+                f"Blocked wipe_database for scouting_team_number=0 by user={getattr(current_user, 'username', 'unknown')}"
+            )
+            flash(
+                "Wipe for scouting team 0 is blocked by default. Set ALLOW_TEAM_ZERO_WIPE=1 to enable intentionally.",
+                "danger"
+            )
             return redirect(url_for('data.index'))
         
         # Count records before deletion for reporting (scoped where appropriate)
