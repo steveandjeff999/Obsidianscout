@@ -72,6 +72,11 @@ USE_WAITRESS = False
 # When False (default) the app continues using local SQLite files.
 USE_POSTGRES = False
 
+# Safety guard: when PostgreSQL mode is enabled, do NOT silently fall back to
+# SQLite unless explicitly allowed. Silent fallback can make it appear that
+# PostgreSQL data was reset, while the app is actually reading a different DB.
+ALLOW_SQLITE_FALLBACK = os.environ.get('ALLOW_SQLITE_FALLBACK', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
 # Default port for the server. Change this at the top of the file to
 # run the app on a different port. Environment variable `PORT` will still
 # override this value when present (e.g., in hosting environments).
@@ -101,32 +106,136 @@ if USE_POSTGRES:
             print("[3/4] PostgreSQL is running and databases are provisioned.", flush=True)
             # Optionally auto-migrate existing SQLite data on first use
             _pg_flag = os.path.join(script_dir, 'instance', '.pg_initial_migration_done')
-            if not os.path.exists(_pg_flag):
-                print("[4/4] First-time migration: copying SQLite data to PostgreSQL...", flush=True)
+            # Log flag status for debugging why migrations may rerun
+            flag_exists = os.path.exists(_pg_flag)
+            print(f"[Postgres] Migration flag file: {_pg_flag} (exists={flag_exists})", flush=True)
+            if flag_exists:
                 try:
-                    from app.utils.db_migrate import migrate_sqlite_to_postgres
-                    result = migrate_sqlite_to_postgres(verbose=True)
-                    if result['success']:
-                        os.makedirs(os.path.dirname(_pg_flag), exist_ok=True)
-                        with open(_pg_flag, 'w') as _f:
-                            _f.write(f'migrated at {__import__("datetime").datetime.now().isoformat()}')
-                        print("Initial SQLite → PostgreSQL migration complete.", flush=True)
-                    else:
-                        print("WARNING: Initial migration had errors. Check output above.", flush=True)
-                except Exception as _mig_err:
-                    print(f"WARNING: Could not run initial migration: {_mig_err}", flush=True)
+                    st = os.stat(_pg_flag)
+                    print(f"[Postgres]   Flag file mode={oct(st.st_mode)} uid={st.st_uid} gid={st.st_gid}", flush=True)
+                except Exception as _st_err:
+                    print(f"[Postgres]   Could not stat flag file: {_st_err}", flush=True)
+
+            if not flag_exists:
+                force_initial_migration = os.environ.get('FORCE_INITIAL_PG_MIGRATION', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+                def _sqlite_has_any_data() -> bool:
+                    import sqlite3
+                    checks = [
+                        (os.path.join(script_dir, 'instance', 'scouting.db'), ('team', 'event', 'match', 'scouting_data', 'pit_scouting_data')),
+                        (os.path.join(script_dir, 'instance', 'users.db'), ('user',)),
+                    ]
+                    for db_path, table_names in checks:
+                        if not os.path.exists(db_path):
+                            continue
+                        try:
+                            conn = sqlite3.connect(db_path)
+                            cur = conn.cursor()
+                            for tname in table_names:
+                                try:
+                                    cur.execute(f'SELECT COUNT(*) FROM "{tname}"')
+                                    count = int((cur.fetchone() or [0])[0] or 0)
+                                    if count > 0:
+                                        conn.close()
+                                        return True
+                                except Exception:
+                                    continue
+                            conn.close()
+                        except Exception:
+                            continue
+                    return False
+
+                def _pg_has_any_data() -> bool:
+                    try:
+                        from sqlalchemy import create_engine, text
+                    except Exception:
+                        return False
+
+                    checks = [
+                        (_pg_manager.get_uri(), ('team', 'event', 'match', 'scouting_data', 'pit_scouting_data')),
+                        (_pg_manager.get_binds().get('users'), ('user',)),
+                    ]
+
+                    for uri, table_names in checks:
+                        if not uri:
+                            continue
+                        try:
+                            eng = create_engine(uri)
+                            with eng.connect() as conn:
+                                for tname in table_names:
+                                    try:
+                                        result = conn.execute(text(f'SELECT COUNT(*) FROM "{tname}"'))
+                                        count = int((result.scalar() or 0))
+                                        if count > 0:
+                                            eng.dispose()
+                                            return True
+                                    except Exception:
+                                        continue
+                            eng.dispose()
+                        except Exception:
+                            continue
+                    return False
+
+                sqlite_has_data = _sqlite_has_any_data()
+                pg_has_data = _pg_has_any_data()
+                print(f"[Postgres] Startup migration precheck: sqlite_has_data={sqlite_has_data}, pg_has_data={pg_has_data}, force={force_initial_migration}", flush=True)
+
+                should_migrate = force_initial_migration or (sqlite_has_data and not pg_has_data)
+
+                if should_migrate:
+                    print("[4/4] First-time migration: copying SQLite data to PostgreSQL...", flush=True)
+                    try:
+                        from app.utils.db_migrate import migrate_sqlite_to_postgres
+                        result = migrate_sqlite_to_postgres(verbose=True)
+                        if result['success']:
+                            os.makedirs(os.path.dirname(_pg_flag), exist_ok=True)
+                            with open(_pg_flag, 'w') as _f:
+                                _f.write(f'migrated at {__import__("datetime").datetime.now().isoformat()}')
+                            print("Initial SQLite → PostgreSQL migration complete.", flush=True)
+                        else:
+                            print("WARNING: Initial migration had errors. Check output above.", flush=True)
+                    except Exception as _mig_err:
+                        print(f"WARNING: Could not run initial migration: {_mig_err}", flush=True)
+                else:
+                    # Safety: prevent destructive re-migration when PG already has data but flag is missing
+                    os.makedirs(os.path.dirname(_pg_flag), exist_ok=True)
+                    with open(_pg_flag, 'w') as _f:
+                        _f.write(
+                            f'startup-safety marker created at {__import__("datetime").datetime.now().isoformat()} '
+                            f'(sqlite_has_data={sqlite_has_data}, pg_has_data={pg_has_data})'
+                        )
+                    print("[4/4] Startup migration skipped by safety checks; marker file created.", flush=True)
             else:
                 print("[4/4] Migration already done (skipping).", flush=True)
         else:
-            print("WARNING: PostgreSQL could not be started. Falling back to SQLite.", flush=True)
-            USE_POSTGRES = False
+            if ALLOW_SQLITE_FALLBACK:
+                print("WARNING: PostgreSQL could not be started. Falling back to SQLite (ALLOW_SQLITE_FALLBACK enabled).", flush=True)
+                USE_POSTGRES = False
+            else:
+                raise RuntimeError("PostgreSQL could not be started and SQLite fallback is disabled")
     except Exception as _pg_err:
-        print(f"WARNING: PostgreSQL setup failed: {_pg_err}", flush=True)
-        print("Falling back to SQLite.", flush=True)
-        USE_POSTGRES = False
+        if ALLOW_SQLITE_FALLBACK:
+            print(f"WARNING: PostgreSQL setup failed: {_pg_err}", flush=True)
+            print("Falling back to SQLite (ALLOW_SQLITE_FALLBACK enabled).", flush=True)
+            USE_POSTGRES = False
+        else:
+            print(f"FATAL: PostgreSQL setup failed: {_pg_err}", flush=True)
+            print("Refusing to fall back to SQLite. Set ALLOW_SQLITE_FALLBACK=1 to permit fallback.", flush=True)
+            raise
     print("==============================\n", flush=True)
 
 app = create_app(use_postgres=USE_POSTGRES)
+
+try:
+    effective_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    if isinstance(effective_uri, str) and '@' in effective_uri:
+        scheme, rest = effective_uri.split('://', 1) if '://' in effective_uri else ('', effective_uri)
+        if '@' in rest:
+            effective_uri = f"{scheme}://***:***@{rest.split('@', 1)[1]}" if scheme else f"***:***@{rest.split('@', 1)[1]}"
+    print(f"[Startup] Effective DB URI: {effective_uri}", flush=True)
+    print(f"[Startup] USE_POSTGRES={app.config.get('USE_POSTGRES', USE_POSTGRES)}", flush=True)
+except Exception as _db_diag_err:
+    print(f"[Startup] Warning: Could not print DB diagnostics: {_db_diag_err}", flush=True)
 
 def mobile_api_file_log(prefix, message):
     """Helper to write mobile API request/response details to a file safely."""

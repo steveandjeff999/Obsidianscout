@@ -243,7 +243,7 @@ def filter_matches_by_scouting_team(query=None):
     If alliance mode is active, shows matches from all alliance members for shared events.
     Deduplicates matches at SQL level using subquery with MIN(id) grouped by event code, match type, and match number.
     """
-    from sqlalchemy import select, and_
+    from sqlalchemy import select, and_, or_
     from app import db
     
     scouting_team_number = get_current_scouting_team_number()
@@ -260,7 +260,6 @@ def filter_matches_by_scouting_team(query=None):
             alliance_team_numbers = list(alliance_team_numbers)
 
             from sqlalchemy import func as sql_func
-            from sqlalchemy import or_
 
             # Build match filters for red/blue alliance membership
             red_filters = [Match.red_alliance.contains(str(n)) for n in alliance_team_numbers]
@@ -285,8 +284,15 @@ def filter_matches_by_scouting_team(query=None):
 
             return query.filter(Match.id.in_(select(subq.c.match_id)))
         else:
-            # Show only current team's matches
-            return query.filter(Match.scouting_team_number == scouting_team_number)
+            # Show matches for current team and any unassigned (NULL) matches.
+            # Unassigned matches are often created during initial sync/import and
+            # should be visible to any team that is configured on the device.
+            return query.filter(
+                or_(
+                    Match.scouting_team_number == scouting_team_number,
+                    Match.scouting_team_number.is_(None)
+                )
+            )
     return query.filter(Match.scouting_team_number.is_(None))  # Show unassigned matches if no team set
 
 

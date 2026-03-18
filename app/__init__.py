@@ -759,6 +759,8 @@ def create_app(test_config=None, use_postgres=False):
     # ------------------------------------------------------------------
     # Database URI setup – choose between SQLite and PostgreSQL
     # ------------------------------------------------------------------
+    allow_sqlite_fallback = os.environ.get('ALLOW_SQLITE_FALLBACK', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
     if use_postgres:
         # PostgreSQL mode: import manager and build URIs
         try:
@@ -769,9 +771,12 @@ def create_app(test_config=None, use_postgres=False):
             _engine_opts = _pg.get_engine_options()
             print(f"[create_app] Using PostgreSQL: {_db_uri.split('@')[1] if '@' in _db_uri else _db_uri}")
         except Exception as pg_err:
-            print(f"[create_app] WARNING: PostgreSQL setup failed ({pg_err}), falling back to SQLite.")
-            use_postgres = False
-            app.config['USE_POSTGRES'] = False
+            if allow_sqlite_fallback:
+                print(f"[create_app] WARNING: PostgreSQL setup failed ({pg_err}), falling back to SQLite (ALLOW_SQLITE_FALLBACK enabled).")
+                use_postgres = False
+                app.config['USE_POSTGRES'] = False
+            else:
+                raise RuntimeError(f"PostgreSQL setup failed and SQLite fallback is disabled: {pg_err}")
 
     if not use_postgres:
         # SQLite mode (default)
