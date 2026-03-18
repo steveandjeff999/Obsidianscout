@@ -279,55 +279,16 @@ def perform_update(release: str | Path, is_zip: bool = False, preserve_extra: se
                 continue
 
             # If overwrite mode requested, replace everything except protected DBs and gameconfig.json
-            # Also preserve the PG migration flag/config so updates cannot accidentally trigger a re-migration.
             if overwrite:
                 if name == 'gameconfig.json':
                     _log(f"Protected file in overwrite mode: Skipping '{name}'")
                     skipped.append((name, 'protected (gameconfig.json - overwrite disabled)'))
                     continue
-
-                # Preserve the migration-complete marker and Postgres config to avoid re-running migrations
-                # if the update replaces the instance directory.
-                preserved_files = []
-                if name == 'instance':
-                    for rel in ('instance/.pg_initial_migration_done', 'instance/postgres_config.json'):
-                        src = repo_root / rel
-                        if src.exists():
-                            tmp = backup_root / f"preserve_{os.path.basename(rel)}"
-                            if tmp.exists():
-                                tmp = Path(str(tmp) + f"_{int(time.time())}")
-                            try:
-                                if not dry_run:
-                                    tmp.parent.mkdir(parents=True, exist_ok=True)
-                                    if src.is_dir():
-                                        shutil.copytree(src, tmp)
-                                    else:
-                                        shutil.copy2(src, tmp)
-                                preserved_files.append((src, tmp))
-                            except Exception:
-                                # If we cannot preserve, still proceed with the update; worst case the app reruns migration.
-                                pass
-
                 try:
                     copy_item(entry, target, backup_root, dry_run=dry_run, log=_log)
                     changed.append(name)
                 except Exception as e:
                     _log(f"ERROR copying {entry} -> {target}: {e}")
-
-                # Restore preserved files if they existed
-                if name == 'instance' and preserved_files and not dry_run:
-                    for orig, tmp in preserved_files:
-                        try:
-                            if tmp.is_dir():
-                                if orig.exists():
-                                    shutil.rmtree(orig)
-                                shutil.copytree(tmp, orig)
-                            else:
-                                orig.parent.mkdir(parents=True, exist_ok=True)
-                                shutil.copy2(tmp, orig)
-                        except Exception:
-                            pass
-
                 continue
 
             # Determine if there are any preserve entries relevant to this top-level entry.

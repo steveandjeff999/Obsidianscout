@@ -10,8 +10,6 @@ const STATIC_ASSETS = [
   // Scouting pages (explicitly precache important routes)
   '/scouting/',
   '/scouting/form',
-  '/scouting/auto_path',
-  '/scouting/auto_paths',
   '/scouting/list',
   '/scouting/qr',
   '/scouting/offline',
