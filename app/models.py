@@ -1474,6 +1474,39 @@ class StrategyDrawing(db.Model):
         self.data_json = json.dumps(value)
 
 
+class AutoPathDrawing(db.Model):
+    """Model to store an individual robot's auto‑path sketch for a specific match."""
+    __tablename__ = 'auto_path_drawing'
+
+    id = db.Column(db.Integer, primary_key=True)
+    match_id = db.Column(db.Integer, db.ForeignKey('match.id'), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
+    data_json = db.Column(db.Text, nullable=False)  # JSON-encoded drawing data
+    scouting_team_number = db.Column(db.Integer, nullable=True)  # Scouting team that created this drawing
+    last_updated = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Ensure only one drawing per match/team pair
+    __table_args__ = (db.UniqueConstraint('match_id', 'team_id', name='uix_match_team'),)
+
+    match = db.relationship('Match', backref=db.backref('auto_path_drawings', cascade='all, delete-orphan'))
+    team = db.relationship('Team')
+
+    def __repr__(self):
+        return f"<AutoPathDrawing match={self.match_id} team={self.team_id}>"
+
+    @property
+    def data(self):
+        try:
+            return json.loads(self.data_json)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @data.setter
+    def data(self, value):
+        self.data_json = json.dumps(value)
+
+
 class QualitativeScoutingData(db.Model):
     """Model to store qualitative scouting observations for entire alliances in a match"""
     __tablename__ = 'qualitative_scouting_data'
@@ -2135,6 +2168,89 @@ class AllianceSharedQualitativeData(db.Model):
             timestamp=qual_data.timestamp,
             alliance_scouted=qual_data.alliance_scouted,
             data_json=qual_data.data_json,
+            shared_by_team=shared_by_team
+        )
+
+
+class AllianceSharedAutoPathData(db.Model):
+    """Model to store copies of auto path drawings shared with alliances.
+
+    When an auto path drawing is synced to an alliance, a copy is made here so
+    that deleting the original doesn't affect other alliance members' access.
+    """
+    __tablename__ = 'alliance_shared_auto_path_data'
+
+    id = db.Column(db.Integer, primary_key=True)
+    alliance_id = db.Column(db.Integer, db.ForeignKey('scouting_alliance.id'), nullable=False)
+
+    # Reference to original drawing (may be null if original was deleted)
+    original_auto_path_id = db.Column(db.Integer, nullable=True)
+
+    # Team that originally created this drawing (the "owner")
+    source_scouting_team_number = db.Column(db.Integer, nullable=False)
+
+    # Copy of the auto path drawing fields
+    match_id = db.Column(db.Integer, db.ForeignKey('match.id', ondelete='CASCADE'), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
+    data_json = db.Column(db.Text, nullable=False)
+
+    # Metadata for alliance sharing
+    shared_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    shared_by_team = db.Column(db.Integer, nullable=False)
+    last_edited_by_team = db.Column(db.Integer, nullable=True)
+    last_edited_at = db.Column(db.DateTime, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+
+    # Relationships
+    alliance_rel = db.relationship('ScoutingAlliance', backref='shared_auto_path_data')
+    match = db.relationship('Match', backref=db.backref('shared_auto_path_drawings', lazy=True, cascade='all, delete-orphan'))
+    team = db.relationship('Team')
+
+    def __repr__(self):
+        return f'<AllianceSharedAutoPathData Alliance {self.alliance_id} Match {self.match_id} Team {self.team.team_number if self.team else "?"}>'
+
+    @property
+    def data(self):
+        try:
+            return json.loads(self.data_json)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @data.setter
+    def data(self, value):
+        self.data_json = json.dumps(value)
+
+    def to_dict(self):
+        match_obj = self.match
+        return {
+            'id': self.id,
+            'alliance_id': self.alliance_id,
+            'original_id': self.original_auto_path_id,
+            'source_team': self.source_scouting_team_number,
+            'match_id': self.match_id,
+            'match_type': match_obj.match_type if match_obj else None,
+            'match_number': match_obj.match_number if match_obj else None,
+            'event_code': match_obj.event.code if match_obj and match_obj.event else None,
+            'team_id': self.team_id,
+            'team_number': self.team.team_number if self.team else None,
+            'data': self.data,
+            'shared_at': self.shared_at.isoformat() if self.shared_at else None,
+            'shared_by_team': self.shared_by_team,
+            'last_edited_by_team': self.last_edited_by_team,
+            'last_edited_at': self.last_edited_at.isoformat() if self.last_edited_at else None,
+            'is_active': self.is_active
+        }
+
+    @classmethod
+    def create_from_auto_path(cls, drawing, alliance_id, shared_by_team):
+        """Create a shared copy from original AutoPathDrawing"""
+        return cls(
+            alliance_id=alliance_id,
+            original_auto_path_id=drawing.id,
+            source_scouting_team_number=drawing.scouting_team_number or shared_by_team,
+            match_id=drawing.match_id,
+            team_id=drawing.team_id,
+            data_json=drawing.data_json,
             shared_by_team=shared_by_team
         )
 

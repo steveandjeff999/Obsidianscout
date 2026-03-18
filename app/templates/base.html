@@ -1434,7 +1434,10 @@
                 {% if 'pit_scouting' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'pit_scouting.index' %}active{% endif %}" href="{{ url_for('pit_scouting.index') }}"><i class="fas fa-wrench"></i><span>Pit Scouting</span></a>{% endif %}
                 {% if 'scouting_alliances_nav' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint and request.endpoint.startswith('scouting_alliances') %}active{% endif %}" href="{{ url_for('scouting_alliances.dashboard') }}"><i class="fas fa-users"></i><span>Scouting Alliances</span></a>{% endif %}
                 {% if 'all_data' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.list_data' %}active{% endif %}" href="{{ url_for('scouting.list_data') }}"><i class="fas fa-list"></i><span>All Data</span></a>{% endif %}
+{% if 'match_data' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.match_data' %}active{% endif %}" href="{{ url_for('scouting.match_data') }}"><i class="fas fa-table"></i><span>Match Data</span></a>{% endif %}
                 {% if 'text_elements' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.view_text_elements' %}active{% endif %}" href="{{ url_for('scouting.view_text_elements') }}"><i class="fas fa-comment-alt"></i><span>Text Elements</span></a>{% endif %}
+                {% if 'auto_path' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.auto_path' %}active{% endif %}" href="{{ url_for('scouting.auto_path') }}"><i class="fas fa-route"></i><span>Auto Path Scouting</span></a>{% endif %}
+                {% if 'auto_path_list' not in hidden_nav_items %}<a class="nav-link {% if request.endpoint == 'scouting.auto_path_list' %}active{% endif %}" href="{{ url_for('scouting.auto_path_list') }}"><i class="fas fa-list"></i><span>Saved Auto Paths</span></a>{% endif %}
                 </div>
             </div>
             {% if user_has_role('admin') or user_has_role('analytics') %}

@@ -11,8 +11,8 @@ from app.models import (
     ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceInvitation,
     ScoutingAllianceEvent, ScoutingAllianceSync, ScoutingAllianceChat,
     TeamAllianceStatus, AllianceSharedScoutingData, AllianceSharedPitData,
-    AllianceSharedQualitativeData, AllianceDeletedData,
-    QualitativeScoutingData
+    AllianceSharedQualitativeData, AllianceSharedAutoPathData, AllianceDeletedData,
+    QualitativeScoutingData, AutoPathDrawing
 )
 from app.routes.auth import admin_required
 from app.utils.theme_manager import ThemeManager
@@ -50,65 +50,59 @@ def get_theme_context():
 @login_required
 def dashboard():
     """Main scouting alliance dashboard (available to all users)"""
-    from app.models import TeamAllianceStatus
-    
     current_team = get_current_scouting_team_number()
-    
-    # Get alliances this team is part of
+
     my_alliances = db.session.query(ScoutingAlliance).join(ScoutingAllianceMember).filter(
         ScoutingAllianceMember.team_number == current_team,
         ScoutingAllianceMember.status == 'accepted'
-    ).all()
-    
-    # Get current active alliance info
-    active_alliance = TeamAllianceStatus.get_active_alliance_for_team(current_team)
-    
-    # Get pending invitations
+    ).order_by(ScoutingAlliance.created_at.desc()).all()
+
     pending_invitations = ScoutingAllianceInvitation.query.filter_by(
         to_team_number=current_team,
         status='pending'
-    ).all()
-    
-    # Get sent invitations
+    ).order_by(ScoutingAllianceInvitation.created_at.desc()).all()
+
     sent_invitations = ScoutingAllianceInvitation.query.filter_by(
         from_team_number=current_team,
         status='pending'
-    ).all()
-    
-    return render_template('scouting_alliances/dashboard.html',
-                         my_alliances=my_alliances,
-                         active_alliance=active_alliance,
-                         pending_invitations=pending_invitations,
-                         sent_invitations=sent_invitations,
-                         current_team=current_team,
-                         **get_theme_context())
+    ).order_by(ScoutingAllianceInvitation.created_at.desc()).all()
+
+    active_alliance = TeamAllianceStatus.get_active_alliance_for_team(current_team)
+
+    return render_template(
+        'scouting_alliances/dashboard.html',
+        my_alliances=my_alliances,
+        pending_invitations=pending_invitations,
+        sent_invitations=sent_invitations,
+        active_alliance=active_alliance,
+        current_team=current_team,
+        **get_theme_context()
+    )
+
 
 @bp.route('/search')
+@bp.route('/search-teams')
 @login_required
-@admin_required
 def search_teams():
-    """Search for scouting teams to invite to alliances"""
+    """Search for teams by number or username"""
     query = request.args.get('q', '').strip()
     current_team = get_current_scouting_team_number()
-    
-    # Search for teams (excluding current team)
-    teams = []
-    if query:
-        if query.isdigit():
-            # Search by team number
-            teams = User.query.filter(
-                User.scouting_team_number == int(query),
-                User.scouting_team_number != current_team
-            ).distinct(User.scouting_team_number).all()
-        else:
-            # Search by username (team names are not stored separately)
-            teams = User.query.filter(
-                User.username.contains(query),
-                User.scouting_team_number != current_team,
-                User.scouting_team_number.isnot(None)
-            ).distinct(User.scouting_team_number).all()
-    
-    # Convert to team info format
+
+    if not query:
+        return jsonify({'teams': []})
+
+    if query.isdigit():
+        teams = User.query.filter(
+            User.scouting_team_number == int(query),
+            User.scouting_team_number != current_team
+        ).distinct(User.scouting_team_number).all()
+    else:
+        teams = User.query.filter(
+            User.username.contains(query),
+            User.scouting_team_number != current_team,
+            User.scouting_team_number.isnot(None)
+        ).distinct(User.scouting_team_number).all()
+
     team_results = []
     seen_teams = set()
     for user in teams:
@@ -119,7 +113,7 @@ def search_teams():
                 'has_users': True
             })
             seen_teams.add(user.scouting_team_number)
-    
+
     return jsonify({'teams': team_results})
 
 # ======== ALLIANCE MANAGEMENT ========
@@ -900,7 +894,54 @@ def sync_scouting_data(alliance_id):
                     )
                     db.session.add(shared_copy)
                     total_shared_copies += 1
-        
+
+            # Get auto path drawings for each team
+            auto_path_entries = AutoPathDrawing.query.join(Match).filter(
+                Match.event_id.in_(event_ids),
+                db.or_(
+                    AutoPathDrawing.scouting_team_number == team_num,
+                    AutoPathDrawing.scouting_team_number == None
+                )
+            ).all()
+
+            for entry in auto_path_entries:
+                # Skip NULL scouting_team_number drawings when not processing current_team
+                # to avoid every team claiming the same unowned drawing
+                if entry.scouting_team_number is None and team_num != current_team:
+                    continue
+
+                # Skip if this data was previously deleted by alliance admin
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='auto_path',
+                    match_id=entry.match_id,
+                    team_id=entry.team_id,
+                    alliance_color=None,
+                    source_team=team_num
+                ):
+                    continue
+
+                src_team = entry.scouting_team_number or team_num
+                existing_shared = AllianceSharedAutoPathData.query.filter_by(
+                    alliance_id=alliance_id,
+                    original_auto_path_id=entry.id
+                ).first()
+
+                if not existing_shared:
+                    existing_shared = AllianceSharedAutoPathData.query.filter_by(
+                        alliance_id=alliance_id,
+                        match_id=entry.match_id,
+                        team_id=entry.team_id,
+                        source_scouting_team_number=src_team
+                    ).first()
+
+                if not existing_shared:
+                    shared_copy = AllianceSharedAutoPathData.create_from_auto_path(
+                        entry, alliance_id, team_num
+                    )
+                    db.session.add(shared_copy)
+                    total_shared_copies += 1
+
         # NOTE: We no longer create local copies in each team's ScoutingData/PitScoutingData.
         # Alliance data lives ONLY in AllianceShared*Data tables.
         # This prevents duplicates and makes delete work properly.
@@ -1112,9 +1153,53 @@ def populate_alliance_shared_data(alliance_id):
                     )
                     db.session.add(shared_copy)
                     total_qualitative_copies += 1
-    
+
+            # Get ALL auto path drawings for each team
+            auto_path_entries = AutoPathDrawing.query.join(Match).filter(
+                Match.event_id.in_(event_ids),
+                db.or_(
+                    AutoPathDrawing.scouting_team_number == team_num,
+                    AutoPathDrawing.scouting_team_number == None
+                )
+            ).all()
+
+            for entry in auto_path_entries:
+                if entry.scouting_team_number is None and team_num != current_team:
+                    continue
+
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='auto_path',
+                    match_id=entry.match_id,
+                    team_id=entry.team_id,
+                    alliance_color=None,
+                    source_team=team_num
+                ):
+                    continue
+
+                src_team = entry.scouting_team_number or team_num
+                existing_shared = AllianceSharedAutoPathData.query.filter_by(
+                    alliance_id=alliance_id,
+                    original_auto_path_id=entry.id
+                ).first()
+
+                if not existing_shared:
+                    existing_shared = AllianceSharedAutoPathData.query.filter_by(
+                        alliance_id=alliance_id,
+                        match_id=entry.match_id,
+                        team_id=entry.team_id,
+                        source_scouting_team_number=src_team
+                    ).first()
+
+                if not existing_shared:
+                    shared_copy = AllianceSharedAutoPathData.create_from_auto_path(
+                        entry, alliance_id, team_num
+                    )
+                    db.session.add(shared_copy)
+                    total_qualitative_copies += 1
+
     db.session.commit()
-    
+
     return jsonify({
         'success': True,
         'scouting_copies_created': total_scouting_copies,
@@ -1712,7 +1797,7 @@ def api_sync_alliance_data():
                 Match.event_id.in_(event_ids),
                 QualitativeScoutingData.scouting_team_number == current_team
             ).all()
-            
+
             for entry in qual_entries:
                 qualitative_data.append({
                     'match_id': entry.match_id,
@@ -1724,7 +1809,29 @@ def api_sync_alliance_data():
                     'data': entry.data,
                     'timestamp': entry.timestamp.isoformat()
                 })
-        
+
+            # Get auto path drawings for these events
+            auto_path_entries = AutoPathDrawing.query.join(Match).filter(
+                Match.event_id.in_(event_ids),
+                db.or_(
+                    AutoPathDrawing.scouting_team_number == current_team,
+                    AutoPathDrawing.scouting_team_number == None
+                )
+            ).all()
+
+            auto_path_data = []
+            for entry in auto_path_entries:
+                auto_path_data.append({
+                    'match_id': entry.match_id,
+                    'match_number': entry.match.match_number if entry.match else None,
+                    'match_type': entry.match.match_type if entry.match else None,
+                    'event_code': entry.match.event.code if entry.match and entry.match.event else '',
+                    'team_number': entry.team.team_number if entry.team else None,
+                    'team_id': entry.team_id,
+                    'data': entry.data,
+                    'last_updated': entry.last_updated.isoformat() if entry.last_updated else None
+                })
+
         # Send data to alliance members
         sync_count = 0
         for member_obj in alliance.get_active_members():
@@ -1735,13 +1842,13 @@ def api_sync_alliance_data():
                     from_team_number=current_team,
                     to_team_number=member_obj.team_number,
                     data_type='manual_sync',
-                    data_count=len(scouting_data) + len(pit_data) + len(qualitative_data),
+                    data_count=len(scouting_data) + len(pit_data) + len(qualitative_data) + len(auto_path_data),
                     sync_status='pending',
                     last_sync=datetime.now(timezone.utc)
                 )
                 db.session.add(sync_record)
                 sync_count += 1
-                
+
                 # Emit data via SocketIO
                 socketio.emit('alliance_data_sync_auto', {
                     'from_team': current_team,
@@ -1749,19 +1856,21 @@ def api_sync_alliance_data():
                     'scouting_data': scouting_data,
                     'pit_data': pit_data,
                     'qualitative_data': qualitative_data,
+                    'auto_path_data': auto_path_data,
                     'sync_id': sync_record.id,
                     'type': 'manual_sync'
                 }, room=f'team_{member_obj.team_number}')
-        
+
         db.session.commit()
-        
+
         return jsonify({
             'success': True,
             'message': 'Alliance data synchronized successfully',
             'synced_to': sync_count,
             'scouting_entries': len(scouting_data),
             'pit_entries': len(pit_data),
-            'qualitative_entries': len(qualitative_data)
+            'qualitative_entries': len(qualitative_data),
+            'auto_path_entries': len(auto_path_data)
         })
         
     except Exception as e:
@@ -2204,38 +2313,6 @@ def save_game_config(alliance_id):
                 
                 config_data['post_match']['rating_elements'] = rating_elements
                 config_data['post_match']['text_elements'] = text_elements
-                
-                # Update API settings (FIRST API) - handle both old and new field names
-                # Old template uses: first_username, first_auth_token, first_base_url
-                # New template uses: api_username, api_auth_token, api_base_url
-                first_username = request.form.get('first_username') or request.form.get('api_username')
-                first_auth_token = request.form.get('first_auth_token') or request.form.get('api_auth_token')
-                first_base_url = request.form.get('first_base_url') or request.form.get('api_base_url')
-                
-                if 'first_username' in request.form or 'first_auth_token' in request.form or 'first_base_url' in request.form or \
-                   'api_username' in request.form or 'api_auth_token' in request.form or 'api_base_url' in request.form:
-                    config_data['api_settings'] = {
-                        'username': first_username or '',
-                        'auth_token': first_auth_token or '',
-                        'base_url': first_base_url or 'https://frc-api.firstinspires.org'
-                    }
-                
-                # Update TBA API settings - allow clearing fields
-                if 'tba_auth_key' in request.form or 'tba_base_url' in request.form:
-                    config_data['tba_api_settings'] = {
-                        'auth_key': request.form.get('tba_auth_key', ''),
-                        'base_url': request.form.get('tba_base_url', 'https://www.thebluealliance.com/api/v3')
-                    }
-                
-                # Update preferred API source if provided
-                if 'preferred_api_source' in request.form:
-                    config_data['preferred_api_source'] = request.form.get('preferred_api_source', 'tba')
-                
-                # Update auto_sync_enabled setting if provided
-                if 'auto_sync_enabled' in request.form:
-                    if 'api_settings' not in config_data:
-                        config_data['api_settings'] = {}
-                    config_data['api_settings']['auto_sync_enabled'] = True if request.form.get('auto_sync_enabled') else False
         
         # Capture original config for migration comparison
         try:
@@ -2888,7 +2965,49 @@ def perform_periodic_alliance_sync():
                             )
                             db.session.add(shared_copy)
                             shared_copies_created += 1
-                    
+
+                    # Get recent auto path drawings for this team
+                    recent_auto_path = AutoPathDrawing.query.join(Match).filter(
+                        Match.event_id.in_(event_ids),
+                        AutoPathDrawing.last_updated >= recent_time,
+                        db.or_(
+                            AutoPathDrawing.scouting_team_number == current_team,
+                            AutoPathDrawing.scouting_team_number == None
+                        )
+                    ).all()
+
+                    for entry in recent_auto_path:
+                        if AllianceDeletedData.is_deleted(
+                            alliance_id=alliance.id,
+                            data_type='auto_path',
+                            match_id=entry.match_id,
+                            team_id=entry.team_id,
+                            alliance_color=None,
+                            source_team=current_team
+                        ):
+                            continue
+
+                        src_team = entry.scouting_team_number or current_team
+                        existing_shared = AllianceSharedAutoPathData.query.filter_by(
+                            alliance_id=alliance.id,
+                            original_auto_path_id=entry.id
+                        ).first()
+
+                        if not existing_shared:
+                            existing_shared = AllianceSharedAutoPathData.query.filter_by(
+                                alliance_id=alliance.id,
+                                match_id=entry.match_id,
+                                team_id=entry.team_id,
+                                source_scouting_team_number=src_team
+                            ).first()
+
+                        if not existing_shared:
+                            shared_copy = AllianceSharedAutoPathData.create_from_auto_path(
+                                entry, alliance.id, current_team
+                            )
+                            db.session.add(shared_copy)
+                            shared_copies_created += 1
+
                     # Prepare sync data
                     scouting_data = []
                     for entry in recent_scouting:
@@ -2924,11 +3043,24 @@ def perform_periodic_alliance_sync():
                             'data': entry.data,
                             'timestamp': entry.timestamp.isoformat()
                         })
-                    
+
+                    auto_path_data = []
+                    for entry in recent_auto_path:
+                        auto_path_data.append({
+                            'match_id': entry.match_id,
+                            'match_number': entry.match.match_number if entry.match else None,
+                            'match_type': entry.match.match_type if entry.match else None,
+                            'event_code': entry.match.event.code if entry.match and entry.match.event else '',
+                            'team_number': entry.team.team_number if entry.team else None,
+                            'team_id': entry.team_id,
+                            'data': entry.data,
+                            'last_updated': entry.last_updated.isoformat() if entry.last_updated else None
+                        })
+
                     # Send to alliance members
                     active_members = alliance.get_active_members()
                     sync_count = 0
-                    
+
                     for member in active_members:
                         if member.team_number != current_team:
                             # Create sync record
@@ -2937,13 +3069,13 @@ def perform_periodic_alliance_sync():
                                 from_team_number=current_team,
                                 to_team_number=member.team_number,
                                 data_type='periodic_sync',
-                                data_count=len(scouting_data) + len(pit_data) + len(qualitative_data),
+                                data_count=len(scouting_data) + len(pit_data) + len(qualitative_data) + len(auto_path_data),
                                 sync_status='pending',
                                 last_sync=datetime.now(timezone.utc)
                             )
                             db.session.add(sync_record)
                             sync_count += 1
-                            
+
                             # Emit data via SocketIO to both team and alliance room
                             payload = {
                                 'from_team': current_team,
@@ -2951,6 +3083,7 @@ def perform_periodic_alliance_sync():
                                 'scouting_data': scouting_data,
                                 'pit_data': pit_data,
                                 'qualitative_data': qualitative_data,
+                                'auto_path_data': auto_path_data,
                                 'sync_id': sync_record.id,
                                 'type': 'periodic_sync'
                             }
@@ -4461,12 +4594,19 @@ def api_get_alliance_shared_data(alliance_id):
             alliance_id=alliance_id,
             is_active=True
         ).all()
-        
+
+        # Get all active shared auto path data
+        auto_path_data = AllianceSharedAutoPathData.query.filter_by(
+            alliance_id=alliance_id,
+            is_active=True
+        ).all()
+
         return jsonify({
             'success': True,
             'scouting_data': [d.to_dict() for d in scouting_data],
             'pit_data': [d.to_dict() for d in pit_data],
             'qualitative_data': [d.to_dict() for d in qualitative_data],
+            'auto_path_data': [d.to_dict() for d in auto_path_data],
             'is_admin': member.role == 'admin'
         })
         
@@ -4720,7 +4860,6 @@ def sync_alliance_teams(alliance_id):
     """Sync teams from FIRST API for alliance - stores under alliance's storage team"""
     from app.utils.api_utils import get_teams_dual_api, api_to_db_team_conversion, get_event_details_dual_api
     from app.routes.data import get_or_create_event
-    from app.utils.config_manager import get_effective_game_config
     
     current_team = get_current_scouting_team_number()
     
@@ -4746,10 +4885,11 @@ def sync_alliance_teams(alliance_id):
     
     if not event_code:
         return jsonify({'success': False, 'error': 'Event code is required'}), 400
-    
-    # Get effective game config for the alliance
+
+    # Get effective game configuration for default year/season values
+    from app.utils.config_manager import get_effective_game_config
     game_config = get_effective_game_config()
-    
+
     try:
         # Get or create event under alliance's storage team
         event = Event.query.filter_by(
@@ -5559,118 +5699,87 @@ def import_data_page(alliance_id):
 def scan_my_team_data(alliance_id):
     """Scan current team's data to find entries that can be shared with alliance"""
     current_team = get_current_scouting_team_number()
-    
-    # Check if user is a member of this alliance
+
     member = ScoutingAllianceMember.query.filter_by(
         alliance_id=alliance_id,
         team_number=current_team,
         status='accepted'
     ).first()
-    
     if not member:
         return jsonify({'success': False, 'error': 'Not authorized'}), 403
-    
+
     alliance = ScoutingAlliance.query.get_or_404(alliance_id)
-    
     data = request.get_json() or {}
-    data_type = data.get('data_type', 'all')  # 'scouting', 'pit', or 'all'
-    
+    data_type = data.get('data_type', 'all')
+
     try:
-        # Get alliance event codes (optional - if none, show all team data)
         alliance_events = alliance.get_shared_events()
-        
-        current_app.logger.info(f"[ImportScan] Team {current_team} scanning for alliance {alliance_id}")
-        current_app.logger.info(f"[ImportScan] Alliance events: {alliance_events}")
-        
-        # Get events for these codes
+
         events = []
         event_ids = []
         if alliance_events:
             events = Event.query.filter(Event.code.in_(alliance_events)).all()
             event_ids = [e.id for e in events]
-            current_app.logger.info(f"[ImportScan] Found event IDs: {event_ids}")
-        
-        # Get ALL existing shared data in alliance to check for duplicates
-        # A duplicate is defined by match_id + team_id + alliance (for scouting)
-        # or just team_id (for pit)
+
         existing_scouting_keys = set()
         existing_pit_team_ids = set()
-        
-        # Get existing shared scouting data from ANY source
+        existing_qualitative_keys = set()
+        existing_auto_path_keys = set()
+
         existing_shared_scouting = AllianceSharedScoutingData.query.filter_by(
             alliance_id=alliance_id,
             is_active=True
         ).all()
-        
         for shared in existing_shared_scouting:
-            # Create a unique key for comparison (match + team + alliance color)
-            key = (shared.match_id, shared.team_id, shared.alliance)
-            existing_scouting_keys.add(key)
-        
-        current_app.logger.info(f"[ImportScan] Existing scouting keys: {len(existing_scouting_keys)}")
-        
-        # Get existing shared pit data from ANY source
+            existing_scouting_keys.add((shared.match_id, shared.team_id, shared.alliance))
+
         existing_shared_pit = AllianceSharedPitData.query.filter_by(
             alliance_id=alliance_id,
             is_active=True
         ).all()
-        
         for shared in existing_shared_pit:
             existing_pit_team_ids.add(shared.team_id)
-        
-        current_app.logger.info(f"[ImportScan] Existing pit team IDs: {len(existing_pit_team_ids)}")
-        
-        # Prepare existing qualitative keys (match_id + alliance_scouted)
-        existing_qualitative_keys = set()
+
         existing_shared_qualitative = AllianceSharedQualitativeData.query.filter_by(
             alliance_id=alliance_id,
             is_active=True
         ).all()
         for shared in existing_shared_qualitative:
             existing_qualitative_keys.add((shared.match_id, shared.alliance_scouted))
-        current_app.logger.info(f"[ImportScan] Existing qualitative keys: {len(existing_qualitative_keys)}")
-        
+
+        existing_shared_auto_path = AllianceSharedAutoPathData.query.filter_by(
+            alliance_id=alliance_id,
+            is_active=True
+        ).all()
+        for shared in existing_shared_auto_path:
+            existing_auto_path_keys.add((shared.match_id, shared.team_id))
+
         results = {
             'scouting_data': [],
             'pit_data': [],
             'qualitative_data': [],
+            'auto_path_data': [],
             'source_team': current_team,
             'alliance_events': alliance_events
         }
-        
-        # Scan scouting data from CURRENT TEAM ONLY
+
         if data_type in ['all', 'scouting']:
-            # Get all scouting data from current team
-            # EXCLUDE entries that were received from alliance (have [Alliance- prefix)
             scouting_query = ScoutingData.query.filter(
                 ScoutingData.scouting_team_number == current_team
-            )
-            
-            # Exclude alliance-received data
-            scouting_query = scouting_query.filter(
+            ).filter(
                 db.or_(
                     ScoutingData.scout_name == None,
                     ~ScoutingData.scout_name.like('[Alliance-%')
                 )
             )
-            
-            # If we have alliance events, filter by them
+
             if event_ids:
-                scouting_query = scouting_query.join(Match).filter(
-                    Match.event_id.in_(event_ids)
-                )
-            
-            scouting_entries = scouting_query.all()
-            current_app.logger.info(f"[ImportScan] Found {len(scouting_entries)} scouting entries for team {current_team}")
-            
-            for entry in scouting_entries:
-                # Check if already exists in alliance (from ANY source)
+                scouting_query = scouting_query.join(Match).filter(Match.event_id.in_(event_ids))
+
+            for entry in scouting_query.all():
                 key = (entry.match_id, entry.team_id, entry.alliance)
                 if key in existing_scouting_keys:
-                    current_app.logger.debug(f"[ImportScan] Skipping duplicate scouting entry: {key}")
                     continue
-                
-                # Check if this was previously ignored/deleted
                 if AllianceDeletedData.is_deleted(
                     alliance_id=alliance_id,
                     data_type='scouting',
@@ -5679,10 +5788,7 @@ def scan_my_team_data(alliance_id):
                     alliance_color=entry.alliance,
                     source_team=current_team
                 ):
-                    current_app.logger.debug(f"[ImportScan] Skipping deleted entry: {key}")
                     continue
-                
-                # Add to results
                 results['scouting_data'].append({
                     'id': entry.id,
                     'team_number': entry.team.team_number if entry.team else 'Unknown',
@@ -5696,46 +5802,58 @@ def scan_my_team_data(alliance_id):
                     'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
                     'data_preview': _get_data_preview(entry.data)
                 })
-        
-        # Scan pit data from CURRENT TEAM ONLY
+
         if data_type in ['all', 'pit']:
-            # Get all pit data from current team
-            # EXCLUDE entries that were received from alliance (have [Alliance- prefix)
-            # Include NULL scouting_team_number for backwards compatibility
             pit_query = PitScoutingData.query.filter(
                 db.or_(
                     PitScoutingData.scouting_team_number == current_team,
                     PitScoutingData.scouting_team_number == None
                 )
+            ).filter(
+                db.or_(
+                    PitScoutingData.scout_name == None,
+                    ~PitScoutingData.scout_name.like('[Alliance-%')
+                )
             )
-        
-        # Scan qualitative data from CURRENT TEAM ONLY
+
+            for entry in pit_query.all():
+                if entry.team_id in existing_pit_team_ids:
+                    continue
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='pit',
+                    match_id=None,
+                    team_id=entry.team_id,
+                    alliance_color=None,
+                    source_team=current_team
+                ):
+                    continue
+                results['pit_data'].append({
+                    'id': entry.id,
+                    'team_number': entry.team.team_number if entry.team else 'Unknown',
+                    'team_name': entry.team.team_name if entry.team else 'Unknown',
+                    'scout_name': entry.scout_name,
+                    'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
+                    'data_preview': _get_data_preview(entry.data)
+                })
+
         if data_type in ['all', 'qualitative']:
-            # Get all qualitative data from current team
             qual_query = QualitativeScoutingData.query.filter(
                 QualitativeScoutingData.scouting_team_number == current_team
-            )
-            # Exclude alliance-received entries
-            qual_query = qual_query.filter(
+            ).filter(
                 db.or_(
                     QualitativeScoutingData.scout_name == None,
                     ~QualitativeScoutingData.scout_name.like('[Alliance-%')
                 )
             )
-            # filter by events if needed
+
             if event_ids:
-                qual_query = qual_query.join(Match).filter(
-                    Match.event_id.in_(event_ids)
-                )
-            qual_entries = qual_query.all()
-            current_app.logger.info(f"[ImportScan] Found {len(qual_entries)} qualitative entries for team {current_team}")
-            
-            for entry in qual_entries:
+                qual_query = qual_query.join(Match).filter(Match.event_id.in_(event_ids))
+
+            for entry in qual_query.all():
                 key = (entry.match_id, entry.alliance_scouted)
                 if key in existing_qualitative_keys:
-                    current_app.logger.debug(f"[ImportScan] Skipping duplicate qualitative entry: {key}")
                     continue
-                
                 if AllianceDeletedData.is_deleted(
                     alliance_id=alliance_id,
                     data_type='qualitative',
@@ -5745,7 +5863,6 @@ def scan_my_team_data(alliance_id):
                     source_team=current_team
                 ):
                     continue
-                
                 results['qualitative_data'].append({
                     'id': entry.id,
                     'match_type': entry.match.match_type if entry.match else 'Unknown',
@@ -5758,58 +5875,50 @@ def scan_my_team_data(alliance_id):
                     'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
                     'data_preview': _get_data_preview(entry.data)
                 })
-            
-            # Exclude alliance-received data
-            pit_query = pit_query.filter(
+
+        if data_type in ['all', 'auto_path']:
+            auto_path_query = AutoPathDrawing.query.filter(
                 db.or_(
-                    PitScoutingData.scout_name == None,
-                    ~PitScoutingData.scout_name.like('[Alliance-%')
+                    AutoPathDrawing.scouting_team_number == current_team,
+                    AutoPathDrawing.scouting_team_number == None
                 )
             )
-            
-            pit_entries = pit_query.all()
-            current_app.logger.info(f"[ImportScan] Found {len(pit_entries)} pit entries for team {current_team}")
-            
-            for entry in pit_entries:
-                # Check if already exists in alliance (from ANY source)
-                if entry.team_id in existing_pit_team_ids:
-                    current_app.logger.debug(f"[ImportScan] Skipping duplicate pit entry for team_id: {entry.team_id}")
+            if event_ids:
+                auto_path_query = auto_path_query.join(Match).filter(Match.event_id.in_(event_ids))
+
+            for entry in auto_path_query.all():
+                key = (entry.match_id, entry.team_id)
+                if key in existing_auto_path_keys:
                     continue
-                
-                # Check if this was previously ignored/deleted
                 if AllianceDeletedData.is_deleted(
                     alliance_id=alliance_id,
-                    data_type='pit',
-                    match_id=None,
+                    data_type='auto_path',
+                    match_id=entry.match_id,
                     team_id=entry.team_id,
                     alliance_color=None,
                     source_team=current_team
                 ):
                     continue
-                
-                # Add to results
-                results['pit_data'].append({
+                results['auto_path_data'].append({
                     'id': entry.id,
                     'team_number': entry.team.team_number if entry.team else 'Unknown',
                     'team_name': entry.team.team_name if entry.team else 'Unknown',
-                    'scout_name': entry.scout_name,
-                    'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
-                    'data_preview': _get_data_preview(entry.data)
+                    'match_number': entry.match.match_number if entry.match else 'Unknown',
+                    'match_type': entry.match.match_type if entry.match else 'Unknown',
+                    'event_code': entry.match.event.code if entry.match and entry.match.event else 'Unknown',
+                    'event_name': entry.match.event.name if entry.match and entry.match.event else 'Unknown',
+                    'last_updated': entry.last_updated.isoformat() if entry.last_updated else None
                 })
-        
-        current_app.logger.info(f"[ImportScan] Results: {len(results['scouting_data'])} scouting, {len(results['pit_data'])} pit, {len(results['qualitative_data'])} qualitative")
-        
+
         return jsonify({
             'success': True,
             'results': results,
             'total_scouting': len(results['scouting_data']),
             'total_pit': len(results['pit_data']),
             'total_qualitative': len(results['qualitative_data']),
-            'results': results,
-            'total_scouting': len(results['scouting_data']),
-            'total_pit': len(results['pit_data'])
+            'total_auto_path': len(results['auto_path_data'])
         })
-        
+
     except Exception as e:
         current_app.logger.error(f"Error scanning team data: {str(e)}")
         import traceback
@@ -5821,15 +5930,14 @@ def _get_data_preview(data):
     """Get a short preview of data for display"""
     if not data:
         return 'No data'
-    
+
     if isinstance(data, str):
         try:
             data = json.loads(data)
-        except:
+        except Exception:
             return data[:100] + '...' if len(data) > 100 else data
-    
+
     if isinstance(data, dict):
-        # Get first few key-value pairs
         items = list(data.items())[:3]
         preview_parts = []
         for key, value in items:
@@ -5841,7 +5949,7 @@ def _get_data_preview(data):
                     str_val = str_val[:20] + '...'
                 preview_parts.append(f"{key}: {str_val}")
         return ', '.join(preview_parts)
-    
+
     return str(data)[:100]
 
 
@@ -5867,12 +5975,14 @@ def import_selected_data(alliance_id):
     scouting_ids = data.get('scouting_ids', [])  # List of ScoutingData IDs to import
     pit_ids = data.get('pit_ids', [])  # List of PitScoutingData IDs to import
     qualitative_ids = data.get('qualitative_ids', [])  # List of QualitativeScoutingData IDs to import
+    auto_path_ids = data.get('auto_path_ids', [])  # List of AutoPathDrawing IDs to import
     ignore_ids = data.get('ignore_ids', [])  # IDs to mark as ignored (won't show again)
     
     try:
         imported_scouting = 0
         imported_pit = 0
         imported_qualitative = 0
+        imported_auto_path = 0
         ignored_count = 0
         skipped_wrong_team = 0
         skipped_duplicate = 0
@@ -5988,6 +6098,36 @@ def import_selected_data(alliance_id):
             )
             db.session.add(shared_copy)
             imported_qualitative += 1
+
+        # Import auto path drawings
+        for auto_path_id in auto_path_ids:
+            entry = AutoPathDrawing.query.get(auto_path_id)
+            if not entry:
+                continue
+            if entry.scouting_team_number and entry.scouting_team_number != current_team:
+                skipped_wrong_team += 1
+                continue
+            existing = AllianceSharedAutoPathData.query.filter_by(
+                alliance_id=alliance_id,
+                original_auto_path_id=entry.id
+            ).first()
+            if existing:
+                skipped_duplicate += 1
+                continue
+            existing = AllianceSharedAutoPathData.query.filter_by(
+                alliance_id=alliance_id,
+                match_id=entry.match_id,
+                team_id=entry.team_id,
+                is_active=True
+            ).first()
+            if existing:
+                skipped_duplicate += 1
+                continue
+            shared_copy = AllianceSharedAutoPathData.create_from_auto_path(
+                entry, alliance_id, current_team
+            )
+            db.session.add(shared_copy)
+            imported_auto_path += 1
         
         # Mark ignored entries as "deleted" so they won't show up again
         for ignore_entry in ignore_ids:
@@ -6039,6 +6179,21 @@ def import_selected_data(alliance_id):
                     )
                     db.session.add(deleted_record)
                     ignored_count += 1
+
+            elif ignore_type == 'auto_path':
+                entry = AutoPathDrawing.query.get(ignore_id)
+                if entry and (not entry.scouting_team_number or entry.scouting_team_number == current_team):
+                    deleted_record = AllianceDeletedData(
+                        alliance_id=alliance_id,
+                        data_type='auto_path',
+                        match_id=entry.match_id,
+                        team_id=entry.team_id,
+                        alliance_color=None,
+                        source_scouting_team_number=current_team,
+                        deleted_by_team=current_team
+                    )
+                    db.session.add(deleted_record)
+                    ignored_count += 1
         
         db.session.commit()
         
@@ -6049,18 +6204,20 @@ def import_selected_data(alliance_id):
             'imported_scouting': imported_scouting,
             'imported_pit': imported_pit,
             'imported_qualitative': imported_qualitative,
+            'imported_auto_path': imported_auto_path,
             'imported_by': current_team
         }, room=f'alliance_{alliance_id}')
         
-        current_app.logger.info(f"[Import] Team {current_team} imported {imported_scouting} scouting, {imported_pit} pit. Skipped: {skipped_duplicate} duplicates, {skipped_wrong_team} wrong team")
+        current_app.logger.info(f"[Import] Team {current_team} imported {imported_scouting} scouting, {imported_pit} pit, {imported_qualitative} qualitative, {imported_auto_path} auto path. Skipped: {skipped_duplicate} duplicates, {skipped_wrong_team} wrong team")
         
         return jsonify({
             'success': True,
             'imported_scouting': imported_scouting,
             'imported_pit': imported_pit,
             'imported_qualitative': imported_qualitative,
+            'imported_auto_path': imported_auto_path,
             'ignored_count': ignored_count,
-            'message': f'Imported {imported_scouting} scouting entries, {imported_pit} pit entries, and {imported_qualitative} qualitative entries. {ignored_count} entries marked as ignored.'
+            'message': f'Imported {imported_scouting} scouting, {imported_pit} pit, {imported_qualitative} qualitative, and {imported_auto_path} auto path entries. {ignored_count} entries marked as ignored.'
         })
         
     except Exception as e:

@@ -34,10 +34,58 @@
         <input id="eraser-size" type="range" min="6" max="60" value="20" class="ms-2" title="Eraser size" style="vertical-align:middle">
         <label for="bg-upload" class="ms-2 btn btn-outline-secondary btn-sm mb-0">Upload Background</label>
         <input type="file" id="bg-upload" accept="image/*" class="d-none">
+        <!-- import auto path controls -->
+        <div class="ms-3 d-inline-block align-middle">
+            <button id="import-btn" class="btn btn-sm btn-success" title="Import Auto Path">Import Auto Path</button>
+        </div>
     </div>
 </div>
 <div class="position-relative u-max-w-900 mx-auto">
     <img id="field-image" src="{{ url_for('static', filename='Feild-2025.png') }}" alt="Field" class="img-no-drag" draggable="false">
+
+<!-- hidden match/team selectors used by import dialog -->
+<div id="import-controls" class="d-none">
+    <select id="import-match" class="form-select form-select-sm mb-1"></select>
+    <select id="import-team" class="form-select form-select-sm"></select>
+</div>
+
+<!-- modal for browsing existing auto paths -->
+<div class="modal fade" id="importModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Import Auto Path</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <input type="search" id="import-search" class="form-control form-control-sm" placeholder="Search by team or match">
+        </div>
+        <div id="import-list" class="row g-3">
+          <!-- populated dynamically -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- modal for showing enlarged preview -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Preview</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center">
+        <canvas id="preview-canvas" width="600" height="400" style="max-width:100%; border:1px solid #ccc;"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
     <canvas id="drawing-canvas" class="canvas-overlay"></canvas>
     <input type="text" id="text-input-overlay" class="d-none" maxlength="200" aria-label="Canvas text input">
     <button id="delete-text" class="d-none" aria-label="Delete text">✕</button>
@@ -115,6 +163,12 @@ let redoStack = [];
 const UNDO_LIMIT = 30;
 let drawingLastUpdated = null; // ISO timestamp of the drawing on server (used to detect updates) 
 let defaultFieldImage = "{{ url_for('static', filename='Feild-2025.png') }}";
+
+// helper to parse alliance string into array of team_numbers
+function parseAlliance(str) {
+    if (!str) return [];
+    return str.split(',').map(s=>parseInt(s.trim())).filter(n=>!isNaN(n));
+}
 let hoveredTextId = null;
 let eraserSize = parseInt(document.getElementById('eraser-size')?.value || 20, 10);
 
@@ -130,6 +184,131 @@ function resizeCanvas() {
     }
     redraw();
 }
+
+// import functionality setup
+function initImportControls() {
+    const importBtn = document.getElementById('import-btn');
+    const importModalEl = document.getElementById('importModal');
+    const importList = document.getElementById('import-list');
+    if (!importBtn || !importModalEl || !importList) return;
+    const importModal = new bootstrap.Modal(importModalEl);
+
+    importBtn.addEventListener('click', function() {
+        // fetch list of drawings for current selected_event
+        const eventParam = eventSelect ? `?event_id=${eventSelect.value}` : '';
+        fetch(`/scouting/api/auto_path/list${eventParam}`)
+            .then(r=>r.json())
+            .then(list=>{
+                importList.innerHTML = '';
+                if (!list || !list.length) {
+                    importList.innerHTML = '<p class="text-center text-muted">No saved auto paths available.</p>';
+                } else {
+                    list.forEach(item=>{
+                        const col = document.createElement('div');
+                        col.className = 'col-md-4';
+                        col.innerHTML = `
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    Team ${item.team_number} &mdash; ${item.match_type} ${item.match_number}
+                                </div>
+                                <div class="card-body p-2 text-center">
+                                    <canvas class="import-preview" width="200" height="133" data-drawing='${JSON.stringify(item.data)}' style="width:100%;border:1px solid #ccc;"></canvas>
+                                </div>
+                                <div class="card-footer">
+                                    <button class="btn btn-sm btn-primary w-100 import-select" data-match="${item.match_id}" data-team="${item.team_id}">Use</button>
+                                </div>
+                            </div>`;
+                        importList.appendChild(col);
+                    });
+                    // after adding, render previews
+                    importList.querySelectorAll('.import-preview').forEach(canvas=>{
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            const img = new Image();
+                            img.src = defaultFieldImage;
+                            img.onload = ()=>{
+                                ctx.clearRect(0,0,canvas.width,canvas.height);
+                                ctx.drawImage(img,0,0,canvas.width,canvas.height);
+                                const data = JSON.parse(canvas.getAttribute('data-drawing')||'[]');
+                                if (data && data.length) {
+                                    ctx.strokeStyle='#ff0000'; ctx.lineWidth=2;
+                                    data.forEach(entry=>{
+                                        if (entry.points && entry.points.length) {
+                                            ctx.beginPath();
+                                            entry.points.forEach((pt,idx)=>{const x=pt.x*canvas.width,y=pt.y*canvas.height;if(idx===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+                                            ctx.stroke();
+                                        }
+                                    });
+                                }
+                            };
+                        }
+                        // clicking preview opens larger modal
+                        canvas.style.cursor = 'pointer';
+                        canvas.addEventListener('click', function() {
+                            const data = JSON.parse(canvas.getAttribute('data-drawing')||'[]');
+                            const previewCtx = document.getElementById('preview-canvas').getContext('2d');
+                            const pc = document.getElementById('preview-canvas');
+                            // draw background then data
+                            const img2 = new Image();
+                            img2.src = defaultFieldImage;
+                            img2.onload = ()=>{
+                                previewCtx.clearRect(0,0,pc.width,pc.height);
+                                previewCtx.drawImage(img2,0,0,pc.width,pc.height);
+                                if (data && data.length) {
+                                    previewCtx.strokeStyle='#ff0000'; previewCtx.lineWidth=3;
+                                    data.forEach(entry=>{
+                                        if (entry.points && entry.points.length) {
+                                            previewCtx.beginPath();
+                                            entry.points.forEach((pt,idx)=>{const x=pt.x*pc.width,y=pt.y*pc.height;if(idx===0)previewCtx.moveTo(x,y);else previewCtx.lineTo(x,y);});
+                                            previewCtx.stroke();
+                                        }
+                                    });
+                                }
+                                // show modal once drawn
+                                const pm = new bootstrap.Modal(document.getElementById('previewModal'));
+                                pm.show();
+                            };
+                        });
+                    });
+                    // add handlers
+                    importList.querySelectorAll('.import-select').forEach(btn=>{
+                        btn.addEventListener('click', function(){
+                            const mid=this.dataset.match;
+                            const tid=this.dataset.team;
+                            // snapshot for undo
+                            undoStack.push(JSON.parse(JSON.stringify(drawingData)));
+                            if(undoStack.length>UNDO_LIMIT) undoStack.shift();
+                            fetch(`/scouting/api/auto_path/${mid}/${tid}`)
+                                .then(r=>r.json())
+                                .then(resp=>{
+                                    if(resp && resp.data){
+                                        drawingData=drawingData.concat(resp.data||[]);
+                                        redraw();
+                                        showToast && showToast('Imported auto path!','success');
+                                    }
+                                });
+                            importModal.hide();
+                        });
+                    });
+                }
+                importModal.show();
+                // attach search handler each time
+                const searchInput = document.getElementById('import-search');
+                if (searchInput) {
+                    searchInput.value = '';
+                    searchInput.oninput = function() {
+                        const q = this.value.toLowerCase().trim();
+                        importList.querySelectorAll('.col-md-4').forEach(card=>{
+                            const txt = card.textContent.toLowerCase();
+                            card.style.display = txt.includes(q) ? '' : 'none';
+                        });
+                    };
+                }
+            });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initImportControls);
 
 function redraw() {
     // Use the displayed size (bounding rect) so drawing matches pointer coordinates
@@ -767,12 +946,30 @@ if (fieldImage.complete && fieldImage.naturalWidth !== 0) {
     fieldImage.onload = resizeCanvas;
 }
 
+let clearPending = false;
 clearBtn.addEventListener('click', () => {
-    // Snapshot before clearing so user can undo
-    pushUndoSnapshot();
-    drawingData = [];
-    redraw();
-    sendDrawingUpdate();
+    if (!clearPending) {
+        clearPending = true;
+        clearBtn.textContent = 'Confirm Clear';
+        clearBtn.classList.add('btn-danger');
+        clearBtn.classList.remove('btn-warning');
+        setTimeout(() => {
+            clearPending = false;
+            clearBtn.textContent = 'Clear Drawing';
+            clearBtn.classList.remove('btn-danger');
+            clearBtn.classList.add('btn-warning');
+        }, 3000);
+    } else {
+        clearPending = false;
+        clearBtn.textContent = 'Clear Drawing';
+        clearBtn.classList.remove('btn-danger');
+        clearBtn.classList.add('btn-warning');
+        // Snapshot before clearing so user can undo
+        pushUndoSnapshot();
+        drawingData = [];
+        redraw();
+        sendDrawingUpdate();
+    }
 });
 
 // Eraser tool and size handling
