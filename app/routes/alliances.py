@@ -17,6 +17,88 @@ from app.utils.team_isolation import filter_declined_entries_by_scouting_team, g
 
 bp = Blueprint('alliances', __name__, url_prefix='/alliances')
 
+
+def _resolve_alliance_event_for_db(current_event):
+    """Ensure alliance pages always use a real Event row with integer id.
+
+    Alliance mode can provide synthetic event objects (id like ``alliance_2026ARLI``)
+    for dropdown UX. AllianceSelection.event_id is an Integer FK, so this helper
+    resolves synthetic entries to a concrete Event row and auto-creates a local
+    scoped copy when needed.
+    """
+    if not current_event:
+        return None
+
+    event_id = getattr(current_event, 'id', None)
+    if isinstance(event_id, int):
+        return current_event
+
+    event_code = str(getattr(current_event, 'code', '') or '').strip().upper()
+    if not event_code and isinstance(event_id, str) and event_id.startswith('alliance_'):
+        event_code = str(event_id).replace('alliance_', '', 1).strip().upper()
+
+    if not event_code:
+        return None
+
+    candidate_codes = {event_code}
+    try:
+        from app.utils.api_utils import strip_year_prefix
+        stripped = str(strip_year_prefix(event_code) or '').strip().upper()
+        if stripped:
+            candidate_codes.add(stripped)
+    except Exception:
+        pass
+
+    scouting_team_number = get_current_scouting_team_number()
+    codes_list = list(candidate_codes)
+
+    # Prefer a local event copy for the current scouting team
+    local_event = None
+    if scouting_team_number is not None:
+        local_event = Event.query.filter(
+            func.upper(Event.code).in_(codes_list),
+            Event.scouting_team_number == scouting_team_number
+        ).order_by(Event.id.desc()).first()
+
+    if local_event:
+        return local_event
+
+    # Fallback to any existing concrete event with same code
+    existing_event = Event.query.filter(
+        func.upper(Event.code).in_(codes_list)
+    ).order_by(Event.id.desc()).first()
+    if existing_event:
+        return existing_event
+
+    # Self-heal: create a local concrete event record for the current team
+    try:
+        from app.routes.data import get_or_create_event
+
+        preferred_code = next((c for c in codes_list if len(c) >= 4 and c[:4].isdigit()), event_code)
+        new_event = get_or_create_event(
+            name=getattr(current_event, 'name', None) or f'Event {preferred_code}',
+            code=preferred_code,
+            year=getattr(current_event, 'year', None),
+            location=getattr(current_event, 'location', None),
+            start_date=getattr(current_event, 'start_date', None),
+            end_date=getattr(current_event, 'end_date', None),
+            scouting_team_number=scouting_team_number
+        )
+        if new_event:
+            db.session.add(new_event)
+            db.session.commit()
+            current_app.logger.info(
+                f"Auto-created local event for alliance page: code={preferred_code}, team={scouting_team_number}, id={new_event.id}"
+            )
+            return new_event
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            f"Failed to auto-resolve synthetic alliance event '{event_code}' to concrete Event row"
+        )
+
+    return None
+
 def get_theme_context():
     theme_manager = ThemeManager()
     return {
@@ -75,6 +157,13 @@ def index():
     
     if not current_event:
         flash('No events found. Please create an event first.', 'warning')
+        return redirect(url_for('main.index'))
+
+    # Ensure we have a concrete Event row (numeric id) even when dropdown/context
+    # supplied a synthetic alliance event object (id='alliance_<CODE>').
+    current_event = _resolve_alliance_event_for_db(current_event)
+    if not current_event or not isinstance(getattr(current_event, 'id', None), int):
+        flash('Could not resolve the selected event for alliance selection. Please sync or reselect the event.', 'warning')
         return redirect(url_for('main.index'))
     
     # Get existing alliances for the current event (filtered by scouting team)
