@@ -61,13 +61,6 @@
                         <!-- Quick prediction UI removed -->
                     </div>
                 </form>
-                {% if team and match %}
-                <div class="mt-2">
-                    <a href="{{ url_for('scouting.auto_path') }}?team_id={{ team.id }}&match_id={{ match.id }}" class="btn btn-secondary btn-sm" id="auto-path-link">
-                        <i class="fas fa-route me-1"></i> Auto Path Scouting
-                    </a>
-                </div>
-                {% endif %}
             </div>
         </div>
 

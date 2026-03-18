@@ -248,7 +248,7 @@ def test_mobile_qualitative_upload_sorts_entries():
             assert resp.status_code == 200
 
         # also verify the main "All Data" page includes a link to the qualitative list
-        from app.routes.scouting import list_data, match_data
+        from app.routes.scouting import list_data
         with app.test_request_context('/scouting/list'):
             resp2 = list_data()
             assert hasattr(resp2, 'status_code')
@@ -256,30 +256,6 @@ def test_mobile_qualitative_upload_sorts_entries():
             # response may be a string or a Response object
             html = resp2.get_data(as_text=True) if hasattr(resp2, 'get_data') else resp2
             assert '/scouting/qualitative/list' in html
-            # overview should include a link to the new match-data page
-            assert '/scouting/match-data' in html
-            # since we set up a single scouting record there should be at least one match-data entry listed
-            assert '1 records' in html or '1 record' in html
-            # grouped sections should be present and contain our team number
-            assert 'Match Scouting' in html
-            assert 'Pit Data' in html
-            assert 'Auto Paths' in html
-            assert 'Qualitative' in html
-            assert str(data['scouting'].team.team_number) in html
-            # verify that actions column is present
-            assert 'Actions' in html
-            assert 'View' in html
-        # ensure the new match-data page still renders the table of entries
-        with app.test_request_context('/scouting/match-data'):
-            # login so access checks pass
-            from flask_login import login_user
-            login_user(data['u1'])
-            resp3 = match_data()
-            assert hasattr(resp3, 'status_code')
-            assert resp3.status_code == 200
-            html3 = resp3.get_data(as_text=True) if hasattr(resp3, 'get_data') else resp3
-            # our single scouting record should appear on the page
-            assert str(data['scouting'].team.team_number) in html3
 
     # restore alliance-mode test header
 

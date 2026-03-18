@@ -1,0 +1,23 @@
+Make alternate offseason team names not show up on other events --fixed 
+
+/scouting/text-elements not showing weather its an alliance or team event -- fixed 
+
+/alliances/ showing duplicate teams in list -- fixed 
+
+/matches/strategy/all not showing matches for alliance events --fixed 
+
+If you have time look into live strategy since it has not been tested fully --needs active event on api to test so will wait until next season 
+
+fix json import error below --partially fixed
+
+Error importing portable archive: (sqlite3.IntegrityError) UNIQUE constraint failed: strategy_drawing.match_id [SQL: INSERT INTO strategy_drawing (match_id, scouting_team_number, data_json, last_updated, created_at, background_image) VALUES (?, ?, ?, ?, ?, ?)] [parameters: (701, None, '[]', '2025-12-19 19:10:28.405708', '2025-12-19 19:10:28.405713', None)] (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+
+
+/data/validate not validating in alliance mode --fixed 
+
+/data/manage not finding teams or matches --fixed 
+
+/matches/strategy not loading matches for alliance events --fixed 
+
+not loading matches for alliance events on strategydrawing page -- found out it wa sebcause of a event without matches synced

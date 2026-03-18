@@ -5,8 +5,7 @@ from app.models import (
     Team, Match, Event, ScoutingData, StrategyDrawing, PitScoutingData,
     AllianceSelection, DoNotPickEntry, AvoidEntry,
     TeamListEntry, StrategyShare, SharedGraph, SharedTeamRanks, team_event,
-    AllianceSharedScoutingData, AllianceSharedPitData, AllianceSharedQualitativeData, QualitativeScoutingData,
-    AutoPathDrawing
+    AllianceSharedScoutingData, AllianceSharedPitData, AllianceSharedQualitativeData, QualitativeScoutingData
 )
 from app import db
 import pandas as pd
@@ -1698,79 +1697,6 @@ def import_qr():
     """Import data from QR codes (manual entry or upload)"""
     if request.method == 'POST':
         # Improve: Handle API request with JSON data (supports single item or list of items)
-        def import_auto_path_payload(auto_path_json):
-            team = None
-            match = None
-
-            team_id = auto_path_json.get('team_id')
-            if team_id is not None:
-                team = Team.query.get(team_id)
-
-            if not team:
-                team_number = auto_path_json.get('team_number')
-                if not team_number:
-                    return {'success': False, 'message': 'Invalid auto path QR data: missing team'}
-                team = Team.query.filter_by(team_number=team_number).first()
-                if not team:
-                    team = Team(team_number=team_number, team_name=auto_path_json.get('team_name') or f'Team {team_number}')
-                    db.session.add(team)
-                    db.session.flush()
-
-            match_id = auto_path_json.get('match_id')
-            if match_id is not None:
-                match = Match.query.get(match_id)
-
-            if not match:
-                match_number = auto_path_json.get('match_number')
-                match_type = auto_path_json.get('match_type', 'Qualification')
-                if not match_number:
-                    return {'success': False, 'message': 'Invalid auto path QR data: missing match'}
-
-                match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
-                if not match:
-                    game_config = get_effective_game_config()
-                    event_code = auto_path_json.get('event_code')
-                    event_name = auto_path_json.get('event_name') or event_code or 'Unknown Event'
-                    event = None
-                    if event_code:
-                        event = Event.query.filter_by(code=event_code).first()
-                    if not event:
-                        event = get_or_create_event(name=event_name, year=game_config['season'], code=event_code)
-
-                    match = Match(
-                        match_number=match_number,
-                        match_type=match_type,
-                        event_id=event.id
-                    )
-                    db.session.add(match)
-                    db.session.flush()
-
-            drawing_data = auto_path_json.get('drawing_data')
-            if drawing_data is None:
-                drawing_data = auto_path_json.get('data')
-            if drawing_data is None:
-                return {'success': False, 'message': 'Invalid auto path QR data: missing drawing data'}
-
-            existing_drawing = AutoPathDrawing.query.filter_by(
-                match_id=match.id,
-                team_id=team.id
-            ).first()
-
-            if existing_drawing:
-                existing_drawing.data = drawing_data
-                db.session.commit()
-                return {'success': True, 'message': f'Updated auto path for Team {team.team_number} in Match {match.match_number}'}
-
-            new_drawing = AutoPathDrawing(
-                match_id=match.id,
-                team_id=team.id,
-                data_json='[]'
-            )
-            new_drawing.data = drawing_data
-            db.session.add(new_drawing)
-            db.session.commit()
-            return {'success': True, 'message': f'Added auto path for Team {team.team_number} in Match {match.match_number}'}
-
         def process_single_qr(qr_text):
             """Process a single QR payload string; returns dict {success: bool, message: str}."""
             try:
@@ -1779,9 +1705,6 @@ def import_qr():
                 return {'success': False, 'message': 'Invalid QR code data format. Expected JSON.'}
 
             try:
-                if scouting_data_json.get('auto_path_generated') is True or scouting_data_json.get('export_type') == 'auto_path':
-                    return import_auto_path_payload(scouting_data_json)
-
                 # Check if this is qualitative scouting data
                 if scouting_data_json.get('qualitative') is True:
                     from app.models import QualitativeScoutingData
@@ -2001,13 +1924,6 @@ def import_qr():
         try:
             # Parse QR data (assuming it's JSON)
             scouting_data_json = json.loads(qr_data)
-
-            if scouting_data_json.get('auto_path_generated') is True or scouting_data_json.get('export_type') == 'auto_path':
-                result = import_auto_path_payload(scouting_data_json)
-                if request.is_json:
-                    return result
-                flash(result['message'], 'success' if result.get('success') else 'error')
-                return redirect(request.url)
             
             # Detect the format of the QR code
             if 'offline_generated' in scouting_data_json:
@@ -3718,51 +3634,17 @@ def delete_entry(entry_id):
     return redirect(url_for('data.manage_entries'))
 
 @bp.route('/wipe_database', methods=['POST'])
-@login_required
 def wipe_database():
     """Wipe all data for the current scouting team from the database with automatic foreign key constraint handling"""
     import traceback
     from sqlalchemy import text
     
     try:
-        # Require explicit form confirmation in non-test environments
-        if not current_app.config.get('TESTING', False) and not request.form.get('confirm_wipe'):
-            current_app.logger.warning(
-                f"Blocked unconfirmed wipe_database request from user={getattr(current_user, 'username', 'unknown')}"
-            )
-            flash("Wipe cancelled: confirmation checkbox is required.", "warning")
-            return redirect(url_for('data.index'))
-
-        # Extra safety: block destructive wipe on PostgreSQL unless explicitly enabled
-        allow_postgres_wipe = os.environ.get('ALLOW_POSTGRES_WIPE', '').strip().lower() in ('1', 'true', 'yes', 'on')
-        if current_app.config.get('USE_POSTGRES', False) and not allow_postgres_wipe:
-            current_app.logger.error(
-                f"Blocked wipe_database on PostgreSQL for user={getattr(current_user, 'username', 'unknown')} "
-                f"team={getattr(current_user, 'scouting_team_number', None)} (ALLOW_POSTGRES_WIPE not set)"
-            )
-            flash(
-                "Wipe is disabled while using PostgreSQL. Set ALLOW_POSTGRES_WIPE=1 to enable it intentionally.",
-                "danger"
-            )
-            return redirect(url_for('data.index'))
-
         scouting_team_number = current_user.scouting_team_number
         
         # Check if scouting team number is None or empty string (but allow 0 for admin/superadmin)
         if scouting_team_number is None or scouting_team_number == '':
             flash("Error: No scouting team number found for current user.", "danger")
-            return redirect(url_for('data.index'))
-
-        # Additional guardrail: team 0 can be broad/shared data; require explicit opt-in
-        allow_team_zero_wipe = os.environ.get('ALLOW_TEAM_ZERO_WIPE', '').strip().lower() in ('1', 'true', 'yes', 'on')
-        if str(scouting_team_number) == '0' and not allow_team_zero_wipe:
-            current_app.logger.error(
-                f"Blocked wipe_database for scouting_team_number=0 by user={getattr(current_user, 'username', 'unknown')}"
-            )
-            flash(
-                "Wipe for scouting team 0 is blocked by default. Set ALLOW_TEAM_ZERO_WIPE=1 to enable intentionally.",
-                "danger"
-            )
             return redirect(url_for('data.index'))
         
         # Count records before deletion for reporting (scoped where appropriate)

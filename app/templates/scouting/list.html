@@ -1,161 +1,177 @@
 {% extends 'base.html' %}
 
-{% block title %}All Data Overview{% endblock %}
+{% block title %}Scouting Data List{% endblock %}
 
-{% block heading %}All Data{% endblock %}
+{% block heading %}Scouting Data List{% endblock %}
 
 {% block content %}
 <div class="card">
     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Data Summary</h5>
-        <a href="{{ url_for('scouting.index') }}" class="btn btn-light btn-sm">
-            <i class="fas fa-arrow-left me-1"></i> Back to Scouting Dashboard
-        </a>
+        <h5 class="mb-0">
+            {% if is_alliance_mode %}
+            <i class="fas fa-users me-2"></i>Alliance Scouting Data
+            {% else %}
+            All Scouting Data
+            {% endif %}
+        </h5>
+        <div class="d-flex gap-2">
+            {% if is_alliance_mode %}
+            <span class="badge bg-warning text-dark">
+                <i class="fas fa-handshake me-1"></i>Alliance Mode Active
+            </span>
+            {% endif %}
+            <a href="{{ url_for('scouting.index') }}" class="btn btn-light btn-sm">
+                <i class="fas fa-arrow-left me-1"></i> Back to Scouting Dashboard
+            </a>
+        </div>
     </div>
     <div class="card-body">
-        <p class="text-muted">Use the links below to drill into specific datasets.</p>
-        <div class="row g-3">
-            <div class="col-md-3">
-                <a href="{{ url_for('scouting.match_data') }}" class="card text-decoration-none h-100">
-                    <div class="card-body text-center">
-                        <i class="fas fa-table fa-2x mb-2"></i>
-                        <h6 class="card-title">Match Scouting</h6>
-                        <p class="mb-0 fw-bold">{{ match_count or 0 }} records</p>
-                    </div>
-                </a>
+        {% if is_alliance_mode %}
+        <div class="alert alert-info mb-3">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Alliance Mode:</strong> Showing shared scouting data from all alliance members.
+            {% if user_is_alliance_admin %}
+            <span class="badge bg-success ms-2">You are an Alliance Admin</span>
+            {% else %}
+            <span class="text-muted ms-2">(You can only delete data you personally scouted)</span>
+            {% endif %}
+        </div>
+        {% endif %}
+        <div class="alert alert-secondary mb-3">
+            <i class="fas fa-boxes me-2"></i>
+            <strong>Pit Data:</strong> To view pit data, visit <a href="{{ url_for('pit_scouting.list_dynamic') }}" class="alert-link">/pit-scouting/list-dynamic</a>.
+        </div>
+        <div class="alert alert-secondary mb-3">
+            <i class="fas fa-feather me-2"></i>
+            <strong>Qualitative Data:</strong> To view qualitative data, visit <a href="{{ url_for('scouting.list_qualitative_data') }}" class="alert-link">/scouting/qualitative/list</a>.
+        </div>
+
+        {% if scouting_data %}        <div class="d-flex gap-3 mb-3">
+            <div>
+                <label class="form-label">Filter by event:</label>
+                <div>
+                    <select id="event-filter-select" class="form-select w-auto">
+                        <option value="all" selected>All Events</option>
+                        {% for event in events|dedupe_events %}
+                        <option value="{{ event.id }}" data-event-id="{{ event.id }}">{{ event.name }} ({{ event.year }}){% if event.is_alliance %} (Alliance){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
-            <div class="col-md-3">
-                <a href="{{ url_for('pit_scouting.list_dynamic') }}" class="card text-decoration-none h-100">
-                    <div class="card-body text-center">
-                        <i class="fas fa-wrench fa-2x mb-2"></i>
-                        <h6 class="card-title">Pit Data</h6>
-                        <p class="mb-0 fw-bold">{{ pit_count or 0 }} records</p>
-                    </div>
-                </a>
+            <div class="vr"></div>
+            <div>
+                <label class="form-label">Filter by match type:</label>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary match-filter-btn active" data-filter="all">All Types</button>
+                    <button type="button" class="btn btn-outline-success match-filter-btn" data-filter="Practice">Practice</button>
+                    <button type="button" class="btn btn-outline-primary match-filter-btn" data-filter="Qualification">Qualification</button>
+                    <button type="button" class="btn btn-outline-danger match-filter-btn" data-filter="Playoff">Playoff</button>
+                </div>
             </div>
-            <div class="col-md-3">
-                <a href="{{ url_for('scouting.auto_path_list') }}" class="card text-decoration-none h-100">
-                    <div class="card-body text-center">
-                        <i class="fas fa-route fa-2x mb-2"></i>
-                        <h6 class="card-title">Auto Paths</h6>
-                        <p class="mb-0 fw-bold">{{ auto_count or 0 }} drawings</p>
-                    </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Team</th>
+                        <th>Match</th>
+                        <th>Alliance</th>
+                        <th>Scout</th>
+                        {% if is_alliance_mode %}<th>Source Team</th>{% endif %}
+                        <th>Station</th>
+                        <th>Timestamp</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for data in scouting_data %}
+                    <tr data-event-id="{{ data.match.event.id }}">
+                        <td>
+                            <a href="{{ url_for('teams.view', team_number=data.team.team_number) }}">
+                                {{ data.team.team_number }}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">{{ data.match.event.code }}</span>
+                            <span class="badge {% if data.match.match_type == 'Qualification' %}bg-primary{% elif data.match.match_type == 'Playoff' %}bg-danger{% elif data.match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ data.match.match_type }}
+                            </span>
+                            {{ data.match.match_number }}
+                        </td>
+                        <td>
+                            <span class="badge {% if data.alliance == 'red' %}bg-danger{% elif data.alliance == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                {{ data.alliance }}
+                            </span>
+                        </td>
+                        <td>{{ data.scout_name }}</td>
+                        {% if is_alliance_mode %}
+                        <td>
+                            <span class="badge bg-info">Team {{ data.source_scouting_team_number }}</span>
+                        </td>
+                        {% endif %}
+                        <td>{{ data.scouting_station if data.scouting_station else '-' }}</td>
+                        <td>{{ data.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                {% if is_alliance_mode %}
+                                <a href="{{ url_for('scouting.view_data', id=data.id, shared_id=data.id) }}" class="btn btn-sm btn-primary" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% else %}
+                                <a href="{{ url_for('scouting.view_data', id=data.id) }}" class="btn btn-sm btn-primary" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{{ url_for('scouting.scouting_form', team_id=data.team_id, match_id=data.match_id) }}" class="btn btn-sm btn-warning" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                {% endif %}
+                                {% set can_delete = user_is_alliance_admin or (current_user.username and current_user.username|lower in (data.scout_name|lower if data.scout_name else '')) or (not is_alliance_mode) %}
+                                {% if can_delete %}
+                                <button type="button" class="btn btn-sm btn-danger double-confirm-delete" title="Delete" data-entry-id="{{ data.id }}" {% if is_alliance_mode %}data-shared-id="{{ data.id }}"{% endif %}>
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                {% else %}
+                                <button type="button" class="btn btn-sm btn-secondary" title="Only alliance admins or the original scout can delete" disabled>
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Hidden form for double-confirm delete behavior (scripts.js will submit on second click) -->
+                            <form id="delete-form-{{ data.id }}" action="{{ url_for('scouting.delete_data', id=data.id) }}" method="post" class="d-none">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                {% if is_alliance_mode %}
+                                <input type="hidden" name="shared_id" value="{{ data.id }}">
+                                {% endif %}
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info text-center">
+            <i class="fas fa-info-circle me-2"></i> No scouting data available yet.
+        </div>
+        {% endif %}
+    </div>
+    {% if scouting_data %}
+    <div class="card-footer bg-light">
+        <div class="d-flex justify-content-between align-items-center">
+            <span>Total records: {{ scouting_data|length }}</span>
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('scouting.view_text_elements') }}" class="btn btn-outline-info">
+                    <i class="fas fa-comment-alt me-2"></i> View Text Elements
                 </a>
-            </div>
-            <div class="col-md-3">
-                <a href="{{ url_for('scouting.list_qualitative_data') }}" class="card text-decoration-none h-100">
-                    <div class="card-body text-center">
-                        <i class="fas fa-feather fa-2x mb-2"></i>
-                        <h6 class="card-title">Qualitative</h6>
-                        <p class="mb-0 fw-bold">{{ qual_count or 0 }} entries</p>
-                    </div>
+                <a href="{{ url_for('data.export_excel') }}" class="btn btn-success">
+                    <i class="fas fa-file-excel me-2"></i> Export to Excel
                 </a>
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
-
-<hr class="my-4">
-<div class="card">
-    <div class="card-header">
-        <h5 class="mb-0">Detailed Data</h5>
-    </div>
-    <div class="card-body">
-        <details open class="mb-3">
-            <summary><strong>Match Scouting ({{ match_count or 0 }})</strong></summary>
-            <div class="table-responsive mt-2">
-                <table class="table table-sm table-striped">
-                    <thead><tr><th>Team</th><th>Match</th><th>Alliance</th><th>Scout</th><th>Time</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        {% for d in scouting_entries %}
-                        <tr>
-                            <td>{{ d.team.team_number }}</td>
-                            <td>{{ d.match.match_number }} ({{ d.match.match_type }})</td>
-                            <td>{{ d.alliance }}</td>
-                            <td>{{ d.scout_name }}</td>
-                            <td>{{ d.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
-                            <td>
-                                <a href="{{ url_for('scouting.view_data', id=d.id) }}" class="btn btn-xs btn-primary">View</a>
-                                <a href="{{ url_for('scouting.scouting_form', team_id=d.team_id, match_id=d.match_id) }}" class="btn btn-xs btn-warning">Edit</a>
-                                <a href="{{ url_for('scouting.delete_data', id=d.id) }}" class="btn btn-xs btn-danger">Delete</a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </details>
-
-        <details class="mb-3">
-            <summary><strong>Pit Data ({{ pit_count or 0 }})</strong></summary>
-            <div class="table-responsive mt-2">
-                <table class="table table-sm table-striped">
-                    <thead><tr><th>Team</th><th>Event</th><th>Scout</th><th>Time</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        {% for p in pit_entries %}
-                        <tr>
-                            <td>{{ p.team.team_number if p.team else '-' }}</td>
-                            <td>{{ p.event.name if p.event else '-' }}</td>
-                            <td>{{ p.scout_name }}</td>
-                            <td>{{ p.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
-                            <td>
-                                <a href="{{ url_for('pit_scouting.view', id=p.id) }}" class="btn btn-xs btn-primary">View</a>
-                                <a href="{{ url_for('pit_scouting.delete', id=p.id) }}" class="btn btn-xs btn-danger">Delete</a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </details>
-
-        <details class="mb-3">
-            <summary><strong>Auto Paths ({{ auto_count or 0 }})</strong></summary>
-            <div class="table-responsive mt-2">
-                <table class="table table-sm table-striped">
-                    <thead><tr><th>Team</th><th>Match</th><th>Time</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        {% for a in auto_entries %}
-                        <tr>
-                            <td>{{ a.team.team_number if a.team else '-' }}</td>
-                            <td>{{ a.match.match_number if a.match else '-' }}</td>
-                            <td>{{ a.match.timestamp.strftime('%m/%d/%Y %H:%M') if a.match else '-' }}</td>
-                            <td>
-                                <a href="{{ url_for('scouting.auto_path_view', match_id=a.match_id, team_id=a.team_id) }}" class="btn btn-xs btn-primary">View</a>
-                                <a href="{{ url_for('scouting.delete_auto_path', match_id=a.match_id, team_id=a.team_id) }}" class="btn btn-xs btn-danger">Delete</a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </details>
-
-        <details class="mb-3">
-            <summary><strong>Qualitative ({{ qual_count or 0 }})</strong></summary>
-            <div class="table-responsive mt-2">
-                <table class="table table-sm table-striped">
-                    <thead><tr><th>Match</th><th>Alliance</th><th>Scout</th><th>Time</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        {% for q in qual_entries %}
-                        <tr>
-                            <td>{{ q.match.match_number if q.match else '-' }}</td>
-                            <td>{{ q.alliance_scouted if q.alliance_scouted else q.alliance }}</td>
-                            <td>{{ q.scout_name }}</td>
-                            <td>{{ q.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
-                            <td>
-                                <a href="{{ url_for('scouting.view_qualitative_data', entry_id=q.id) }}" class="btn btn-xs btn-primary">View</a>
-                                <a href="{{ url_for('scouting.delete_qualitative_data', entry_id=q.id) }}" class="btn btn-xs btn-danger">Delete</a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </details>
-    </div>
-</div>
-
 {% endblock %}
 
 {% block extra_js %}

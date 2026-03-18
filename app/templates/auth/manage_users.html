@@ -38,42 +38,72 @@
                 <form method="get" class="mb-4">
                     <div class="input-group">
                         <input type="text" name="search" class="form-control" placeholder="Search by username or team number..." value="{{ search or '' }}">
+                        <input type="hidden" name="sort" value="{{ sort }}">
+                        <input type="hidden" name="order" value="{{ order }}">
                         <button class="btn btn-outline-secondary" type="submit"><i class="fas fa-search"></i></button>
                     </div>
                 </form>
                 {% if users %}
-                {% if current_user.has_role('superadmin') %}
+                {# show pagination controls based on the users pagination object #}
+                {% if pagination and pagination.pages > 1 %}
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>
-                        {% if total_team_pages and total_team_pages > 1 %}
-                        <nav aria-label="Team pages">
+                        <nav aria-label="User pages">
                             <ul class="pagination pagination-sm mb-0">
-                                <li class="page-item {% if team_page <= 1 %}disabled{% endif %}">
-                                    <a class="page-link" href="{{ url_for('auth.manage_users', search=search, team_page=team_page-1) }}">« Prev</a>
+                                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                                    <a class="page-link" href="{{ url_for('auth.manage_users', search=search, sort=sort, order=order, page=pagination.prev_num) }}">« Prev</a>
                                 </li>
-                                {% for p in range(1, total_team_pages+1) %}
-                                    <li class="page-item {% if p == team_page %}active{% endif %}">
-                                        <a class="page-link" href="{{ url_for('auth.manage_users', search=search, team_page=p) }}">{{ p }}</a>
-                                    </li>
+                                {% for p in pagination.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+                                    {% if p %}
+                                        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                                            <a class="page-link" href="{{ url_for('auth.manage_users', search=search, sort=sort, order=order, page=p) }}">{{ p }}</a>
+                                        </li>
+                                    {% else %}
+                                        <li class="page-item disabled"><span class="page-link">…</span></li>
+                                    {% endif %}
                                 {% endfor %}
-                                <li class="page-item {% if team_page >= total_team_pages %}disabled{% endif %}">
-                                    <a class="page-link" href="{{ url_for('auth.manage_users', search=search, team_page=team_page+1) }}">Next »</a>
+                                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                                    <a class="page-link" href="{{ url_for('auth.manage_users', search=search, sort=sort, order=order, page=pagination.next_num) }}">Next »</a>
                                 </li>
                             </ul>
                         </nav>
-                        {% endif %}
                     </div>
-                    <div class="text-muted small">Showing teams {{ team_start }}–{{ team_end }} of {{ total_teams }}</div>
+                    <div class="text-muted small">Showing {{ user_start }}–{{ user_end }} of {{ total_users }}</div>
                 </div>
                 {% endif %}
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead class="table-dark">
                             <tr>
-                                <th class="sortable" data-col-index="0" role="button" tabindex="0">Username <i class="fas fa-sort ms-1"></i></th>
-                                <th class="sortable" data-col-index="1" role="button" tabindex="0">Team <i class="fas fa-sort ms-1"></i></th>
+                                {# server-side sortable headers: clicking will reset to page 1 and toggle order #}
+                        {% set username_order = 'asc' %}
+                        {% if sort == 'username' and order == 'asc' %}
+                            {% set username_order = 'desc' %}
+                        {% endif %}
+                        <th>
+                            <a href="{{ url_for('auth.manage_users', search=search, sort='username', order=username_order) }}" class="text-decoration-none">
+                                Username <i class="fas fa-sort{% if sort=='username' %} fa-sort-{{ 'up' if order=='asc' else 'down' }}{% endif %} ms-1"></i>
+                            </a>
+                        </th>
+                        {% set team_order = 'asc' %}
+                        {% if sort == 'team' and order == 'asc' %}
+                            {% set team_order = 'desc' %}
+                        {% endif %}
+                        <th>
+                            <a href="{{ url_for('auth.manage_users', search=search, sort='team', order=team_order) }}" class="text-decoration-none">
+                                Team <i class="fas fa-sort{% if sort=='team' %} fa-sort-{{ 'up' if order=='asc' else 'down' }}{% endif %} ms-1"></i>
+                            </a>
+                        </th>
                                 <th>Roles</th>
-                                <th class="sortable text-nowrap" data-col-index="3" role="button" tabindex="0">Last Used <i class="fas fa-sort ms-1"></i></th>
+                                {% set last_order = 'asc' %}
+                                {% if sort == 'last_used' and order == 'asc' %}
+                                    {% set last_order = 'desc' %}
+                                {% endif %}
+                                <th>
+                                    <a href="{{ url_for('auth.manage_users', search=search, sort='last_used', order=last_order) }}" class="text-decoration-none">
+                                        Last Used <i class="fas fa-sort{% if sort=='last_used' %} fa-sort-{{ 'up' if order=='asc' else 'down' }}{% endif %} ms-1"></i>
+                                    </a>
+                                </th>
                                 <th>New Password</th>
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -124,7 +154,10 @@
                                     </td>
                                     <td class="align-middle">
                                         {# Display last login time or 'Never' if null. Use simple formatting to avoid introducing new filters. #}
-                                        {% if user.last_login %}
+                                        {# Prefer new last_used field; fall back to legacy last_login if necessary #}
+                                        {% if user.last_used %}
+                                            {{ user.last_used.strftime('%Y-%m-%d %H:%M:%S') }}
+                                        {% elif user.last_login %}
                                             {{ user.last_login.strftime('%Y-%m-%d %H:%M:%S') }}
                                         {% else %}
                                             <span class="text-muted">Never</span>
@@ -333,66 +366,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Run filter once on load to apply search param state
     filterRows();
 
-    // --- Sorting support ---
-    const sortableHeaders = document.querySelectorAll('th.sortable');
-    function setSortIcon(th, order) {
-        const icon = th.querySelector('i.fas');
-        if (!icon) return;
-        icon.classList.remove('fa-sort', 'fa-sort-up', 'fa-sort-down');
-        if (order === 'asc') icon.classList.add('fa-sort-up');
-        else if (order === 'desc') icon.classList.add('fa-sort-down');
-        else icon.classList.add('fa-sort');
-    }
-    function parseDateForSort(s) {
-        if (!s) return -Infinity;
-        s = s.trim().toLowerCase();
-        if (s === 'never' || s === '') return -Infinity;
-        // Accept format 'YYYY-MM-DD HH:MM:SS' -> replace space with T for parse
-        let t = Date.parse(s.replace(' ', 'T'));
-        if (isNaN(t)) {
-            // fallback: try Date.parse as-is
-            t = Date.parse(s);
-        }
-        return isNaN(t) ? -Infinity : t;
-    }
-    function sortTableByColumn(index, type, order) {
-        const tbody = document.querySelector('table.table tbody');
-        if (!tbody) return;
-        const rows = Array.from(tbody.rows);
-        rows.sort(function(a, b) {
-            let va = getCellText(a, index);
-            let vb = getCellText(b, index);
-            if (type === 'date') {
-                va = parseDateForSort(va);
-                vb = parseDateForSort(vb);
-            } else {
-                va = va || '';
-                vb = vb || '';
-            }
-            if (va < vb) return order === 'asc' ? -1 : 1;
-            if (va > vb) return order === 'asc' ? 1 : -1;
-            return 0;
-        });
-        // Reattach rows in sorted order
-        rows.forEach(r => tbody.appendChild(r));
-    }
-    sortableHeaders.forEach(function(th){
-        th.addEventListener('click', function(){
-            const idx = parseInt(th.getAttribute('data-col-index'));
-            const current = th.getAttribute('data-order') || 'none';
-            // reset other headers
-            sortableHeaders.forEach(h => { if (h !== th) { h.removeAttribute('data-order'); setSortIcon(h, null); }});
-            const next = current === 'asc' ? 'desc' : 'asc';
-            th.setAttribute('data-order', next);
-            setSortIcon(th, next);
-            const type = idx === 3 ? 'date' : 'string'; // last used (3) is date
-            sortTableByColumn(idx, type, next);
-        });
-        // keyboard support
-        th.addEventListener('keydown', function(e){
-            if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); th.click(); }
-        });
-    });
+    // Sorting is handled on the server now; header links rebuild the query string.
+    // The client-side sort logic is no longer needed and has been removed.
 });
 // removed inline confirmDeleteUser; event listeners handle deletion modal
 </script>

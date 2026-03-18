@@ -1,89 +1,124 @@
-# Obsidian Scout Launcher - Cross-Platform (Windows/Linux)
+# Obsidian Scout Launcher (PowerShell)
+# This script ensures the application runs with the correct directory and virtual environment
 
-if ($IsWindows) {
-    $Host.UI.RawUI.WindowTitle = "Obsidian Scout"
-}
+$Host.UI.RawUI.WindowTitle = "Obsidian Scout"
 
-Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "========================================"  -ForegroundColor Cyan
 Write-Host "Obsidian Scout Launcher" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "========================================"  -ForegroundColor Cyan
 Write-Host ""
 
+# Change to the script's directory
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptPath
 Write-Host "Working directory: $PWD" -ForegroundColor Yellow
+Write-Host ""
 
-# Detect OS-specific paths and names
-if ($IsWindows) {
-    $venvBinPath = Join-Path $scriptPath ".venv\Scripts"
-    $pyName = "python.exe"
-} else {
-    $venvBinPath = Join-Path $scriptPath ".venv/bin"
-    $pyName = "python3"
-}
-
-$venvPython = Join-Path $venvBinPath $pyName
-$venvActivate = Join-Path $venvBinPath "Activate.ps1"
-$pipExe = Join-Path $venvBinPath "pip"
-
-# 1. Check if virtual environment exists
-if (-not (Test-Path $venvActivate)) {
-    Write-Host "WARNING: Virtual environment not found!" -ForegroundColor Yellow
-    Write-Host "Creating virtual environment..." -ForegroundColor Cyan
-    
-    # Use system python to create the venv initially
-    $systemPy = if ($IsWindows) { "python" } else { "python3" }
-    & $systemPy -m venv .venv
-    
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "ERROR: Failed to create virtual environment" -ForegroundColor Red
-        if ($env:TERM -or $IsWindows) { Read-Host "Press Enter to exit" }
-        exit 1
-    }
-}
-
-# 2. Activate virtual environment
-Write-Host "Activating virtual environment..." -ForegroundColor Cyan
+# Check if Python is available
 try {
-    . $venvActivate
-    Write-Host "Activated: $env:VIRTUAL_ENV" -ForegroundColor Green
+    $pythonVersion = python --version 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Python not found"
+    }
+    Write-Host "Python found: $pythonVersion" -ForegroundColor Green
+    Write-Host ""
 }
 catch {
-    Write-Host "ERROR: Failed to activate virtual environment" -ForegroundColor Red
-    if ($env:TERM -or $IsWindows) { Read-Host "Press Enter to exit" }
+    Write-Host "ERROR: Python is not installed or not in PATH" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Please install Python 3.13 or higher from:" -ForegroundColor Yellow
+    Write-Host "https://www.python.org/downloads/" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Make sure to check 'Add Python to PATH' during installation" -ForegroundColor Yellow
+    Write-Host ""
+    Read-Host "Press Enter to exit"
     exit 1
 }
 
-# 3. Check Requirements Hash
-$hashFile = Join-Path $scriptPath ".venv/requirements.hash"
-$reqFile = Join-Path $scriptPath "requirements.txt"
-$reqHash = (Get-FileHash $reqFile -Algorithm MD5).Hash
+# Check if virtual environment exists
+$venvPath = Join-Path $scriptPath ".venv"
+$venvActivate = Join-Path $venvPath "Scripts\Activate.ps1"
 
-$oldHash = ""
-if (Test-Path $hashFile) {
-    $oldHash = (Get-Content $hashFile -Raw).Trim()
+if (-not (Test-Path $venvActivate)) {
+    Write-Host "WARNING: Virtual environment not found!" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Creating virtual environment..." -ForegroundColor Cyan
+    
+    python -m venv .venv
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: Failed to create virtual environment" -ForegroundColor Red
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
+    
+    Write-Host "Virtual environment created successfully" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Installing dependencies..." -ForegroundColor Cyan
+    
+    & "$venvPath\Scripts\pip.exe" install -r requirements.txt
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: Failed to install dependencies" -ForegroundColor Red
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
+    
+    Write-Host "Dependencies installed successfully" -ForegroundColor Green
+    Write-Host ""
 }
 
-if ($reqHash -ne $oldHash) {
-    Write-Host "requirements.txt changed - updating dependencies..." -ForegroundColor Yellow
-    & $pipExe install -r $reqFile
-    if ($LASTEXITCODE -eq 0) { $reqHash | Set-Content $hashFile }
-}
-
-# 4. Run the application using the VENV python specifically
-$runPy = Join-Path $scriptPath "run.py"
-Write-Host "Starting Obsidian Scout..." -ForegroundColor Cyan
-Write-Host "Access at: http://localhost:8080" -ForegroundColor Green
-Write-Host "========================================" -ForegroundColor Cyan
+# Activate virtual environment
+Write-Host "Activating virtual environment..." -ForegroundColor Cyan
 
 try {
-    & $venvPython $runPy
+    & $venvActivate
+    Write-Host "Virtual environment activated: $env:VIRTUAL_ENV" -ForegroundColor Green
+    Write-Host ""
 }
 catch {
-    Write-Host "Application crashed or failed to start." -ForegroundColor Red
+    Write-Host "ERROR: Failed to activate virtual environment" -ForegroundColor Red
+    Write-Host "Try running: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Yellow
+    Read-Host "Press Enter to exit"
+    exit 1
 }
 
-if ($env:TERM -or $IsWindows) {
+# Check if required files exist
+$runPy = Join-Path $scriptPath "run.py"
+if (-not (Test-Path $runPy)) {
+    Write-Host "ERROR: run.py not found!" -ForegroundColor Red
+    Write-Host "Make sure you're in the correct directory." -ForegroundColor Yellow
     Write-Host ""
     Read-Host "Press Enter to exit"
+    exit 1
 }
+
+# Run the application
+Write-Host "Starting Obsidian Scout..." -ForegroundColor Cyan
+Write-Host ""
+Write-Host "You can access the application at:" -ForegroundColor Green
+Write-Host "  - http://localhost:8080" -ForegroundColor Cyan
+Write-Host "  - https://localhost:8080 (if SSL enabled)" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+
+try {
+    python run.py
+}
+catch {
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "Application exited with an error" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Check the error messages above for details" -ForegroundColor Yellow
+    Write-Host "Common fixes:" -ForegroundColor Cyan
+    Write-Host "  1. Make sure all dependencies are installed" -ForegroundColor White
+    Write-Host "  2. Check FIXING_ACCESS_DENIED.md for permission issues" -ForegroundColor White
+    Write-Host "  3. Try running test_directory_fix.py to diagnose" -ForegroundColor White
+}
+
+Write-Host ""
+Read-Host "Press Enter to exit"

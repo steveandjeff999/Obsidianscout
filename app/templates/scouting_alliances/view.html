@@ -484,7 +484,7 @@
                     
                     <!-- Data Stats -->
                     <div class="row mb-3" id="allianceDataStats">
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <div class="card bg-light">
                                 <div class="card-body text-center">
                                     <h4 class="text-primary" id="sharedScoutingCount">-</h4>
@@ -492,7 +492,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <div class="card bg-light">
                                 <div class="card-body text-center">
                                     <h4 class="text-info" id="sharedPitCount">-</h4>
@@ -500,19 +500,11 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <div class="card bg-light">
                                 <div class="card-body text-center">
                                     <h4 class="text-success" id="sharedQualitativeCount">-</h4>
                                     <p class="mb-0">Qualitative Entries</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
-                                    <h4 class="text-warning" id="sharedAutoPathCount">-</h4>
-                                    <p class="mb-0">Auto Path Drawings</p>
                                 </div>
                             </div>
                         </div>
@@ -533,11 +525,6 @@
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" id="qualitative-tab" data-bs-toggle="tab" data-bs-target="#qualitativeData" type="button" role="tab">
                                 <i class="fas fa-comment-dots me-1"></i> Qualitative Scouting
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="autopath-tab" data-bs-toggle="tab" data-bs-target="#autoPathData" type="button" role="tab">
-                                <i class="fas fa-route me-1"></i> Auto Paths
                             </button>
                         </li>
                     </ul>
@@ -617,33 +604,8 @@
                                 </table>
                             </div>
                         </div>
-
-                        <!-- Auto Path Data Tab -->
-                        <div class="tab-pane fade" id="autoPathData" role="tabpanel">
-                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                                <table class="table table-sm table-hover">
-                                    <thead class="sticky-top bg-white">
-                                        <tr>
-                                            <th>Team</th>
-                                            <th>Match</th>
-                                            <th>Event</th>
-                                            <th>Source Team</th>
-                                            <th>Shared</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="autoPathDataTable">
-                                        <tr>
-                                            <td colspan="6" class="text-center text-muted">
-                                                <i class="fas fa-spinner fa-spin me-2"></i>Loading...
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
                     </div>
-
+                    
                     <div class="alert alert-warning mt-3">
                         <i class="fas fa-exclamation-triangle me-2"></i>
                         <strong>Note:</strong> Editing shared data will update the alliance copy. Use "Include Original" to also update the source team's copy.
@@ -1432,7 +1394,6 @@ function removeMember(allianceId, memberId, teamNumber) {
 let allianceScoutingData = [];
 let alliancePitData = [];
 let allianceQualitativeData = [];
-let allianceAutoPathData = [];
 
 // Load alliance shared data on page load (for admins)
 document.addEventListener('DOMContentLoaded', function() {
@@ -1511,51 +1472,39 @@ function loadAllianceSharedData() {
                 allianceScoutingData = data.scouting_data || [];
                 alliancePitData = data.pit_data || [];
                 allianceQualitativeData = data.qualitative_data || [];
-                allianceAutoPathData = data.auto_path_data || [];
 
+                // Update stats
                 document.getElementById('sharedScoutingCount').textContent = allianceScoutingData.length;
                 document.getElementById('sharedPitCount').textContent = alliancePitData.length;
                 const qualElem = document.getElementById('sharedQualitativeCount');
                 if (qualElem) qualElem.textContent = allianceQualitativeData.length;
-                const autoPathElem = document.getElementById('sharedAutoPathCount');
-                if (autoPathElem) autoPathElem.textContent = allianceAutoPathData.length;
 
+                // Render tables
                 renderScoutingDataTable();
                 renderPitDataTable();
                 renderQualitativeDataTable();
-                renderAutoPathDataTable();
             } catch (e) {
                 console.error('Error rendering alliance shared tables:', e);
-                try { renderPitDataTable(); } catch(err) {}
-                try { renderQualitativeDataTable(); } catch(err) {}
-                try { renderAutoPathDataTable(); } catch(err) {}
+                // try to at least clear qualitative spinner
+                try { renderQualitativeDataTable(); } catch {};
             }
         } else {
             console.error('Failed to load alliance data:', data.error);
             showNotification('Failed to load alliance data: ' + (data.error || 'Unknown error'), 'danger');
-            renderPitDataTable();
             renderQualitativeDataTable();
-            renderAutoPathDataTable();
         }
     })
     .catch(error => {
         console.error('Error loading alliance data:', error);
-        renderPitDataTable();
         renderQualitativeDataTable();
-        renderAutoPathDataTable();
     });
 }
 
+// ensure qualitative tab re-renders when shown
 const qualTab = document.getElementById('qualitative-tab');
 if (qualTab) {
     qualTab.addEventListener('shown.bs.tab', function() {
         renderQualitativeDataTable();
-    });
-}
-const autoPathTab = document.getElementById('autopath-tab');
-if (autoPathTab) {
-    autoPathTab.addEventListener('shown.bs.tab', function() {
-        renderAutoPathDataTable();
     });
 }
 
@@ -1591,45 +1540,15 @@ function renderScoutingDataTable() {
     `).join('');
 }
 
-function renderPitDataTable() {
-    const tbody = document.getElementById('pitDataTable');
-    if (!tbody) return;
-
-    if (alliancePitData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No pit scouting data shared in this alliance yet.</td></tr>';
-        return;
-    }
-
-    tbody.innerHTML = alliancePitData.map(item => `
-        <tr>
-            <td><strong>${item.team_number || 'N/A'}</strong></td>
-            <td>${item.scout_name || 'Unknown'}</td>
-            <td>Team ${item.source_team}</td>
-            <td><small>${item.shared_at ? new Date(item.shared_at).toLocaleDateString() : 'N/A'}</small></td>
-            <td>
-                <button class="btn btn-sm btn-outline-primary" onclick="viewSharedData('pit', ${item.id})" title="View">
-                    <i class="fas fa-eye"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-warning" onclick="editSharedData('pit', ${item.id})" title="Edit">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteSharedData('pit', ${item.id})" title="Remove from Alliance">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
-}
-
 function renderQualitativeDataTable() {
     const tbody = document.getElementById('qualitativeDataTable');
     if (!tbody) return;
-
+    
     if (allianceQualitativeData.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No qualitative data shared in this alliance yet.</td></tr>';
         return;
     }
-
+    
     tbody.innerHTML = allianceQualitativeData.map(item => {
         const teamOrAlliance = item.alliance_scouted || item.team_number || 'N/A';
         const matchDisplay = item.match_type || item.match_number ? `${item.match_type||''} ${item.match_number||''}`.trim() : 'N/A';
@@ -1656,34 +1575,34 @@ function renderQualitativeDataTable() {
     `}).join('');
 }
 
-function renderAutoPathDataTable() {
-    const tbody = document.getElementById('autoPathDataTable');
+function renderPitDataTable() {
+    const tbody = document.getElementById('pitDataTable');
     if (!tbody) return;
-
-    if (allianceAutoPathData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No auto path drawings shared in this alliance yet.</td></tr>';
+    
+    if (alliancePitData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No pit scouting data shared in this alliance yet.</td></tr>';
         return;
     }
-
-    tbody.innerHTML = allianceAutoPathData.map(item => {
-        const matchDisplay = item.match_type || item.match_number ? `${item.match_type||''} ${item.match_number||''}`.trim() : 'N/A';
-        return `
+    
+    tbody.innerHTML = alliancePitData.map(item => `
         <tr>
             <td><strong>${item.team_number || 'N/A'}</strong></td>
-            <td>${matchDisplay}</td>
-            <td>${item.event_code || 'N/A'}</td>
+            <td>${item.scout_name || 'Unknown'}</td>
             <td>Team ${item.source_team}</td>
             <td><small>${item.shared_at ? new Date(item.shared_at).toLocaleDateString() : 'N/A'}</small></td>
             <td>
-                <button class="btn btn-sm btn-outline-primary" onclick="viewSharedData('auto_path', ${item.id})" title="View">
+                <button class="btn btn-sm btn-outline-primary" onclick="viewSharedData('pit', ${item.id})" title="View">
                     <i class="fas fa-eye"></i>
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteSharedData('auto_path', ${item.id})" title="Remove from Alliance">
+                <button class="btn btn-sm btn-outline-warning" onclick="editSharedData('pit', ${item.id})" title="Edit">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteSharedData('pit', ${item.id})" title="Remove from Alliance">
                     <i class="fas fa-trash"></i>
                 </button>
             </td>
         </tr>
-    `}).join('');
+    `).join('');
 }
 
 function viewSharedData(dataType, sharedId) {
@@ -1691,32 +1610,26 @@ function viewSharedData(dataType, sharedId) {
     if (dataType === 'scouting') dataArray = allianceScoutingData;
     else if (dataType === 'pit') dataArray = alliancePitData;
     else if (dataType === 'qualitative') dataArray = allianceQualitativeData;
-    else if (dataType === 'auto_path') dataArray = allianceAutoPathData;
     const item = dataArray ? dataArray.find(d => d.id === sharedId) : null;
-
+    
     if (!item) {
         showNotification('Data not found', 'danger');
         return;
     }
     
     // Create a formatted view of the data
-    const scoutLine = dataType === 'auto_path' ? '' : `<p><strong>Scout:</strong> ${item.scout_name || 'Unknown'}</p>`;
-    const matchLine = (dataType === 'scouting' || dataType === 'qualitative' || dataType === 'auto_path')
-        ? `<p><strong>Match:</strong> ${item.match_type || ''} ${item.match_number || ''}</p>`
-        : '';
-    const dataBody = dataType === 'auto_path' ? (item.data_json || item.data || {}) : (item.data || {});
     let content = `<div class="mb-3">
         <h6>Data Details</h6>
         <p><strong>Team:</strong> ${item.team_number || 'N/A'}</p>
         <p><strong>Source Team:</strong> ${item.source_team}</p>
-        ${scoutLine}
-        ${matchLine}
+        <p><strong>Scout:</strong> ${item.scout_name || 'Unknown'}</p>
+        ${(dataType === 'scouting' || dataType === 'qualitative') ? `<p><strong>Match:</strong> ${item.match_type || ''} ${item.match_number || ''}</p>` : ''}
         <p><strong>Shared:</strong> ${item.shared_at ? new Date(item.shared_at).toLocaleString() : 'N/A'}</p>
         ${item.last_edited_by_team ? `<p><strong>Last edited by:</strong> Team ${item.last_edited_by_team} on ${new Date(item.last_edited_at).toLocaleString()}</p>` : ''}
     </div>
     <div class="mb-3">
-        <h6>${dataType === 'auto_path' ? 'Auto Path Data' : 'Scouting Data'}</h6>
-        <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">${JSON.stringify(dataBody, null, 2)}</pre>
+        <h6>Scouting Data</h6>
+        <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">${JSON.stringify(item.data, null, 2)}</pre>
     </div>`;
     
     // Show in modal
@@ -1728,13 +1641,6 @@ function editSharedData(dataType, sharedId) {
     if (dataType === 'scouting') dataArray = allianceScoutingData;
     else if (dataType === 'pit') dataArray = alliancePitData;
     else if (dataType === 'qualitative') dataArray = allianceQualitativeData;
-    else if (dataType === 'auto_path') dataArray = allianceAutoPathData;
-
-    if (dataType === 'auto_path') {
-        showNotification('Auto path drawings can be viewed or removed from alliance, but not edited here.', 'warning');
-        viewSharedData(dataType, sharedId);
-        return;
-    }
     const item = dataArray ? dataArray.find(d => d.id === sharedId) : null;
     
     if (!item) {
@@ -1818,7 +1724,6 @@ function deleteSharedData(dataType, sharedId) {
     if (dataType === 'scouting') dataArray = allianceScoutingData;
     else if (dataType === 'pit') dataArray = alliancePitData;
     else if (dataType === 'qualitative') dataArray = allianceQualitativeData;
-    else if (dataType === 'auto_path') dataArray = allianceAutoPathData;
     const item = dataArray ? dataArray.find(d => d.id === sharedId) : null;
     
     if (!item) {
@@ -1826,7 +1731,7 @@ function deleteSharedData(dataType, sharedId) {
         return;
     }
     
-    const typeLabel = dataType === 'scouting' ? 'match' : dataType === 'pit' ? 'pit' : dataType === 'qualitative' ? 'qualitative' : 'auto path';
+    const typeLabel = dataType === 'scouting' ? 'match' : dataType === 'pit' ? 'pit' : 'qualitative';
     const confirmMsg = `Remove this ${typeLabel} scouting entry from the alliance?\n\n` +
                        `Team: ${item.team_number || 'N/A'}\n` +
                        (dataType !== 'pit' ? `Match: ${item.match_type || ''} ${item.match_number || ''}\n` : '') +

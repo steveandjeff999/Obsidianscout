@@ -261,30 +261,6 @@
         </div>
     </div>
 </div>
-
-<!-- Team Details Modal -->
-<div class="modal fade" id="teamDetailsModal" tabindex="-1" aria-labelledby="teamDetailsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
-                <h5 class="modal-title" id="teamDetailsModalLabel"><i class="fas fa-info-circle me-2"></i>Team Details</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div id="teamDetailsContent">
-                    <!-- Populated dynamically -->
-                </div>
-            </div>
-            <div class="modal-footer">
-                <a href="#" id="teamDetailsViewFullLink" class="btn btn-primary" target="_blank">
-                    <i class="fas fa-external-link-alt me-1"></i>View full team page
-                </a>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 {% endblock %}
 
 {% block extra_js %}
@@ -639,7 +615,7 @@ function displayRecommendations() {
         }
         const predictedHtml = team.predicted_points ? `<small class="text-muted d-block">Next: ${team.predicted_points} pts</small>` : '';
         return `
-            <div class="recommendation-item border-bottom pb-2 mb-2" data-team-id="${team.team_id}" style="cursor: pointer;" onclick="showTeamDetails(${team.team_number})">
+            <div class="recommendation-item border-bottom pb-2 mb-2" data-team-id="${team.team_id}">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <div class="fw-bold ${badgeClass}">${warningIcon}${rankText} - Team ${team.team_number}</div>
@@ -652,7 +628,7 @@ function displayRecommendations() {
                     </div>
                     </div>
                     <div class="ms-2">
-                        <button class="btn btn-sm btn-outline-secondary" title="Decline" onclick="event.stopPropagation(); declineTeam(${team.team_number})">
+                        <button class="btn btn-sm btn-outline-secondary" title="Decline" onclick="declineTeam(${team.team_number})">
                             <i class="fas fa-user-times d-inline d-md-none"></i>
                             <span class="d-none d-md-inline"><i class="fas fa-user-times me-1"></i>Declined</span>
                         </button>
@@ -697,7 +673,7 @@ function displayRecommendations() {
         }
         const predictedHtml = team.predicted_points ? `<div class="small text-muted mt-1">Next: ${team.predicted_points} pts</div>` : '';
         return `
-            <div class="recommendation-item border-bottom pb-2 mb-2" data-team-id="${team.team_id}" style="cursor: pointer;" onclick="showTeamDetails(${team.team_number})">
+            <div class="recommendation-item border-bottom pb-2 mb-2" data-team-id="${team.team_id}">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <div class="fw-bold ${badgeClass}">${warningIcon}${trendHtml}Team ${team.team_number}</div>
@@ -708,7 +684,7 @@ function displayRecommendations() {
                         ${predictedHtml}
                     </div>
                     <div class="ms-2">
-                        <button class="btn btn-sm btn-outline-secondary" title="Decline" onclick="event.stopPropagation(); declineTeam(${team.team_number})">
+                        <button class="btn btn-sm btn-outline-secondary" title="Decline" onclick="declineTeam(${team.team_number})">
                             <i class="fas fa-user-times d-inline d-md-none"></i>
                             <span class="d-none d-md-inline"><i class="fas fa-user-times me-1"></i>Declined</span>
                         </button>
@@ -793,120 +769,6 @@ function showTeamSelectionModal() {
             console.log("Search cleared - showing all teams");
         });
     }, { once: true });
-}
-
-function showTeamDetails(teamId) {
-    const modal = new bootstrap.Modal(document.getElementById('teamDetailsModal'));
-    const content = document.getElementById('teamDetailsContent');
-    const viewLink = document.getElementById('teamDetailsViewFullLink');
-
-    // Show a loading state while we fetch data
-    content.innerHTML = `
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading team details...</span>
-            </div>
-            <div class="mt-2 text-muted">Loading team details...</div>
-        </div>
-    `;
-    modal.show();
-
-    fetch(`/alliances/api/team_details?team_number=${encodeURIComponent(teamId)}&event_id=${encodeURIComponent(currentEventId)}`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.error) {
-                content.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-                return;
-            }
-
-            const metrics = data.metrics || {};
-            const predictionElements = data.prediction_elements || [];
-
-            const trendIcon = (data.trend_direction === 'up')
-                ? '<i class="fas fa-arrow-up text-success me-1" title="Trending up"></i>'
-                : (data.trend_direction === 'down')
-                    ? '<i class="fas fa-arrow-down text-danger me-1" title="Trending down"></i>'
-                    : '<i class="fas fa-minus text-muted me-1" title="No recent trend"></i>';
-
-            // Build the detail rows for the prediction elements
-            const predictionRows = predictionElements.map(elem => {
-                const valueDisplay = typeof elem.avg_value === 'number'
-                    ? elem.type === 'boolean'
-                        ? `${elem.avg_value.toFixed(0)}% true`
-                        : elem.avg_value.toFixed(1)
-                    : elem.avg_value;
-
-                const pointsDisplay = elem.avg_points !== null && elem.avg_points !== undefined
-                    ? `${elem.avg_points.toFixed(1)} pts`
-                    : '';
-
-                return `
-                    <tr>
-                        <td>${elem.name}</td>
-                        <td>${valueDisplay || '—'}</td>
-                        <td>${pointsDisplay || '—'}</td>
-                    </tr>
-                `;
-            }).join('');
-
-            content.innerHTML = `
-                <div class="row">
-                    <div class="col-md-6">
-                        <h4 class="mb-1">Team ${data.team_number}</h4>
-                        <div class="text-muted mb-2">${data.team_name || ''}</div>
-
-                        <div class="mb-3">
-                            <span class="badge bg-primary">Total: ${metrics.total_points} pts</span>
-                            <span class="badge bg-success ms-2">Auto: ${metrics.auto_points} pts</span>
-                            <span class="badge bg-info ms-2">Teleop: ${metrics.teleop_points} pts</span>
-                            <span class="badge bg-warning text-dark ms-2">Endgame: ${metrics.endgame_points} pts</span>
-                        </div>
-
-                        ${predictionRows ? `
-                            <h6 class="mt-3">Prediction Elements</h6>
-                            <div class="table-responsive">
-                                <table class="table table-sm table-borderless mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th>Name</th>
-                                            <th>Value</th>
-                                            <th>Points</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${predictionRows}
-                                    </tbody>
-                                </table>
-                            </div>
-                        ` : `<div class="text-muted">No prediction elements configured.</div>`}
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Quick Actions</h6>
-                        <ul class="list-unstyled">
-                            <li><a href="#" class="btn btn-sm btn-outline-primary" id="teamDetailsRefresh" role="button">Refresh data</a></li>
-                            <li class="mt-2"><button type="button" class="btn btn-sm btn-outline-danger" onclick="declineTeam(${data.team_number});">Decline Team</button></li>
-                        </ul>
-                    </div>
-                </div>
-            `;
-
-            // Update the full-team view link
-            if (viewLink) {
-                viewLink.href = `/teams/${data.team_number}/view?event_id=${currentEventId}`;
-            }
-
-            const refreshBtn = document.getElementById('teamDetailsRefresh');
-            if (refreshBtn) {
-                refreshBtn.onclick = function(e) {
-                    e.preventDefault();
-                    showTeamDetails(teamId);
-                };
-            }
-        })
-        .catch(err => {
-            console.error('Error loading team details:', err);
-            content.innerHTML = `<div class="alert alert-danger">Error loading team details.</div>`;
-        });
 }
 
 function handleSearchKeyup(event) {
