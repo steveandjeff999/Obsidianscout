@@ -2204,6 +2204,38 @@ def save_game_config(alliance_id):
                 
                 config_data['post_match']['rating_elements'] = rating_elements
                 config_data['post_match']['text_elements'] = text_elements
+                
+                # Update API settings (FIRST API) - handle both old and new field names
+                # Old template uses: first_username, first_auth_token, first_base_url
+                # New template uses: api_username, api_auth_token, api_base_url
+                first_username = request.form.get('first_username') or request.form.get('api_username')
+                first_auth_token = request.form.get('first_auth_token') or request.form.get('api_auth_token')
+                first_base_url = request.form.get('first_base_url') or request.form.get('api_base_url')
+                
+                if 'first_username' in request.form or 'first_auth_token' in request.form or 'first_base_url' in request.form or \
+                   'api_username' in request.form or 'api_auth_token' in request.form or 'api_base_url' in request.form:
+                    config_data['api_settings'] = {
+                        'username': first_username or '',
+                        'auth_token': first_auth_token or '',
+                        'base_url': first_base_url or 'https://frc-api.firstinspires.org'
+                    }
+                
+                # Update TBA API settings - allow clearing fields
+                if 'tba_auth_key' in request.form or 'tba_base_url' in request.form:
+                    config_data['tba_api_settings'] = {
+                        'auth_key': request.form.get('tba_auth_key', ''),
+                        'base_url': request.form.get('tba_base_url', 'https://www.thebluealliance.com/api/v3')
+                    }
+                
+                # Update preferred API source if provided
+                if 'preferred_api_source' in request.form:
+                    config_data['preferred_api_source'] = request.form.get('preferred_api_source', 'tba')
+                
+                # Update auto_sync_enabled setting if provided
+                if 'auto_sync_enabled' in request.form:
+                    if 'api_settings' not in config_data:
+                        config_data['api_settings'] = {}
+                    config_data['api_settings']['auto_sync_enabled'] = True if request.form.get('auto_sync_enabled') else False
         
         # Capture original config for migration comparison
         try:
@@ -4688,6 +4720,7 @@ def sync_alliance_teams(alliance_id):
     """Sync teams from FIRST API for alliance - stores under alliance's storage team"""
     from app.utils.api_utils import get_teams_dual_api, api_to_db_team_conversion, get_event_details_dual_api
     from app.routes.data import get_or_create_event
+    from app.utils.config_manager import get_effective_game_config
     
     current_team = get_current_scouting_team_number()
     
@@ -4713,6 +4746,9 @@ def sync_alliance_teams(alliance_id):
     
     if not event_code:
         return jsonify({'success': False, 'error': 'Event code is required'}), 400
+    
+    # Get effective game config for the alliance
+    game_config = get_effective_game_config()
     
     try:
         # Get or create event under alliance's storage team
