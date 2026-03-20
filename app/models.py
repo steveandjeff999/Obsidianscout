@@ -2163,9 +2163,27 @@ class AllianceDeletedData(db.Model):
     
     # Relationship
     alliance_rel = db.relationship('ScoutingAlliance', backref='deleted_data_records')
+
+    # Sentinel team_id used for qualitative deletes (qualitative entries do not map to a single team_id)
+    QUALITATIVE_TEAM_ID_SENTINEL = -1
+
+    def __init__(self, **kwargs):
+        data_type = kwargs.get('data_type')
+        team_id = kwargs.get('team_id')
+        kwargs['team_id'] = self._normalize_team_id(data_type, team_id)
+        super().__init__(**kwargs)
     
     def __repr__(self):
         return f'<AllianceDeletedData Alliance {self.alliance_id} Type {self.data_type}>'
+
+    @classmethod
+    def _normalize_team_id(cls, data_type, team_id):
+        """Normalize team_id to satisfy DB constraints while preserving semantics."""
+        if team_id is not None:
+            return team_id
+        if data_type == 'qualitative':
+            return cls.QUALITATIVE_TEAM_ID_SENTINEL
+        return team_id
     
     @classmethod
     def is_deleted(cls, alliance_id, data_type, match_id, team_id, alliance_color, source_team):
@@ -2184,6 +2202,11 @@ class AllianceDeletedData(db.Model):
     @classmethod
     def mark_deleted(cls, alliance_id, data_type, match_id, team_id, alliance_color, source_team, deleted_by):
         """Mark data as deleted to prevent re-sync"""
+        normalized_team_id = cls._normalize_team_id(data_type, team_id)
+
+        if normalized_team_id is None:
+            raise ValueError(f"team_id is required when marking '{data_type}' data as deleted")
+
         # Check if already marked
         existing = cls.query.filter_by(
             alliance_id=alliance_id,
@@ -2193,7 +2216,7 @@ class AllianceDeletedData(db.Model):
         if data_type in ('scouting', 'qualitative'):
             existing = existing.filter_by(match_id=match_id, alliance_color=alliance_color)
         if team_id is not None:
-            existing = existing.filter_by(team_id=team_id)
+            existing = existing.filter_by(team_id=normalized_team_id)
         
         if existing.first():
             return  # Already marked
@@ -2202,7 +2225,7 @@ class AllianceDeletedData(db.Model):
             alliance_id=alliance_id,
             data_type=data_type,
             match_id=match_id,
-            team_id=team_id,
+            team_id=normalized_team_id,
             alliance_color=alliance_color,
             source_scouting_team_number=source_team,
             deleted_by_team=deleted_by

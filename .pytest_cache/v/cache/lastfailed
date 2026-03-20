@@ -1,0 +1,9 @@
+{
+  "cleanup/test_port_detection.py": true,
+  "cleanup/test_updater_safety.py": true,
+  "scripts/test_template.py": true,
+  "tests/test_mobile_scoping.py": true,
+  "tests/test_service_worker.py": true,
+  "tools/test_graph_data.py": true,
+  "tools/test_single_graph.py": true
+}

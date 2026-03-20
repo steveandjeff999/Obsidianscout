@@ -1,4 +1,6 @@
 import types
+import pytest
+import requests
 
 from app.utils.statbotics_api_utils import (
     parse_team_epa,
@@ -229,3 +231,46 @@ def test_get_epa_metrics_for_team_clamps_negative(monkeypatch):
                         lambda: 'tba_opr_only')
     data = get_epa_metrics_for_team(1234)
     assert data['total'] == 0.0
+
+
+def test_get_team_epa_transient_network_error_does_not_cache_miss(monkeypatch):
+    """Transient Statbotics failures (5xx / network) should not create a permanent miss."""
+    monkeypatch.setattr('app.utils.statbotics_api_utils._sb_client', None)
+
+    def fake_get(*args, **kwargs):
+        raise requests.RequestException("timeout")
+
+    monkeypatch.setattr('app.utils.statbotics_api_utils.requests.get', fake_get)
+
+    cache_calls = {'epa': 0, 'db': 0}
+
+    def fake_epa_cache_set(key, value):
+        cache_calls['epa'] += 1
+
+    def fake_db_cache_put(team_number, epa_dict):
+        cache_calls['db'] += 1
+
+    monkeypatch.setattr('app.utils.statbotics_api_utils._epa_cache_set', fake_epa_cache_set)
+    monkeypatch.setattr('app.utils.statbotics_api_utils._db_cache_put', fake_db_cache_put)
+
+    data = get_statbotics_team_epa(254, use_cache=False)
+    assert data is None
+    assert cache_calls['epa'] == 0
+    assert cache_calls['db'] == 0
+
+
+def test_rest_api_500_raises_transient_error(monkeypatch):
+    monkeypatch.setattr('app.utils.statbotics_api_utils._sb_client', None)
+
+    class DummyResp:
+        status_code = 500
+
+        def json(self):
+            return {}
+
+    monkeypatch.setattr('app.utils.statbotics_api_utils.requests.get', lambda *args, **kwargs: DummyResp())
+
+    from app.utils.statbotics_api_utils import StatboticsTransientError, _rest_api_get_team_epa
+
+    with pytest.raises(StatboticsTransientError):
+        _rest_api_get_team_epa(254)
