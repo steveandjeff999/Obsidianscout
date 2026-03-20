@@ -105,7 +105,7 @@ if USE_POSTGRES:
                 print("[4/4] First-time migration: copying SQLite data to PostgreSQL...", flush=True)
                 try:
                     from app.utils.db_migrate import migrate_sqlite_to_postgres
-                    result = migrate_sqlite_to_postgres(verbose=True)
+                    result = migrate_sqlite_to_postgres(verbose=True, require_confirmation=True)
                     if result['success']:
                         os.makedirs(os.path.dirname(_pg_flag), exist_ok=True)
                         with open(_pg_flag, 'w') as _f:

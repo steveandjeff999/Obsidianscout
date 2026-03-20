@@ -89,6 +89,14 @@ class StatboticsError(Exception):
     """Raised for Statbotics-related errors (network or parsing)."""
 
 
+class StatboticsTransientError(StatboticsError):
+    """Raised for transient errors (rate limiting, network, 5xx) that should not be cached."""
+
+
+class StatboticsNotFound(StatboticsError):
+    """Raised when a Statbotics resource is definitively not found (404)."""
+
+
 def _get_game_config_year() -> int:
     """Return the season year from the active game config, or the current calendar year.
 
@@ -187,27 +195,26 @@ def _client_get_team_epa(team_number: int | str) -> Optional[Dict[str, Optional[
         return None
 
     global _sb_instance
+    SBClass = getattr(_sb_client, "Statbotics", None)
+    if not SBClass:
+        return None
+
     try:
-        SBClass = getattr(_sb_client, "Statbotics", None)
-        if not SBClass:
-            return None
         if _sb_instance is None:
             _sb_instance = SBClass()
 
         current_year = _get_game_config_year()
 
         for year in (current_year, current_year - 1):
-            try:
-                data = _sb_instance.get_team_year(int(team_number), year)
-                if isinstance(data, dict):
-                    parsed = _extract_epa_from_dict(data)
-                    if parsed is not None:
-                        return parsed
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return None
+            data = _sb_instance.get_team_year(int(team_number), year)
+            if isinstance(data, dict):
+                parsed = _extract_epa_from_dict(data)
+                if parsed is not None:
+                    return parsed
+        return None
+    except Exception as exc:
+        # Treat client errors as transient so we don't cache misses forever.
+        raise StatboticsTransientError(f"Statbotics client error: {exc}") from exc
 
 
 def _rest_api_get_team_epa(team_number: int | str) -> Optional[Dict[str, Optional[float]]]:
@@ -222,14 +229,24 @@ def _rest_api_get_team_epa(team_number: int | str) -> Optional[Dict[str, Optiona
                 headers={"Accept": "application/json", "User-Agent": _USER_AGENT},
                 timeout=_DEFAULT_TIMEOUT,
             )
-            if resp.status_code != 200:
+            if resp.status_code == 404:
+                # Not found for this year; try previous year or overall no-data
                 continue
+            if resp.status_code != 200:
+                raise StatboticsTransientError(
+                    f"Statbotics REST API returned HTTP {resp.status_code} for {url}"
+                )
             data = resp.json()
             if isinstance(data, dict):
                 parsed = _extract_epa_from_dict(data)
                 if parsed is not None:
                     return parsed
-        except Exception:
+        except requests.RequestException as exc:
+            raise StatboticsTransientError(
+                f"Statbotics REST request failed: {exc}"
+            ) from exc
+        except ValueError:
+            # invalid JSON; treat as a non-fatal no-data condition and continue
             continue
     return None
 
@@ -253,8 +270,9 @@ def fetch_team_page(team_number: int | str, timeout: int = _DEFAULT_TIMEOUT) -> 
     if resp.status_code == 200:
         return resp.text
     if resp.status_code == 404:
-        raise StatboticsError(f"Statbotics team page not found: {url}")
-    raise StatboticsError(f"Statbotics returned HTTP {resp.status_code} for {url}")
+        # Team not listed yet for this year; treat as known missing instead of transient
+        return None
+    raise StatboticsTransientError(f"Statbotics returned HTTP {resp.status_code} for {url}")
 
 
 def parse_team_epa(page_html: str) -> Optional[Dict[str, Optional[float]]]:
@@ -421,6 +439,7 @@ def get_statbotics_team_epa(team_number: int | str, use_cache: bool = True) -> O
             return stale
 
     result: Optional[Dict] = None
+    transient_failure = False
 
     # --- L3: Statbotics API ---
     # Only reached when there is *no* DB data at all (first run) or
@@ -429,31 +448,44 @@ def get_statbotics_team_epa(team_number: int | str, use_cache: bool = True) -> O
     # 1. Official Python client (fastest — uses REST under the hood)
     try:
         result = _client_get_team_epa(team_number)
-    except Exception:
-        pass
+    except StatboticsTransientError:
+        transient_failure = True
 
     # 2. Direct REST API call (reliable JSON, no HTML parsing)
-    if result is None:
+    if result is None and not transient_failure:
         try:
             result = _rest_api_get_team_epa(team_number)
-        except Exception:
-            pass
+        except StatboticsTransientError:
+            transient_failure = True
 
     # 3. HTML scraping (last resort)
-    if result is None:
+    if result is None and not transient_failure:
         try:
             html = fetch_team_page(team_number)
-            result = parse_team_epa(html)
-        except Exception:
-            pass
+            if html is not None:
+                result = parse_team_epa(html)
+        except StatboticsTransientError:
+            transient_failure = True
 
-    # Store in caches — even failures — to prevent repeated slow lookups
+    # Store in caches: for transient failures do not cache misses.
     if use_cache:
-        _epa_cache_set(key, result if result is not None else _CACHE_MISS)
-        _db_cache_put(team_number, result)
+        if result is not None:
+            _epa_cache_set(key, result)
+            _db_cache_put(team_number, result)
+        elif transient_failure:
+            # Keep existing cache entries if any; don't write miss.
+            return None
+        else:
+            _epa_cache_set(key, _CACHE_MISS)
+            _db_cache_put(team_number, None)
     else:
-        # Scheduler path (use_cache=False) — always persist to DB
-        _db_cache_put(team_number, result)
+        # Scheduler path (use_cache=False)
+        if result is not None:
+            _db_cache_put(team_number, result)
+        elif transient_failure:
+            return None
+        else:
+            _db_cache_put(team_number, None)
 
     return result
 

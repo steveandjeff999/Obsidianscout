@@ -140,6 +140,26 @@ def _get_table_order(engine):
     return meta.sorted_tables
 
 
+def _confirm_sqlite_to_postgres_migration(assume_yes: bool = False) -> bool:
+    """Require explicit terminal confirmation before SQLite → PostgreSQL migration."""
+    if assume_yes:
+        return True
+
+    if not sys.stdin or not sys.stdin.isatty():
+        print("Migration cancelled: interactive terminal confirmation is required.")
+        print("Re-run in a terminal, or use --yes to bypass confirmation.")
+        return False
+
+    print("\nWARNING: This will copy local SQLite data into PostgreSQL.")
+    print("Existing rows in destination tables may be replaced during migration.")
+    response = input("Type 'MIGRATE' to continue (anything else cancels): ").strip()
+    if response.upper() != 'MIGRATE':
+        print("Migration cancelled by user.")
+        return False
+
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Type coercion helpers for SQLite → PostgreSQL
 # ---------------------------------------------------------------------------
@@ -504,12 +524,19 @@ def _ensure_pg_tables(pg_cfg: dict):
         print("  [setup] Tables will be created from SQLite schema reflection instead.")
 
 
-def migrate_sqlite_to_postgres(verbose: bool = True) -> dict:
+def migrate_sqlite_to_postgres(verbose: bool = True, require_confirmation: bool = False, assume_yes: bool = False) -> dict:
     """
     Migrate all data from the local SQLite databases into PostgreSQL.
 
     Returns a summary dict: {"success": bool, "details": {...}}
     """
+    if require_confirmation and not _confirm_sqlite_to_postgres_migration(assume_yes=assume_yes):
+        return {
+            "success": False,
+            "cancelled": True,
+            "details": {"confirmation": "cancelled"}
+        }
+
     pg_cfg = _load_pg_config()
     results = {}
     overall_ok = True
@@ -757,11 +784,16 @@ def main():
         help="Migration direction or 'status' to compare row counts. (default: status)",
     )
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress verbose output")
+    parser.add_argument("--yes", "-y", action="store_true", help="Bypass confirmation prompt for sqlite-to-postgres")
 
     args = parser.parse_args()
 
     if args.direction == "sqlite-to-postgres":
-        result = migrate_sqlite_to_postgres(verbose=not args.quiet)
+        result = migrate_sqlite_to_postgres(
+            verbose=not args.quiet,
+            require_confirmation=True,
+            assume_yes=args.yes,
+        )
     elif args.direction == "postgres-to-sqlite":
         result = migrate_postgres_to_sqlite(verbose=not args.quiet)
     else:
