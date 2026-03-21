@@ -199,6 +199,33 @@ function showQuickView(entryId, sharedId) {
 }
 </script>
 
+<script>
+    const QUAL_DATA_LIST_SCROLL_KEY = 'qualitative_list_scroll';
+
+    function restoreQualitativeListScroll() {
+        try {
+            const y = localStorage.getItem(QUAL_DATA_LIST_SCROLL_KEY);
+            if (y) {
+                window.scrollTo(0, parseInt(y, 10));
+                localStorage.removeItem(QUAL_DATA_LIST_SCROLL_KEY);
+            }
+        } catch (e) {
+            console.warn('Could not restore qualitative list scroll', e);
+        }
+    }
+
+    function saveQualitativeListScroll() {
+        try {
+            localStorage.setItem(QUAL_DATA_LIST_SCROLL_KEY, window.scrollY || 0);
+        } catch (e) {
+            console.warn('Could not save qualitative list scroll', e);
+        }
+    }
+
+    window.addEventListener('beforeunload', saveQualitativeListScroll);
+    window.addEventListener('load', restoreQualitativeListScroll);
+</script>
+
 <style>
 .dark-mode .table {
     color: #e6e6e6;

@@ -945,15 +945,27 @@ body:not(.dark-mode) .table {
     color:        #374151 !important;
     border-color: rgba(17,24,39,0.08) !important;
 }
-body:not(.dark-mode) .table thead th {
+body:not(.dark-mode) .table:not(.table-dark) thead th {
     background: transparent !important;
     color:      #111827 !important;
     font-weight: 700;
     border-bottom: 2px solid rgba(17,24,39,0.10) !important;
 }
+body:not(.dark-mode) .table.table-dark thead th {
+    background: #212529 !important;
+    color:      #ffffff !important;
+    font-weight: 700;
+    border-bottom: 2px solid rgba(255,255,255,0.15) !important;
+}
 body:not(.dark-mode) .table tbody tr:hover {
     background: rgba(25,118,210,0.04) !important;
 }
+
+/* Make sort buttons in table header readable in light mode even if .text-white is used */
+body:not(.dark-mode) .table thead .sort-col {
+    color: #111827 !important;
+}
+
 body:not(.dark-mode) .table-striped > tbody > tr:nth-of-type(odd) > * {
     background-color: rgba(17,24,39,0.02) !important;
 }

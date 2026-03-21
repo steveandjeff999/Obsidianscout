@@ -233,6 +233,54 @@ def test_get_epa_metrics_for_team_clamps_negative(monkeypatch):
     assert data['total'] == 0.0
 
 
+def test_refresh_opr_epa_for_event_calls_backends(monkeypatch):
+    called = {'epa': [], 'opr': []}
+
+    monkeypatch.setattr('app.utils.statbotics_api_utils.get_statbotics_team_epa',
+                        lambda tn, **kw: called['epa'].append((tn, kw)) or {'total': 11.1})
+    monkeypatch.setattr('app.utils.tba_api_utils.get_tba_team_opr',
+                        lambda tn, event_key=None: called['opr'].append((tn, event_key)) or {'total': 22.2})
+
+    from app.utils.analysis import refresh_opr_epa_for_event
+    refresh_opr_epa_for_event('2026ARLI', team_numbers=[254, 1678])
+
+    assert len(called['epa']) == 2
+    assert (254, {'use_cache': False}) in called['epa']
+    assert len(called['opr']) == 2
+    assert called['opr'][0][1] == '2026arli'
+
+
+def test_get_epa_metrics_for_team_statbotics_fallbacks_to_tba(monkeypatch):
+    """When Statbotics is unavailable, get_epa_metrics_for_team should use TBA OPR."""
+    # force EPA source to scouted_with_statbotics
+    monkeypatch.setattr('app.utils.analysis._get_epa_source_for_team',
+                        lambda: 'scouted_with_statbotics')
+
+    # Simulate statbotics missing
+    monkeypatch.setattr('app.utils.statbotics_api_utils.get_statbotics_team_epa',
+                        lambda tn, **kw: None)
+    # Simulate TBA returning a good OPR
+    monkeypatch.setattr('app.utils.tba_api_utils.get_tba_team_opr',
+                        lambda tn, **kw: {'total': 42.5})
+
+    data = get_epa_metrics_for_team(1111)
+    assert data['total'] == 42.5
+    assert data['epa_source'] == 'scouted_with_statbotics'
+
+
+def test_apply_epa_uses_tba_fallback_when_statbotics_missing(monkeypatch):
+    """_apply_statbotics_epa should use TBA OPR if Statbotics yields no EPA."""
+    monkeypatch.setattr('app.utils.statbotics_api_utils.get_statbotics_team_epa',
+                        lambda tn: None)
+    monkeypatch.setattr('app.utils.tba_api_utils.get_tba_team_opr',
+                        lambda tn: {'total': 23.1})
+
+    result = {'team_number': 2222, 'match_count': 0, 'metrics': {}}
+    out = _apply_statbotics_epa(result, 'scouted_with_statbotics')
+    assert out['metrics']['total_points'] == 23.1
+    assert out['metrics']['_epa_source'] == 'tba_opr'
+
+
 def test_get_team_epa_transient_network_error_does_not_cache_miss(monkeypatch):
     """Transient Statbotics failures (5xx / network) should not create a permanent miss."""
     monkeypatch.setattr('app.utils.statbotics_api_utils._sb_client', None)

@@ -176,6 +176,31 @@
 
 {% block extra_js %}
 <script>
+    const SCOUTING_LIST_SCROLL_KEY = 'scouting_list_scroll';
+
+    function restoreScoutingListScroll() {
+        try {
+            const y = localStorage.getItem(SCOUTING_LIST_SCROLL_KEY);
+            if (y) {
+                window.scrollTo(0, parseInt(y, 10));
+                localStorage.removeItem(SCOUTING_LIST_SCROLL_KEY);
+            }
+        } catch (e) {
+            console.warn('Could not restore scouting list scroll', e);
+        }
+    }
+
+    function saveScoutingListScroll() {
+        try {
+            localStorage.setItem(SCOUTING_LIST_SCROLL_KEY, window.scrollY || 0);
+        } catch (e) {
+            console.warn('Could not save scouting list scroll', e);
+        }
+    }
+
+    window.addEventListener('beforeunload', saveScoutingListScroll);
+    window.addEventListener('load', restoreScoutingListScroll);
+
     document.addEventListener('DOMContentLoaded', function() {
         const dataRows = document.querySelectorAll('tbody tr');
         const matchFilterButtons = document.querySelectorAll('.match-filter-btn');

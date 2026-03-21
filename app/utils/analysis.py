@@ -127,7 +127,24 @@ def _apply_statbotics_epa(result, epa_source):
             epa = get_statbotics_team_epa(team_number)
         except Exception as e:
             print(f"    Statbotics EPA fetch failed for team {team_number}: {e}")
-            return result
+            epa = None
+
+        # Fallback to TBA OPR when Statbotics EPA missing in API-based modes
+        if not epa:
+            try:
+                from app.utils.tba_api_utils import get_tba_team_opr
+                opr = get_tba_team_opr(team_number)
+                if opr and opr.get('total') is not None:
+                    total_val = opr.get('total')
+                    epa = {
+                        'auto': None,
+                        'teleop': None,
+                        'endgame': None,
+                        'total': 0.0 if total_val is None else max(0.0, total_val),
+                    }
+                    source_tag = 'tba_opr'
+            except Exception:
+                pass
 
     if not epa:
         print(f"    No external metric data available for team {team_number} (source={epa_source})")
@@ -310,9 +327,78 @@ def get_epa_metrics_for_team(team_number):
             result['auto'] = epa.get('auto')
             result['teleop'] = epa.get('teleop')
             result['endgame'] = epa.get('endgame')
+        else:
+            # Fallback to TBA OPR when Statbotics is not available
+            try:
+                from app.utils.tba_api_utils import get_tba_team_opr
+                opr = get_tba_team_opr(team_number)
+                if opr and opr.get('total') is not None:
+                    total_val = opr.get('total')
+                    if total_val < 0:
+                        total_val = 0.0
+                    result['total'] = total_val
+                    # auto/teleop/endgame breakdown not available in TBA OPR
+                    if epa_source == 'statbotics_only':
+                        # In statbotics-only mode, treat fallback as tba_opr for later calls
+                        result['epa_source'] = 'tba_opr'
+            except Exception:
+                pass
     except Exception:
         pass
     return result
+
+
+def refresh_opr_epa_for_event(event_code=None, team_numbers=None):
+    """Refresh TBA OPR and Statbotics EPA for event teams after sync operations."""
+    if team_numbers is None:
+        team_numbers = []
+    if not team_numbers and event_code:
+        try:
+            from app.models import Event
+            event = Event.query.filter_by(code=event_code).first()
+            if event and hasattr(event, 'teams'):
+                team_numbers = [t.team_number for t in event.teams if getattr(t, 'team_number', None) is not None]
+        except Exception:
+            pass
+
+    if not team_numbers:
+        return
+
+    # Normalize unique team numbers
+    team_numbers = sorted({int(tn) for tn in team_numbers if tn is not None})
+
+    try:
+        from app.utils.statbotics_api_utils import get_statbotics_team_epa
+    except Exception:
+        get_statbotics_team_epa = None
+
+    try:
+        from app.utils.tba_api_utils import get_tba_team_opr, construct_tba_event_key
+    except Exception:
+        get_tba_team_opr = None
+        construct_tba_event_key = None
+
+    event_key = None
+    if event_code and construct_tba_event_key:
+        try:
+            event_key = construct_tba_event_key(event_code)
+        except Exception:
+            event_key = None
+
+    for tn in team_numbers:
+        if get_statbotics_team_epa:
+            try:
+                get_statbotics_team_epa(tn, use_cache=False)
+            except Exception:
+                pass
+        if get_tba_team_opr:
+            try:
+                if event_key:
+                    get_tba_team_opr(tn, event_key=event_key)
+                else:
+                    get_tba_team_opr(tn)
+            except Exception:
+                pass
 
 
 def _detect_outliers_adaptive(values):
