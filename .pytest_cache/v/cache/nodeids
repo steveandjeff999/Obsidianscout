@@ -6,11 +6,14 @@
   "tests/test_statbotics_api_utils.py::test_apply_epa_negative_values_clamped",
   "tests/test_statbotics_api_utils.py::test_apply_epa_scouted_only_no_change",
   "tests/test_statbotics_api_utils.py::test_apply_epa_statbotics_only",
+  "tests/test_statbotics_api_utils.py::test_apply_epa_uses_tba_fallback_when_statbotics_missing",
   "tests/test_statbotics_api_utils.py::test_get_epa_metrics_for_team_clamps_negative",
+  "tests/test_statbotics_api_utils.py::test_get_epa_metrics_for_team_statbotics_fallbacks_to_tba",
   "tests/test_statbotics_api_utils.py::test_get_team_epa_requests",
   "tests/test_statbotics_api_utils.py::test_get_team_epa_transient_network_error_does_not_cache_miss",
   "tests/test_statbotics_api_utils.py::test_parse_team_epa",
   "tests/test_statbotics_api_utils.py::test_prefers_official_client_statbotics_class",
+  "tests/test_statbotics_api_utils.py::test_refresh_opr_epa_for_event_calls_backends",
   "tests/test_statbotics_api_utils.py::test_rest_api_500_raises_transient_error",
   "tests/test_statbotics_api_utils.py::test_rest_api_fallback"
 ]

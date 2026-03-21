@@ -790,6 +790,16 @@ def sync_from_config():
                 f"sync_summary_{event_code}"
             )
         
+        # After a successful sync, refresh OPR/EPA for the event teams
+        try:
+            from app.utils.analysis import refresh_opr_epa_for_event
+            team_numbers = []
+            if event and hasattr(event, 'teams'):
+                team_numbers = [t.team_number for t in event.teams if getattr(t, 'team_number', None) is not None]
+            refresh_opr_epa_for_event(event_code, team_numbers=team_numbers)
+        except Exception as e:
+            print(f"Warning: Failed to refresh OPR/EPA after match sync: {e}")
+
         # Show success message
         flash(f"Matches sync complete! Added {matches_added} new matches and updated {matches_updated} existing matches.", 'success')
         

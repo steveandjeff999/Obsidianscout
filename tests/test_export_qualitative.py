@@ -59,6 +59,7 @@ def test_export_excel_includes_qualitative(client, app):
     # core columns should be present
     assert 'scout_name' in df.columns
     assert 'alliance_scouted' in df.columns
+    assert 'qualitative_notes' in df.columns
     # if row exists, any nested keys should have produced data_* columns
     if not df.empty:
         # insert a nested structure entry and re-export to test
@@ -85,3 +86,8 @@ def test_export_excel_includes_qualitative(client, app):
         # ensure flattened columns appear
         assert any(col.startswith('data_red_team_111_notes') for col in df2.columns)
         assert any(col.startswith('data_blue_team_222_rank') for col in df2.columns)
+        # qualitative_notes should have been populated in its own column
+        nested_row = df2.loc[df2['scout_name'] == 'nested']
+        assert not nested_row.empty
+        assert 'red:111:hi' in nested_row['qualitative_notes'].iloc[0].replace(' ', '')
+        assert 'blue:222:bye' in nested_row['qualitative_notes'].iloc[0].replace(' ', '')

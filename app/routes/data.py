@@ -2383,6 +2383,28 @@ def export_excel():
                 qual_entries = QualitativeScoutingData.query.filter_by(
                     scouting_team_number=current_user.scouting_team_number
                 ).all()
+
+            def _extract_qualitative_notes(qdata):
+                out_notes = []
+                if not isinstance(qdata, dict):
+                    return ''
+                for alliance_key in ['red', 'blue', 'individual']:
+                    alliance_data = qdata.get(alliance_key, {})
+                    if not isinstance(alliance_data, dict):
+                        continue
+                    for team_key, team_data in alliance_data.items():
+                        if not isinstance(team_data, dict):
+                            continue
+                        note_text = team_data.get('notes')
+                        if note_text is None:
+                            continue
+                        note_str = str(note_text).strip()
+                        if not note_str:
+                            continue
+                        team_num = team_key.replace('team_', '')
+                        out_notes.append(f"{alliance_key}:{team_num}:{note_str}")
+                return '\n'.join(out_notes)
+
             qual_rows = []
             for q in qual_entries:
                 row = {
@@ -2394,7 +2416,8 @@ def export_excel():
                     'scout_name': q.scout_name,
                     'scout_id': q.scout_id,
                     'timestamp': q.timestamp,
-                    'alliance_scouted': q.alliance_scouted
+                    'alliance_scouted': q.alliance_scouted,
+                    'qualitative_notes': _extract_qualitative_notes(q.data)
                 }
                 # Flatten the JSON payload recursively to individual columns
                 try:

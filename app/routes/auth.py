@@ -1895,6 +1895,30 @@ def epa_settings_save():
     except Exception:
         pass
 
+    # Also refresh EPA/OPR for teams in the current event when the data-source policy changes
+    try:
+        from app.utils.analysis import refresh_opr_epa_for_event
+        from app.utils.config_manager import get_current_game_config
+
+        game_config = get_current_game_config() or {}
+        raw_event_code = (game_config.get('current_event_code') or '').strip()
+        if raw_event_code:
+            current_year = game_config.get('season') or game_config.get('year')
+            try:
+                current_year = int(current_year)
+            except Exception:
+                from datetime import datetime as _dt
+                current_year = _dt.now().year
+
+            if not raw_event_code.startswith(str(current_year)):
+                event_code = f"{current_year}{raw_event_code}"
+            else:
+                event_code = raw_event_code
+
+            refresh_opr_epa_for_event(event_code)
+    except Exception as e:
+        print(f"Warning: Failed to refresh OPR/EPA after EPA source change: {e}")
+
     labels = {
         'scouted_only': 'Scouted Data Only',
         'scouted_with_statbotics': 'Scouted Data + Statbotics EPA Gap-Fill',

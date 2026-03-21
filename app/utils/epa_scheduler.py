@@ -13,8 +13,8 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-# Default interval: refresh every 15 minutes
-_DEFAULT_REFRESH_INTERVAL = 900  # seconds
+# Default interval: refresh every 5 minutes
+_DEFAULT_REFRESH_INTERVAL = 300  # seconds
 
 
 class EPARefreshScheduler:

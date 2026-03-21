@@ -116,7 +116,7 @@
                                  treats it as a separate key so that users can click
                                  either header to drive the ordering. -->
                             <th style="width: 80px;">
-                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-white text-decoration-none {% if sort_by == 'rank' %}fw-bold{% endif %}" data-sort="rank" title="Sort by rank">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-reset text-decoration-none {% if sort_by == 'rank' %}fw-bold{% endif %}" data-sort="rank" title="Sort by rank">
                                     Rank <i class="fas fa-sort-down sort-icon ms-1" data-for="rank" style="{% if sort_by != 'rank' %}opacity:0.3{% endif %}"></i>
                                 </button>
                             </th>
@@ -126,24 +126,24 @@
                                      overall ratings for that team.  the header is
                                      clickable to allow switching between low‑to‑high
                                      and high‑to‑low. -->
-                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-white text-decoration-none {% if sort_by == 'avg_rating' %}fw-bold{% endif %}" data-sort="avg_rating" title="Sort by average rating">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-reset text-decoration-none {% if sort_by == 'avg_rating' %}fw-bold{% endif %}" data-sort="avg_rating" title="Sort by average rating">
                                     Avg Overall Rating <span class="text-muted small">(higher is better)</span> <i class="fas fa-sort-down sort-icon ms-1" data-for="avg_rating" style="{% if sort_by != 'avg_rating' %}opacity:0.3{% endif %}"></i>
                                 </button>
                             </th>
                             <th style="width: 120px;">Appearances</th>
                             <th style="width: 200px;">Roles</th>
                             <th style="width: 120px;">
-                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-white text-decoration-none {% if sort_by == 'auto_climb' %}fw-bold{% endif %}" data-sort="auto_climb" title="Sort by auto climb">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-reset text-decoration-none {% if sort_by == 'auto_climb' %}fw-bold{% endif %}" data-sort="auto_climb" title="Sort by auto climb">
                                     Auto Climb <i class="fas fa-sort-down sort-icon ms-1" data-for="auto_climb" style="{% if sort_by != 'auto_climb' %}opacity:0.3{% endif %}"></i>
                                 </button>
                             </th>
                             <th style="width: 120px;">
-                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-white text-decoration-none {% if sort_by == 'endgame_climb' %}fw-bold{% endif %}" data-sort="endgame_climb" title="Sort by endgame climb">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-reset text-decoration-none {% if sort_by == 'endgame_climb' %}fw-bold{% endif %}" data-sort="endgame_climb" title="Sort by endgame climb">
                                     Endgame Climb <i class="fas fa-sort-down sort-icon ms-1" data-for="endgame_climb" style="{% if sort_by != 'endgame_climb' %}opacity:0.3{% endif %}"></i>
                                 </button>
                             </th>
                             <th style="width: 180px;">
-                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-white text-decoration-none {% if sort_by == 'avg_rating' %}fw-bold{% endif %}" data-sort="avg_rating" title="Sort by average rating">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-reset text-decoration-none {% if sort_by == 'avg_rating' %}fw-bold{% endif %}" data-sort="avg_rating" title="Sort by average rating">
                                     Overall Ratings <i class="fas fa-sort-down sort-icon ms-1" data-for="avg_rating" style="{% if sort_by != 'avg_rating' %}opacity:0.3{% endif %}"></i>
                                 </button>
                             </th>
@@ -340,7 +340,7 @@
 
 <!-- Notes Modal -->
 <div class="modal fade" id="notesModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -349,7 +349,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body" id="notes-content">
+            <div class="modal-body" id="notes-content" style="max-height: 60vh; overflow-y: auto;">
                 <div class="text-center">
                     <i class="fas fa-spinner fa-spin fa-2x"></i>
                 </div>
@@ -365,6 +365,31 @@ const teamNotesData = {
     '{{ team.team_number }}': {{ team.notes|tojson }},
     {% endfor %}
 };
+
+const QUAL_LEADERBOARD_SCROLL_KEY = 'qual_leaderboard_scroll';
+
+function restoreLeaderboardScroll() {
+    try {
+        const y = localStorage.getItem(QUAL_LEADERBOARD_SCROLL_KEY);
+        if (y) {
+            window.scrollTo(0, parseInt(y, 10));
+            localStorage.removeItem(QUAL_LEADERBOARD_SCROLL_KEY);
+        }
+    } catch (e) {
+        console.warn('Could not restore qualitative leaderboard scroll', e);
+    }
+}
+
+function saveLeaderboardScroll() {
+    try {
+        localStorage.setItem(QUAL_LEADERBOARD_SCROLL_KEY, window.scrollY || 0);
+    } catch (e) {
+        console.warn('Could not save qualitative leaderboard scroll', e);
+    }
+}
+
+window.addEventListener('beforeunload', saveLeaderboardScroll);
+window.addEventListener('load', restoreLeaderboardScroll);
 
 function showTeamNotes(teamNumber) {
     const modal = new bootstrap.Modal(document.getElementById('notesModal'));
