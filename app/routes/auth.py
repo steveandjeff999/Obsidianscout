@@ -1828,7 +1828,7 @@ def save_nav_visibility():
     # All known nav item keys
     ALL_NAV_KEYS = [
         'dashboard', 'scouting_dashboard', 'start_scouting', 'qualitative_scouting',
-        'pit_scouting', 'scouting_alliances_nav', 'all_data', 'text_elements',
+        'pit_scouting', 'scouting_alliances_nav', 'all_data', 'match_data', 'text_elements',
         'teams', 'team_rankings', 'matches', 'alliance_selection', 'graphs',
         'comparison', 'config_averages', 'custom_pages', 'strategy', 'strategy_all',
         'strategy_draw', 'strategy_live', 'my_graph_shares', 'my_ranking_shares',
