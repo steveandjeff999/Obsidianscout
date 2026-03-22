@@ -15,8 +15,9 @@ from app.utils.team_isolation import (
     filter_events_by_scouting_team, get_event_by_code, get_all_teams_at_event, get_combined_dropdown_events
 )
 from app.utils.alliance_data import (
-    get_all_scouting_data, get_events_with_scouting_data, 
-    can_delete_scouting_entry, is_alliance_admin, get_active_alliance_id,
+    get_all_scouting_data, get_all_pit_data, get_all_qualitative_data,
+    get_events_with_scouting_data, can_delete_scouting_entry,
+    is_alliance_admin, get_active_alliance_id,
     normalize_scouting_entry, get_all_teams_for_alliance, get_all_matches_for_alliance
 )
 
@@ -1045,31 +1046,55 @@ def qr_code(team_id, match_id):
                           display_data=json.dumps(display_data, indent=2),
                           **get_theme_context())
 
+def _render_scouting_combined_list(show_match=True, show_pit=True, show_qualitative=True, active_page='all'):
+    """Render combined scouting data list views."""
+    # Get scouting/match data using alliance-aware helpers
+    scouting_data, match_alliance_mode, alliance_id = get_all_scouting_data()
+    pit_data, pit_alliance_mode, _ = get_all_pit_data()
+    qualitative_data, qual_alliance_mode, _ = get_all_qualitative_data()
+    events, _, _ = get_events_with_scouting_data()
+
+    # Compute alliance mode for display; True if any source is in alliance mode.
+    is_alliance_mode = match_alliance_mode or pit_alliance_mode or qual_alliance_mode
+
+    user_is_alliance_admin = is_alliance_admin(alliance_id) if is_alliance_mode else False
+
+    return render_template('scouting/list.html',
+                           show_match=show_match,
+                           show_pit=show_pit,
+                           show_qualitative=show_qualitative,
+                           active_page=active_page,
+                           scouting_data=scouting_data,
+                           pit_data=pit_data,
+                           qualitative_data=qualitative_data,
+                           events=events,
+                           is_alliance_mode=is_alliance_mode,
+                           alliance_id=alliance_id,
+                           user_is_alliance_admin=user_is_alliance_admin,
+                           **get_theme_context())
+
+
 @bp.route('/list')
 @login_required
 def list_data():
-    """List all scouting data - uses alliance shared data when alliance mode is active"""
+    """List all scouting data (match + pit + qualitative)."""
     # If the user is ONLY a scout (no analytics or admin role), redirect to the scouting dashboard with a message
     if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin'):
         flash('Access to the full scouting data list is restricted. Please contact an administrator for assistance.', 'warning')
         return redirect(url_for('scouting.index'))
-    
-    # Get scouting data - automatically uses alliance shared data if alliance mode is active
-    scouting_data, is_alliance_mode, alliance_id = get_all_scouting_data()
-    
-    # Get events with scouting data
-    events, _, _ = get_events_with_scouting_data()
-    
-    # Check if user is alliance admin (for delete permissions)
-    user_is_alliance_admin = is_alliance_admin(alliance_id) if is_alliance_mode else False
-    
-    return render_template('scouting/list.html', 
-                         scouting_data=scouting_data,
-                         events=events,
-                         is_alliance_mode=is_alliance_mode,
-                         alliance_id=alliance_id,
-                         user_is_alliance_admin=user_is_alliance_admin,
-                         **get_theme_context())
+
+    return _render_scouting_combined_list(show_match=True, show_pit=True, show_qualitative=True, active_page='all')
+
+
+@bp.route('/match-data')
+@login_required
+def match_data():
+    """List match scouting data only (legacy All Data behavior)."""
+    if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin'):
+        flash('Access to the full scouting data list is restricted. Please contact an administrator for assistance.', 'warning')
+        return redirect(url_for('scouting.index'))
+
+    return _render_scouting_combined_list(show_match=True, show_pit=False, show_qualitative=False, active_page='match')
 
 @bp.route('/view/<int:id>')
 @login_required

@@ -113,6 +113,7 @@ def index():
     # Ensure selected_event matches an entry from the events dropdown list
     # This is critical for proper dropdown selection in the template
     selected_event_for_dropdown = None
+
     if event and events:
         try:
             # Check if we're in alliance mode
@@ -254,7 +255,7 @@ def index():
                 query = query.filter(Match.scouting_team_number == current_scouting_team)
             else:
                 query = query.filter(Match.scouting_team_number.is_(None))
-        
+
         # Apply optional filters from the request
         q = (request.args.get('q') or '').strip()
         match_type = (request.args.get('match_type') or '').strip()
@@ -482,6 +483,12 @@ def index():
         next_unplayed_match_id = None
 
     return render_template('matches/index.html', matches=matches, events=events, selected_event=selected_event_for_dropdown, force_selected_event=force_selected_event, display_scores=display_scores, next_unplayed_match_id=next_unplayed_match_id, adjusted_predictions=adjusted_predictions, **get_theme_context())
+
+@bp.route('/match-data')
+@analytics_required
+def match_data_index():
+    """Legacy route alias: keep nav link compatibility and redirect to scouting match data view."""
+    return redirect(url_for('scouting.match_data'))
 
 @bp.route('/sync_from_config')
 @login_required

@@ -1,55 +1,46 @@
 {% extends 'base.html' %}
 
-{% block title %}Scouting Data List{% endblock %}
+{% block title %}
+    {% if active_page == 'match' %}Match Data{% else %}All Data{% endif %}
+{% endblock %}
 
-{% block heading %}Scouting Data List{% endblock %}
+{% block heading %}
+    {% if active_page == 'match' %}Match Data{% else %}All Scouting Data{% endif %}
+{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">
-            {% if is_alliance_mode %}
-            <i class="fas fa-users me-2"></i>Alliance Scouting Data
-            {% else %}
-            All Scouting Data
-            {% endif %}
-        </h5>
-        <div class="d-flex gap-2">
-            {% if is_alliance_mode %}
-            <span class="badge bg-warning text-dark">
-                <i class="fas fa-handshake me-1"></i>Alliance Mode Active
-            </span>
-            {% endif %}
-            <a href="{{ url_for('scouting.index') }}" class="btn btn-light btn-sm">
-                <i class="fas fa-arrow-left me-1"></i> Back to Scouting Dashboard
-            </a>
-        </div>
+<div class="mb-3">
+    <div class="btn-group" role="group">
+        <a class="btn btn-outline-primary {% if active_page == 'all' %}active{% endif %}" href="{{ url_for('scouting.list_data') }}">All Data</a>
+        <a class="btn btn-outline-primary {% if active_page == 'match' %}active{% endif %}" href="{{ url_for('scouting.match_data') }}">Match Data</a>
+        <a class="btn btn-outline-primary {% if active_page == 'pit' %}active{% endif %}" href="{{ url_for('pit_scouting.list_dynamic') }}">Pit Data</a>
+        <a class="btn btn-outline-primary {% if active_page == 'qual' %}active{% endif %}" href="{{ url_for('scouting.list_qualitative_data') }}">Qualitative Data</a>
+    </div>
+</div>
+
+{% if is_alliance_mode %}
+<div class="alert alert-info mb-3">
+    <i class="fas fa-info-circle me-2"></i>
+    <strong>Alliance Mode:</strong>
+    Showing shared scouting data from all alliance members.
+    {% if user_is_alliance_admin %}
+    <span class="badge bg-success ms-2">You are an Alliance Admin</span>
+    {% else %}
+    <span class="text-muted ms-2">(You can only delete data you personally scouted)</span>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if show_match %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Match Scouting Data</h5>
     </div>
     <div class="card-body">
-        {% if is_alliance_mode %}
-        <div class="alert alert-info mb-3">
-            <i class="fas fa-info-circle me-2"></i>
-            <strong>Alliance Mode:</strong> Showing shared scouting data from all alliance members.
-            {% if user_is_alliance_admin %}
-            <span class="badge bg-success ms-2">You are an Alliance Admin</span>
-            {% else %}
-            <span class="text-muted ms-2">(You can only delete data you personally scouted)</span>
-            {% endif %}
-        </div>
-        {% endif %}
-        <div class="alert alert-secondary mb-3">
-            <i class="fas fa-boxes me-2"></i>
-            <strong>Pit Data:</strong> To view pit data, visit <a href="{{ url_for('pit_scouting.list_dynamic') }}" class="alert-link">/pit-scouting/list-dynamic</a>.
-        </div>
-        <div class="alert alert-secondary mb-3">
-            <i class="fas fa-feather me-2"></i>
-            <strong>Qualitative Data:</strong> To view qualitative data, visit <a href="{{ url_for('scouting.list_qualitative_data') }}" class="alert-link">/scouting/qualitative/list</a>.
-        </div>
-
-        {% if scouting_data %}        <div class="d-flex gap-3 mb-3">
-            <div>
-                <label class="form-label">Filter by event:</label>
+        {% if scouting_data %}
+            <div class="d-flex gap-3 mb-3">
                 <div>
+                    <label class="form-label">Filter by event:</label>
                     <select id="event-filter-select" class="form-select w-auto">
                         <option value="all" selected>All Events</option>
                         {% for event in events|dedupe_events %}
@@ -57,93 +48,122 @@
                         {% endfor %}
                     </select>
                 </div>
-            </div>
-            <div class="vr"></div>
-            <div>
-                <label class="form-label">Filter by match type:</label>
-                <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-secondary match-filter-btn active" data-filter="all">All Types</button>
-                    <button type="button" class="btn btn-outline-success match-filter-btn" data-filter="Practice">Practice</button>
-                    <button type="button" class="btn btn-outline-primary match-filter-btn" data-filter="Qualification">Qualification</button>
-                    <button type="button" class="btn btn-outline-danger match-filter-btn" data-filter="Playoff">Playoff</button>
+                <div class="vr"></div>
+                <div>
+                    <label class="form-label">Filter by match type:</label>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary match-filter-btn active" data-filter="all">All Types</button>
+                        <button type="button" class="btn btn-outline-success match-filter-btn" data-filter="Practice">Practice</button>
+                        <button type="button" class="btn btn-outline-primary match-filter-btn" data-filter="Qualification">Qualification</button>
+                        <button type="button" class="btn btn-outline-danger match-filter-btn" data-filter="Playoff">Playoff</button>
+                    </div>
                 </div>
             </div>
-        </div>
+
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Team</th>
+                            <th>Match</th>
+                            <th>Alliance</th>
+                            <th>Scout</th>
+                            {% if is_alliance_mode %}<th>Source Team</th>{% endif %}
+                            <th>Station</th>
+                            <th>Timestamp</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for data in scouting_data %}
+                        <tr data-event-id="{{ data.match.event.id }}">
+                            <td>
+                                <a href="{{ url_for('teams.view', team_number=data.team.team_number) }}">{{ data.team.team_number }}</a>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">{{ data.match.event.code }}</span>
+                                <span class="badge {% if data.match.match_type == 'Qualification' %}bg-primary{% elif data.match.match_type == 'Playoff' %}bg-danger{% elif data.match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">{{ data.match.match_type }}</span>
+                                {{ data.match.match_number }}
+                            </td>
+                            <td><span class="badge {% if data.alliance == 'red' %}bg-danger{% elif data.alliance == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">{{ data.alliance }}</span></td>
+                            <td>{{ data.scout_name }}</td>
+                            {% if is_alliance_mode %}
+                            <td><span class="badge bg-info">Team {{ data.source_scouting_team_number }}</span></td>
+                            {% endif %}
+                            <td>{{ data.scouting_station if data.scouting_station else '-' }}</td>
+                            <td>{{ data.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    {% if is_alliance_mode %}
+                                    <a href="{{ url_for('scouting.view_data', id=data.id, shared_id=data.id) }}" class="btn btn-sm btn-primary" title="View"><i class="fas fa-eye"></i></a>
+                                    {% else %}
+                                    <a href="{{ url_for('scouting.view_data', id=data.id) }}" class="btn btn-sm btn-primary" title="View"><i class="fas fa-eye"></i></a>
+                                    <a href="{{ url_for('scouting.scouting_form', team_id=data.team_id, match_id=data.match_id) }}" class="btn btn-sm btn-warning" title="Edit"><i class="fas fa-edit"></i></a>
+                                    {% endif %}
+                                    {% set can_delete = user_is_alliance_admin or (current_user.username and current_user.username|lower in (data.scout_name|lower if data.scout_name else '')) or (not is_alliance_mode) %}
+                                    {% if can_delete %}
+                                    <button type="button" class="btn btn-sm btn-danger double-confirm-delete" title="Delete" data-entry-id="{{ data.id }}" {% if is_alliance_mode %}data-shared-id="{{ data.id }}"{% endif %}><i class="fas fa-trash"></i></button>
+                                    {% else %}
+                                    <button type="button" class="btn btn-sm btn-secondary" title="Only alliance admins or the original scout can delete" disabled><i class="fas fa-trash"></i></button>
+                                    {% endif %}
+                                </div>
+                                <form id="delete-form-{{ data.id }}" action="{{ url_for('scouting.delete_data', id=data.id) }}" method="post" class="d-none">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    {% if is_alliance_mode %}<input type="hidden" name="shared_id" value="{{ data.id }}">{% endif %}
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="alert alert-info text-center"><i class="fas fa-info-circle me-2"></i>No match scouting records available.</div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if show_pit %}
+<div class="card mb-4">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">Pit Scouting Data</h5>
+    </div>
+    <div class="card-body">
+        {% if pit_data %}
         <div class="table-responsive">
             <table class="table table-striped table-hover">
                 <thead>
                     <tr>
                         <th>Team</th>
-                        <th>Match</th>
-                        <th>Alliance</th>
+                        <th>Event</th>
                         <th>Scout</th>
-                        {% if is_alliance_mode %}<th>Source Team</th>{% endif %}
-                        <th>Station</th>
                         <th>Timestamp</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for data in scouting_data %}
-                    <tr data-event-id="{{ data.match.event.id }}">
-                        <td>
-                            <a href="{{ url_for('teams.view', team_number=data.team.team_number) }}">
-                                {{ data.team.team_number }}
-                            </a>
-                        </td>
-                        <td>
-                            <span class="badge bg-secondary">{{ data.match.event.code }}</span>
-                            <span class="badge {% if data.match.match_type == 'Qualification' %}bg-primary{% elif data.match.match_type == 'Playoff' %}bg-danger{% elif data.match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">
-                                {{ data.match.match_type }}
-                            </span>
-                            {{ data.match.match_number }}
-                        </td>
-                        <td>
-                            <span class="badge {% if data.alliance == 'red' %}bg-danger{% elif data.alliance == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
-                                {{ data.alliance }}
-                            </span>
-                        </td>
-                        <td>{{ data.scout_name }}</td>
-                        {% if is_alliance_mode %}
-                        <td>
-                            <span class="badge bg-info">Team {{ data.source_scouting_team_number }}</span>
-                        </td>
-                        {% endif %}
-                        <td>{{ data.scouting_station if data.scouting_station else '-' }}</td>
-                        <td>{{ data.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
+                    {% for entry in pit_data %}
+                    <tr>
+                        <td>{{ entry.team.team_number if entry.team else '—' }}</td>
+                        <td>{{ entry.event.code if entry.event else '—' }}</td>
+                        <td>{{ entry.scout_name }}</td>
+                        <td>{{ entry.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
                         <td>
                             <div class="btn-group" role="group">
                                 {% if is_alliance_mode %}
-                                <a href="{{ url_for('scouting.view_data', id=data.id, shared_id=data.id) }}" class="btn btn-sm btn-primary" title="View">
-                                    <i class="fas fa-eye"></i>
-                                </a>
+                                <a href="{{ url_for('pit_scouting.view', id=entry.id, shared_id=entry.id) }}" class="btn btn-sm btn-primary" title="View"><i class="fas fa-eye"></i></a>
                                 {% else %}
-                                <a href="{{ url_for('scouting.view_data', id=data.id) }}" class="btn btn-sm btn-primary" title="View">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-                                <a href="{{ url_for('scouting.scouting_form', team_id=data.team_id, match_id=data.match_id) }}" class="btn btn-sm btn-warning" title="Edit">
-                                    <i class="fas fa-edit"></i>
-                                </a>
+                                <a href="{{ url_for('pit_scouting.view', id=entry.id) }}" class="btn btn-sm btn-primary" title="View"><i class="fas fa-eye"></i></a>
                                 {% endif %}
-                                {% set can_delete = user_is_alliance_admin or (current_user.username and current_user.username|lower in (data.scout_name|lower if data.scout_name else '')) or (not is_alliance_mode) %}
+                                {% set can_delete = user_is_alliance_admin or (current_user.username and current_user.username|lower in (entry.scout_name|lower if entry.scout_name else '')) or (not is_alliance_mode) %}
                                 {% if can_delete %}
-                                <button type="button" class="btn btn-sm btn-danger double-confirm-delete" title="Delete" data-entry-id="{{ data.id }}" {% if is_alliance_mode %}data-shared-id="{{ data.id }}"{% endif %}>
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                                {% else %}
-                                <button type="button" class="btn btn-sm btn-secondary" title="Only alliance admins or the original scout can delete" disabled>
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                <form action="{{ url_for('pit_scouting.delete', id=entry.id) }}" method="post" class="d-inline" onsubmit="return confirm('Delete pit entry?');">
+                                    <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
+                                    <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+                                </form>
                                 {% endif %}
                             </div>
-                            
-                            <!-- Hidden form for double-confirm delete behavior (scripts.js will submit on second click) -->
-                            <form id="delete-form-{{ data.id }}" action="{{ url_for('scouting.delete_data', id=data.id) }}" method="post" class="d-none">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                {% if is_alliance_mode %}
-                                <input type="hidden" name="shared_id" value="{{ data.id }}">
-                                {% endif %}
-                            </form>
                         </td>
                     </tr>
                     {% endfor %}
@@ -151,27 +171,78 @@
             </table>
         </div>
         {% else %}
-        <div class="alert alert-info text-center">
-            <i class="fas fa-info-circle me-2"></i> No scouting data available yet.
-        </div>
+            <div class="alert alert-info text-center"><i class="fas fa-info-circle me-2"></i>No pit scouting records available.</div>
         {% endif %}
     </div>
-    {% if scouting_data %}
-    <div class="card-footer bg-light">
-        <div class="d-flex justify-content-between align-items-center">
-            <span>Total records: {{ scouting_data|length }}</span>
-            <div class="btn-group" role="group">
-                <a href="{{ url_for('scouting.view_text_elements') }}" class="btn btn-outline-info">
-                    <i class="fas fa-comment-alt me-2"></i> View Text Elements
-                </a>
-                <a href="{{ url_for('data.export_excel') }}" class="btn btn-success">
-                    <i class="fas fa-file-excel me-2"></i> Export to Excel
-                </a>
-            </div>
-        </div>
-    </div>
-    {% endif %}
 </div>
+{% endif %}
+
+{% if show_qualitative %}
+<div class="card mb-4">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">Qualitative Scouting Data</h5>
+    </div>
+    <div class="card-body">
+        {% if qualitative_data %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Match</th>
+                        <th>Alliance</th>
+                        <th>Scout</th>
+                        <th>Timestamp</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in qualitative_data %}
+                    <tr>
+                        <td>
+                            {% if entry.match %}
+                                <span class="badge {% if entry.match.match_type == 'Qualification' %}bg-primary{% elif entry.match.match_type == 'Playoff' %}bg-danger{% elif entry.match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">{{ entry.match.match_type }}</span>
+                                {{ entry.match.match_number }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if entry.alliance_scouted %}
+                                <span class="badge {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">{{ entry.alliance_scouted|title }}</span>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.scout_name }}</td>
+                        <td>{{ entry.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                {% if is_alliance_mode %}
+                                <a href="{{ url_for('scouting.view_qualitative_data', entry_id=entry.id, shared_id=entry.id) }}" class="btn btn-sm btn-primary" title="View"><i class="fas fa-eye"></i></a>
+                                {% else %}
+                                <a href="{{ url_for('scouting.view_qualitative_data', entry_id=entry.id) }}" class="btn btn-sm btn-primary" title="View"><i class="fas fa-eye"></i></a>
+                                {% endif %}
+                                {% set can_delete = user_is_alliance_admin or (current_user.username and current_user.username|lower in (entry.scout_name|lower if entry.scout_name else '')) or (not is_alliance_mode) %}
+                                {% if can_delete %}
+                                <form action="{{ url_for('scouting.delete_qualitative_data', entry_id=entry.id) }}" method="post" class="d-inline" onsubmit="return confirm('Delete qualitative entry?');">
+                                    <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
+                                    <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <div class="alert alert-info text-center"><i class="fas fa-info-circle me-2"></i>No qualitative scouting records available.</div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}
@@ -209,26 +280,23 @@
 
         function updateVisibility() {
             dataRows.forEach(row => {
-                // Use data-event-id attribute on rows and compare by id
                 const eventId = row.getAttribute('data-event-id') || '';
                 const matchTypeEl = row.querySelector('td:nth-child(2) .badge:nth-child(2)');
                 const matchType = matchTypeEl ? matchTypeEl.textContent.trim().toUpperCase() : '';
 
                 const currentEvent = currentEventFilter ? String(currentEventFilter) : 'all';
                 const currentMatch = currentMatchFilter ? currentMatchFilter.toUpperCase() : 'ALL';
-                
+
                 const eventMatch = (currentEvent === 'all') || (eventId && eventId === currentEvent);
                 const matchTypeMatch = currentMatch === 'ALL' || matchType === currentMatch;
                 row.style.display = eventMatch && matchTypeMatch ? '' : 'none';
             });
 
-            // Update the total records count
             const visibleRows = document.querySelectorAll('tbody tr:not([style*="display: none"])');
             const footerSpan = document.querySelector('.card-footer span');
             if (footerSpan) footerSpan.textContent = `Filtered records: ${visibleRows.length}`;
         }
 
-        // Event filter handler (select)
         const eventFilterSelect = document.getElementById('event-filter-select');
         if (eventFilterSelect) {
             eventFilterSelect.addEventListener('change', function() {
@@ -237,7 +305,6 @@
             });
         }
 
-        // Initial visibility update
         updateVisibility();
 
         matchFilterButtons.forEach(button => {
