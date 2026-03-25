@@ -1,10 +1,11 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app
 from flask_socketio import emit, join_room, leave_room
-from app.models import AllianceSelection, Team, Event, ScoutingData, DoNotPickEntry, AvoidEntry, db, team_event, DeclinedEntry, WantListEntry
+from app.models import AllianceSelection, Team, Event, ScoutingData, DoNotPickEntry, AvoidEntry, db, team_event, DeclinedEntry, WantListEntry, TeamTagEntry
 from app.utils.analysis import calculate_team_metrics
 from flask_login import current_user
 from app import socketio
 from sqlalchemy import func, desc, and_
+import json
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_current_game_config, get_effective_game_config
 from app.utils.team_isolation import (
@@ -16,6 +17,77 @@ from app.utils.team_isolation import (
 from app.utils.team_isolation import filter_declined_entries_by_scouting_team, get_combined_dropdown_events, filter_want_list_by_scouting_team
 
 bp = Blueprint('alliances', __name__, url_prefix='/alliances')
+
+PICK_META_PREFIX = '__PICKMETA__:'
+TEAM_TAG_META_PREFIX = '__TEAMTAG__:'
+
+
+def _decode_pick_meta(reason):
+    parsed = {
+        'note': '',
+        'offense_tag': False,
+        'defense_tag': False
+    }
+    if not reason:
+        return parsed
+
+    if isinstance(reason, str) and reason.startswith(PICK_META_PREFIX):
+        raw_json = reason[len(PICK_META_PREFIX):]
+        try:
+            payload = json.loads(raw_json)
+            parsed['note'] = str(payload.get('note', '') or '')[:120]
+            parsed['offense_tag'] = bool(payload.get('offense_tag', False))
+            parsed['defense_tag'] = bool(payload.get('defense_tag', False))
+            return parsed
+        except Exception:
+            pass
+
+    parsed['note'] = str(reason)[:120]
+    return parsed
+
+
+def _encode_pick_meta(note, offense_tag=False, defense_tag=False):
+    clean_note = (note or '').strip()[:120]
+    payload = {
+        'note': clean_note,
+        'offense_tag': bool(offense_tag),
+        'defense_tag': bool(defense_tag)
+    }
+    return PICK_META_PREFIX + json.dumps(payload, separators=(',', ':'))
+
+
+def _decode_team_tag_meta(reason):
+    parsed = {
+        'note': '',
+        'offense_tag': False,
+        'defense_tag': False
+    }
+    if not reason:
+        return parsed
+
+    if isinstance(reason, str) and reason.startswith(TEAM_TAG_META_PREFIX):
+        raw_json = reason[len(TEAM_TAG_META_PREFIX):]
+        try:
+            payload = json.loads(raw_json)
+            parsed['note'] = str(payload.get('note', '') or '')[:120]
+            parsed['offense_tag'] = bool(payload.get('offense_tag', False))
+            parsed['defense_tag'] = bool(payload.get('defense_tag', False))
+            return parsed
+        except Exception:
+            pass
+
+    parsed['note'] = str(reason)[:120]
+    return parsed
+
+
+def _encode_team_tag_meta(note, offense_tag=False, defense_tag=False):
+    clean_note = (note or '').strip()[:120]
+    payload = {
+        'note': clean_note,
+        'offense_tag': bool(offense_tag),
+        'defense_tag': bool(defense_tag)
+    }
+    return TEAM_TAG_META_PREFIX + json.dumps(payload, separators=(',', ':'))
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -231,8 +303,29 @@ def get_recommendations(event_id):
             WantListEntry.event_id == event_id
         ).all()
         want_list_teams = {}  # Map team_id to rank
+        want_list_tags = {}  # Legacy fallback: tags previously stored on want list entries
         for entry in want_list_entries:
             want_list_teams[entry.team_id] = entry.rank
+            meta = _decode_pick_meta(entry.reason)
+            want_list_tags[entry.team_id] = {
+                'offense_tag': meta['offense_tag'],
+                'defense_tag': meta['defense_tag'],
+                'pick_note': meta['note']
+            }
+
+        # Separate Team Tags list (preferred source for offense/defense tag sorting)
+        team_tag_entries = TeamTagEntry.query.filter_by(
+            event_id=event_id,
+            scouting_team_number=current_user.scouting_team_number
+        ).all()
+        team_tags = {}
+        for entry in team_tag_entries:
+            meta = _decode_team_tag_meta(entry.reason)
+            team_tags[entry.team_id] = {
+                'offense_tag': meta['offense_tag'],
+                'defense_tag': meta['defense_tag'],
+                'pick_note': meta['note']
+            }
         
         # Calculate metrics for available teams
         team_recommendations = []
@@ -241,6 +334,11 @@ def get_recommendations(event_id):
         
         for team in all_teams:
             if team.id not in picked_teams:
+                tag_meta = team_tags.get(team.id, want_list_tags.get(team.id, {
+                    'offense_tag': False,
+                    'defense_tag': False,
+                    'pick_note': ''
+                }))
                 try:
                     analytics_result = calculate_team_metrics(team.id)
                     metrics = analytics_result.get('metrics', {})
@@ -255,7 +353,10 @@ def get_recommendations(event_id):
                             'is_avoided': team.id in avoid_teams,
                             'is_do_not_pick': team.id in do_not_pick_teams,
                             'is_want_list': team.id in want_list_teams,
-                            'want_list_rank': want_list_teams.get(team.id, 999)
+                            'want_list_rank': want_list_teams.get(team.id, 999),
+                            'offense_tag': tag_meta.get('offense_tag', False),
+                            'defense_tag': tag_meta.get('defense_tag', False),
+                            'pick_note': tag_meta.get('pick_note', '')
                         
                         }
                         
@@ -280,7 +381,10 @@ def get_recommendations(event_id):
                             'is_declined': team.id in declined_teams,
                             'has_no_data': True,
                             'is_want_list': team.id in want_list_teams,
-                            'want_list_rank': want_list_teams.get(team.id, 999)
+                            'want_list_rank': want_list_teams.get(team.id, 999),
+                            'offense_tag': tag_meta.get('offense_tag', False),
+                            'defense_tag': tag_meta.get('defense_tag', False),
+                            'pick_note': tag_meta.get('pick_note', '')
                         })
                 except Exception as e:
                     print(f"Error calculating metrics for team {team.team_number}: {e}")
@@ -297,7 +401,10 @@ def get_recommendations(event_id):
                         'is_declined': team.id in declined_teams,
                         'has_no_data': True,
                         'is_want_list': team.id in want_list_teams,
-                        'want_list_rank': want_list_teams.get(team.id, 999)
+                        'want_list_rank': want_list_teams.get(team.id, 999),
+                        'offense_tag': tag_meta.get('offense_tag', False),
+                        'defense_tag': tag_meta.get('defense_tag', False),
+                        'pick_note': tag_meta.get('pick_note', '')
                     })
         
         # Optionally apply a small trend adjustment to the sort key.
@@ -522,7 +629,10 @@ def get_recommendations(event_id):
                 'is_declined': rec.get('is_declined', False),
                 'has_no_data': rec.get('has_no_data', False),
                 'is_want_list': rec.get('is_want_list', False),
-                'want_list_rank': rec.get('want_list_rank', 999)
+                'want_list_rank': rec.get('want_list_rank', 999),
+                'offense_tag': rec.get('offense_tag', False),
+                'defense_tag': rec.get('defense_tag', False),
+                'pick_note': rec.get('pick_note', '')
             }
             # Compute recent trend (slope) for client display (small, robust indicator)
             try:
@@ -690,7 +800,7 @@ def reset_alliances(event_id):
 
 @bp.route('/manage_lists/<int:event_id>')
 def manage_lists(event_id):
-    """Manage avoid, do not pick, declined, and want lists"""
+    """Manage avoid, do not pick, declined, custom pick, and team tag lists"""
     event = Event.query.get_or_404(event_id)
     
     # Get current lists
@@ -698,6 +808,26 @@ def manage_lists(event_id):
     do_not_pick_entries = DoNotPickEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
     declined_entries = DeclinedEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
     want_list_entries = filter_want_list_by_scouting_team().filter_by(event_id=event_id).join(Team).order_by(WantListEntry.rank).all()
+    team_tag_entries = TeamTagEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).order_by(Team.team_number).all()
+    want_list_display_entries = []
+    for entry in want_list_entries:
+        meta = _decode_pick_meta(entry.reason)
+        want_list_display_entries.append({
+            'team_id': entry.team_id,
+            'team': entry.team,
+            'rank': entry.rank,
+            'note': meta['note']
+        })
+    team_tag_display_entries = []
+    for entry in team_tag_entries:
+        meta = _decode_team_tag_meta(entry.reason)
+        team_tag_display_entries.append({
+            'team_id': entry.team_id,
+            'team': entry.team,
+            'note': meta['note'],
+            'offense_tag': meta['offense_tag'],
+            'defense_tag': meta['defense_tag']
+        })
     
     # Get all teams for this event from team_event relationship
     all_teams = db.session.query(Team).join(
@@ -733,6 +863,8 @@ def manage_lists(event_id):
                          do_not_pick_entries=do_not_pick_entries,
                          declined_entries=declined_entries,
                          want_list_entries=want_list_entries,
+                         want_list_display_entries=want_list_display_entries,
+                         team_tag_display_entries=team_tag_display_entries,
                          all_teams=all_teams,
                          **get_theme_context())
 
@@ -939,6 +1071,120 @@ def remove_from_list():
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
 
 
+@bp.route('/api/team_tags/add', methods=['POST'])
+def add_team_tags():
+    """Add or update offense/defense tags for a team in an event."""
+    data = request.get_json() or {}
+
+    team_number = data.get('team_number')
+    event_id = data.get('event_id')
+    offense_tag = bool(data.get('offense_tag', False))
+    defense_tag = bool(data.get('defense_tag', False))
+    note = data.get('note', '')
+
+    if not all([team_number, event_id]):
+        return jsonify({'success': False, 'message': 'Missing required fields'})
+
+    if not offense_tag and not defense_tag:
+        return jsonify({'success': False, 'message': 'Select at least one tag (offense or defense)'})
+
+    team = filter_teams_by_scouting_team().filter_by(team_number=team_number).first()
+    if not team:
+        return jsonify({'success': False, 'message': 'Team not found'})
+
+    try:
+        existing = TeamTagEntry.query.filter_by(
+            team_id=team.id,
+            event_id=event_id,
+            scouting_team_number=current_user.scouting_team_number
+        ).first()
+
+        encoded = _encode_team_tag_meta(note, offense_tag=offense_tag, defense_tag=defense_tag)
+
+        if existing:
+            existing.reason = encoded
+        else:
+            existing = TeamTagEntry(
+                team_id=team.id,
+                event_id=event_id,
+                reason=encoded,
+                scouting_team_number=current_user.scouting_team_number
+            )
+            db.session.add(existing)
+
+        db.session.commit()
+
+        emit_recommendations_update(event_id)
+        return jsonify({
+            'success': True,
+            'message': f'Tags saved for Team {team.team_number}',
+            'team_id': team.id,
+            'team_number': team.team_number,
+            'offense_tag': offense_tag,
+            'defense_tag': defense_tag,
+            'note': (note or '').strip()[:120]
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
+
+
+@bp.route('/api/team_tags/remove', methods=['POST'])
+def remove_team_tags():
+    """Remove offense/defense tags entry for a team in an event."""
+    data = request.get_json() or {}
+
+    team_id = data.get('team_id')
+    event_id = data.get('event_id')
+
+    if not all([team_id, event_id]):
+        return jsonify({'success': False, 'message': 'Missing required fields'})
+
+    entry = TeamTagEntry.query.filter_by(
+        team_id=team_id,
+        event_id=event_id,
+        scouting_team_number=current_user.scouting_team_number
+    ).first()
+
+    if not entry:
+        return jsonify({'success': False, 'message': 'Tag entry not found'})
+
+    try:
+        db.session.delete(entry)
+        db.session.commit()
+        emit_recommendations_update(event_id)
+        return jsonify({'success': True, 'message': 'Team tags removed'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
+
+
+@bp.route('/api/team_tags/get/<int:event_id>')
+def get_team_tags(event_id):
+    """Get all team tag entries for an event."""
+    try:
+        entries = TeamTagEntry.query.filter_by(
+            event_id=event_id,
+            scouting_team_number=current_user.scouting_team_number
+        ).join(Team).order_by(Team.team_number).all()
+
+        team_tags = []
+        for entry in entries:
+            meta = _decode_team_tag_meta(entry.reason)
+            team_tags.append({
+                'team_id': entry.team_id,
+                'team_number': entry.team.team_number,
+                'team_name': entry.team.team_name or f'Team {entry.team.team_number}',
+                'offense_tag': meta['offense_tag'],
+                'defense_tag': meta['defense_tag'],
+                'note': meta['note']
+            })
+
+        return jsonify({'success': True, 'team_tags': team_tags})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
+
+
 @bp.route('/api/want_list/add', methods=['POST'])
 def add_to_want_list():
     """Add a team to the want list"""
@@ -1109,13 +1355,14 @@ def get_want_list(event_id):
         
         want_list = []
         for entry in entries:
+            meta = _decode_pick_meta(entry.reason)
             want_list.append({
                 'id': entry.id,
                 'team_id': entry.team_id,
                 'team_number': entry.team.team_number,
                 'team_name': entry.team.team_name or f'Team {entry.team.team_number}',
                 'rank': entry.rank,
-                'reason': entry.reason or ''
+                'reason': meta['note']
             })
         
         return jsonify({'success': True, 'want_list': want_list})

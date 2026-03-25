@@ -1709,8 +1709,12 @@
                 const __savedScrollY = window.scrollY || 0;
                 const __savedActiveId = (document.activeElement && document.activeElement.id) ? document.activeElement.id : null;
 
-                // Check if we're offline and should use cached data
-                if (!navigator.onLine && window.ScoutingOfflineManager) {
+                // Only force offline cache mode when server reachability is explicitly known to be false.
+                // navigator.onLine can be false when internet is unavailable even if the local scout server is reachable.
+                const serverReachabilityKnown = typeof window.scoutingServerOnline === 'boolean';
+                const forceOfflineMode = (!navigator.onLine && serverReachabilityKnown && window.scoutingServerOnline === false);
+
+                if (forceOfflineMode && window.ScoutingOfflineManager) {
                     console.log('[Offline Mode] Loading form from cache...');
                     const offlineData = window.ScoutingOfflineManager.generateFormOffline(teamId, matchId);
                     
@@ -1724,7 +1728,7 @@
                                 <i class="fas fa-wifi-slash me-2"></i>
                                 <strong>Offline Mode</strong><br>
                                 Unable to load form - no cached data available.
-                                Please connect to the internet to load the form for the first time.
+                                Please reconnect to the scout server to load the form for the first time.
                             </div>
                         `;
                         return;

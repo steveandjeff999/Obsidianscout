@@ -1823,6 +1823,12 @@ def save_qualitative_scouting():
         data = request.get_json()
         individual_team = data.get('individual_team', False)
 
+        def _strip_legacy_ranking(entry):
+            """Remove deprecated 1-3 ranking from newly saved qualitative entries."""
+            if isinstance(entry, dict):
+                entry.pop('ranking', None)
+            return entry
+
         # determine whether predictions are allowed for this team
         ts = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
         predictions_allowed = bool(ts and getattr(ts, 'predictions_enabled', True))
@@ -1844,12 +1850,14 @@ def save_qualitative_scouting():
             if not team_number or not match_id:
                 return jsonify({'success': False, 'message': 'Missing team number or match'}), 400
 
-            # Server-side validation: ranking required for individual entries
+            # Server-side validation: overall rating (1-5) required for individual entries
             individual_block = team_data.get('individual', {})
             team_key = f'team_{team_number}'
             indiv_entry = individual_block.get(team_key)
-            if not indiv_entry or indiv_entry.get('ranking') is None:
-                return jsonify({'success': False, 'message': 'Ranking required for individual team entries'}), 400
+            if not indiv_entry or indiv_entry.get('overall_rating') is None:
+                return jsonify({'success': False, 'message': 'Overall rating required for individual team entries'}), 400
+
+            _strip_legacy_ranking(indiv_entry)
 
             # If Auto/Endgame fields are visible in the UI, require them here
             if show_auto and not (indiv_entry and indiv_entry.get('auto_climb_result')):
@@ -1905,19 +1913,21 @@ def save_qualitative_scouting():
             if not predictions_allowed and 'predicted_winner' in match_summary:
                 match_summary.pop('predicted_winner', None)
 
-            # Server-side validation: require rankings for all teams in the selected alliance(s)
+            # Server-side validation: require overall ratings for all teams in the selected alliance(s)
             if alliance_scouted in ('red', 'both'):
                 for k, v in (team_data.get('red') or {}).items():
-                    if v.get('ranking') is None:
-                        return jsonify({'success': False, 'message': 'All teams in the selected alliance must be ranked'}), 400
+                    if v.get('overall_rating') is None:
+                        return jsonify({'success': False, 'message': 'All teams in the selected alliance must have an overall rating'}), 400
+                    _strip_legacy_ranking(v)
                     if show_auto and not v.get('auto_climb_result'):
                         return jsonify({'success': False, 'message': 'Auto climb required for all teams in the selected alliance(s) when Auto Climb is visible'}), 400
                     if show_endgame and not v.get('endgame_climb_result'):
                         return jsonify({'success': False, 'message': 'Endgame climb result required for all teams in the selected alliance(s) when Endgame Climb is visible'}), 400
             if alliance_scouted in ('blue', 'both'):
                 for k, v in (team_data.get('blue') or {}).items():
-                    if v.get('ranking') is None:
-                        return jsonify({'success': False, 'message': 'All teams in the selected alliance must be ranked'}), 400
+                    if v.get('overall_rating') is None:
+                        return jsonify({'success': False, 'message': 'All teams in the selected alliance must have an overall rating'}), 400
+                    _strip_legacy_ranking(v)
                     if show_auto and not v.get('auto_climb_result'):
                         return jsonify({'success': False, 'message': 'Auto climb required for all teams in the selected alliance(s) when Auto Climb is visible'}), 400
                     if show_endgame and not v.get('endgame_climb_result'):

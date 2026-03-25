@@ -4,8 +4,8 @@
 
 {% import '_help_icon.html' as help %}
 
-{% block heading %}Manage Team Lists {{ help.help_icon('Maintain Avoid, Do-not-pick, and Declined lists that affect alliance recommendations. Changes propagate in real-time and can be restored.', 'Manage lists') }}{% endblock %}
-{% block subheading %}Configure avoid and do not pick lists for {{ event.name }}{% endblock %}
+{% block heading %}Manage Team Lists {{ help.help_icon('Maintain Team Tags plus Custom Pick, Avoid, Do-not-pick, and Declined lists that affect alliance recommendations. Changes propagate in real-time and can be restored.', 'Manage lists') }}{% endblock %}
+{% block subheading %}Configure team tags, custom pick order, and other team lists for {{ event.name }}{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
@@ -180,21 +180,21 @@
         </div>
     </div>
 
-    <!-- Want List -->
+    <!-- Custom Pick List (Want List backend) -->
     <div class="col-lg-6 mb-4">
         <div class="card border-success">
             <div class="card-header bg-success text-white">
                 <h5 class="mb-0">
-                    <i class="fas fa-star me-2"></i>Want List {{ help.help_icon('Teams here get priority boosts in recommendations based on their rank. Rank 1 gets the biggest boost. Drag to reorder.', 'Want list') }}
+                    <i class="fas fa-star me-2"></i>Custom Pick List {{ help.help_icon('Create your own ranked pick order with short notes per team. Drag to reorder ranks.', 'Custom pick list') }}
                 </h5>
-                <small>Teams will be prioritized in recommendations - higher rank = bigger boost</small>
+                <small>Rank teams in your preferred pick order and add short notes</small>
             </div>
             <div class="card-body">
-                <!-- Add to Want List -->
+                <!-- Add to Custom Pick List -->
                 <div class="mb-3">
                     <div class="input-group">
                         <select class="form-select" id="wantListTeamSelect">
-                            <option value="">Select team to add to want list...</option>
+                            <option value="">Select team to add to custom pick list...</option>
                             {% for team in all_teams %}
                             <option value="{{ team.team_number }}">{{ team.team_number }} - {{ team.team_name or 'Unknown' }}</option>
                             {% endfor %}
@@ -204,14 +204,14 @@
                         </button>
                     </div>
                     <div class="mt-2">
-                        <input type="text" class="form-control" id="wantListReason" placeholder="Reason (optional)">
+                        <input type="text" class="form-control" id="wantListReason" placeholder="Short note (optional)" maxlength="120">
                     </div>
                 </div>
                 
-                <!-- Want List Display with Drag-to-Reorder -->
+                <!-- Custom Pick List Display with Drag-to-Reorder -->
                 <div id="wantList" class="sortable-list">
-                    {% if want_list_entries %}
-                    {% for entry in want_list_entries %}
+                    {% if want_list_display_entries %}
+                    {% for entry in want_list_display_entries %}
                     <div class="d-flex justify-content-between align-items-center border-bottom py-2 sortable-item" data-team-id="{{ entry.team_id }}" draggable="true">
                         <div class="d-flex align-items-center flex-grow-1">
                             <span class="badge bg-success me-2" style="min-width: 30px;">{{ entry.rank }}</span>
@@ -219,8 +219,8 @@
                             <div>
                                 <strong>Team {{ entry.team.team_number }}</strong>
                                 {% if entry.team.team_name %} - {{ entry.team.team_name }}{% endif %}
-                                {% if entry.reason %}
-                                <br><small class="text-muted">{{ entry.reason }}</small>
+                                {% if entry.note %}
+                                <br><small class="text-muted">{{ entry.note }}</small>
                                 {% endif %}
                             </div>
                         </div>
@@ -230,7 +230,76 @@
                     </div>
                     {% endfor %}
                     {% else %}
-                    <div class="text-muted text-center py-3" id="wantListEmpty">No teams in want list</div>
+                    <div class="text-muted text-center py-3" id="wantListEmpty">No teams in custom pick list</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Team Tags List -->
+    <div class="col-lg-6 mb-4">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-tags me-2"></i>Team Tags {{ help.help_icon('Add offense/defense tags in a separate list. Tag priority can be used with both point sort and custom rank sort.', 'Team tags') }}
+                </h5>
+                <small>Separate list for offense/defense tags used by recommendation sorting</small>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="input-group">
+                        <select class="form-select" id="teamTagTeamSelect">
+                            <option value="">Select team to tag...</option>
+                            {% for team in all_teams %}
+                            <option value="{{ team.team_number }}">{{ team.team_number }} - {{ team.team_name or 'Unknown' }}</option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-primary" onclick="addTeamTags()">
+                            <i class="fas fa-plus me-1"></i>Save Tags
+                        </button>
+                    </div>
+                    <div class="mt-2 d-flex gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="teamTagOffense">
+                            <label class="form-check-label" for="teamTagOffense">Offense</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="teamTagDefense">
+                            <label class="form-check-label" for="teamTagDefense">Defense</label>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <input type="text" class="form-control" id="teamTagNote" placeholder="Short note (optional)" maxlength="120">
+                    </div>
+                </div>
+
+                <div id="teamTagsList">
+                    {% if team_tag_display_entries %}
+                    {% for entry in team_tag_display_entries %}
+                    <div class="d-flex justify-content-between align-items-center border-bottom py-2" data-team-id="{{ entry.team_id }}">
+                        <div>
+                            <strong>Team {{ entry.team.team_number }}</strong>
+                            {% if entry.team.team_name %} - {{ entry.team.team_name }}{% endif %}
+                            <div class="mt-1">
+                                {% if entry.offense_tag %}
+                                <span class="badge bg-primary me-1">Offense</span>
+                                {% endif %}
+                                {% if entry.defense_tag %}
+                                <span class="badge bg-secondary me-1">Defense</span>
+                                {% endif %}
+                            </div>
+                            {% if entry.note %}
+                            <br><small class="text-muted">{{ entry.note }}</small>
+                            {% endif %}
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" onclick="removeTeamTags({{ entry.team_id }})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-muted text-center py-3">No teams tagged yet</div>
                     {% endif %}
                 </div>
             </div>
@@ -243,7 +312,8 @@
         <div class="alert alert-info">
             <h6><i class="fas fa-info-circle me-2"></i>How these lists work: {{ help.help_icon('Explanation of Avoid, Do-not-pick, Declined, and Want lists and how they affect recommendations.', 'How lists work') }}</h6>
             <ul class="mb-0">
-                <li><strong>Want List:</strong> Teams receive ranking boosts based on their position (Rank 1 = +50 pts, Rank 2 = +40 pts, etc.). Drag to reorder.</li>
+                <li><strong>Team Tags:</strong> Offense/Defense tags are managed in a separate list and can be prioritized in both points and custom-rank sorting.</li>
+                <li><strong>Custom Pick List:</strong> Set your own ranked pick order and optional short notes. Drag to reorder.</li>
                 <li><strong>Avoid List:</strong> Teams will still appear in recommendations but with a 30% reduction in their ranking score</li>
                 <li><strong>Do Not Pick List:</strong> Teams will only be recommended if there are no other available teams</li>
                 <li><strong>Declined List:</strong> Teams are hidden from recommendations but can be manually assigned</li>
@@ -527,6 +597,81 @@ function addToWantList() {
             document.getElementById('wantListTeamSelect').value = '';
             document.getElementById('wantListReason').value = '';
             // UI will update via socket or reload
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Network error occurred');
+    });
+}
+
+function addTeamTags() {
+    const teamNumber = document.getElementById('teamTagTeamSelect').value;
+    const offenseTag = document.getElementById('teamTagOffense').checked;
+    const defenseTag = document.getElementById('teamTagDefense').checked;
+    const note = document.getElementById('teamTagNote').value;
+
+    if (!teamNumber) {
+        alert('Please select a team');
+        return;
+    }
+    if (!offenseTag && !defenseTag) {
+        alert('Select at least one tag (Offense or Defense)');
+        return;
+    }
+
+    fetch('/alliances/api/team_tags/add', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            team_number: teamNumber,
+            event_id: manageEventId,
+            offense_tag: offenseTag,
+            defense_tag: defenseTag,
+            note: note
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('teamTagTeamSelect').value = '';
+            document.getElementById('teamTagOffense').checked = false;
+            document.getElementById('teamTagDefense').checked = false;
+            document.getElementById('teamTagNote').value = '';
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Network error occurred');
+    });
+}
+
+function removeTeamTags(teamId) {
+    if (!confirm('Remove tags for this team?')) {
+        return;
+    }
+
+    fetch('/alliances/api/team_tags/remove', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            team_id: teamId,
+            event_id: manageEventId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
             location.reload();
         } else {
             alert('Error: ' + data.message);

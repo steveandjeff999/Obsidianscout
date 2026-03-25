@@ -13,18 +13,19 @@
     <div id="current-event-id-holder" data-event-id="{{ current_event.id }}" class="d-none"></div>
     <div class="col-md-8">
         <div class="card">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="fas fa-handshake me-2"></i>Alliance Selection - {{ current_event.name }}
-                </h5>
-                <div class="d-flex align-items-center">
-                    <!-- Real-time connection indicator -->
-                    <span id="socketStatus" class="badge bg-secondary me-2" style="font-size: 0.7rem;" title="Socket.IO connection status">
-                        <i class="fas fa-circle"></i> Connecting...
-                    </span>
-                </div>
-                <div class="btn-group" role="group">
-                    <div class="dropdown d-inline-block me-2">
+            <div class="card-header bg-primary text-white alliance-toolbar-header">
+                <div class="d-flex flex-column flex-xl-row w-100 gap-2 align-items-xl-center">
+                    <h5 class="mb-0 me-xl-2">
+                        <i class="fas fa-handshake me-2"></i>Alliance Selection - {{ current_event.name }}
+                    </h5>
+                    <div class="d-flex align-items-center me-xl-2">
+                        <!-- Real-time connection indicator -->
+                        <span id="socketStatus" class="badge bg-secondary" style="font-size: 0.7rem;" title="Socket.IO connection status">
+                            <i class="fas fa-circle"></i> Connecting...
+                        </span>
+                    </div>
+                    <div class="alliance-toolbar-controls d-flex flex-wrap align-items-center gap-2 ms-xl-auto">
+                    <div class="dropdown d-inline-block">
                         <button class="btn btn-light btn-sm dropdown-toggle" type="button" id="eventDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-calendar-alt me-1"></i> Select Event
                         </button>
@@ -41,14 +42,25 @@
                         <i class="fas fa-sync me-1"></i> Refresh
                     </button>
                     <!-- Trend toggle: default ON -->
-                    <div class="form-check form-switch align-self-center ms-2">
+                    <div class="form-check form-switch align-self-center mb-0">
                         <input class="form-check-input" type="checkbox" id="trend-toggle" checked>
                         <label class="form-check-label small text-muted" for="trend-toggle">Use recent trends {{ help.help_icon('When enabled, recent match trends influence team rankings for recommendations. Turn off for static ranking based only on historical averages.', 'Use recent trends') }}</label>
+                    </div>
+                    <div class="form-check form-switch align-self-center mb-0">
+                        <input class="form-check-input" type="checkbox" id="custom-sort-toggle">
+                        <label class="form-check-label small text-muted" for="custom-sort-toggle">Sort by custom pick list {{ help.help_icon('When enabled, teams are ordered by your Custom Pick List rank first (from Manage Lists) instead of points.', 'Sort by custom pick list') }}</label>
+                    </div>
+                    <div class="align-self-center">
+                        <select class="form-select form-select-sm" id="tag-sort-mode" title="Tag sort priority">
+                            <option value="none" selected>No tag priority</option>
+                            <option value="offense">Offense first</option>
+                            <option value="defense">Defense first</option>
+                        </select>
                     </div>
                     {% if not (current_event.is_alliance|default(false)) %}
                     <a href="{{ url_for('alliances.manage_lists', event_id=current_event.id) }}" 
                        class="btn btn-info btn-sm">
-                        <i class="fas fa-list me-1"></i> Manage Lists {{ help.help_icon('Manage decline, avoid and do-not-pick lists which influence recommendations.', 'Manage lists') }}
+                        <i class="fas fa-list me-1"></i> Manage Lists {{ help.help_icon('Manage your custom pick list, declined, avoid and do-not-pick lists which influence recommendations.', 'Manage lists') }}
                     </a>
                     <a href="{{ url_for('alliances.reset_alliances', event_id=current_event.id) }}" 
                        class="btn btn-warning btn-sm" 
@@ -56,6 +68,7 @@
                         <i class="fas fa-undo me-1"></i> Reset All {{ help.help_icon('Clear all current alliance selections for the event. This is reversible only if you have saved or exported previous selections.', 'Reset all') }}
                     </a>
                     {% endif %}
+                    </div>
                 </div>
             </div>
             <div class="card-body">
@@ -215,7 +228,7 @@
                 </h5>
             </div>
             <div class="card-body">
-                <p class="text-muted mb-3">Teams ranked by average total points scored</p>
+                <p class="text-muted mb-3" id="recommendation-sort-description">Teams ranked by average total points scored</p>
                 <div id="team-recommendations">
                     <div class="text-center py-4">
                         <div class="spinner-border text-primary" role="status">
@@ -554,6 +567,109 @@ function setupEventListeners() {
             loadRecommendations();
         });
     }
+
+    const customSortToggle = document.getElementById('custom-sort-toggle');
+    if (customSortToggle) {
+        customSortToggle.addEventListener('change', function() {
+            updateRecommendationSortDescription();
+            displayRecommendations();
+            const modalEl = document.getElementById('teamSelectionModal');
+            if (modalEl && modalEl.classList.contains('show')) {
+                populateTeamSelectionList();
+            }
+        });
+    }
+
+    const tagSortMode = document.getElementById('tag-sort-mode');
+    if (tagSortMode) {
+        tagSortMode.addEventListener('change', function() {
+            updateRecommendationSortDescription();
+            displayRecommendations();
+            const modalEl = document.getElementById('teamSelectionModal');
+            if (modalEl && modalEl.classList.contains('show')) {
+                populateTeamSelectionList();
+            }
+        });
+    }
+}
+
+function getCustomSortEnabled() {
+    const toggle = document.getElementById('custom-sort-toggle');
+    return !!(toggle && toggle.checked);
+}
+
+function updateRecommendationSortDescription() {
+    const description = document.getElementById('recommendation-sort-description');
+    if (!description) return;
+
+    const tagModeEl = document.getElementById('tag-sort-mode');
+    const tagMode = tagModeEl ? tagModeEl.value : 'none';
+    const tagText = tagMode === 'offense' ? ' (Offense first)' : (tagMode === 'defense' ? ' (Defense first)' : '');
+
+    if (getCustomSortEnabled()) {
+        description.textContent = tagMode === 'none'
+            ? 'Teams sorted by your custom pick list rank first, then unranked teams'
+            : `Teams sorted by tag priority first${tagText}, then custom pick list rank`;
+    } else {
+        description.textContent = tagMode === 'none'
+            ? 'Teams ranked by average total points scored'
+            : `Teams ranked by average total points scored${tagText}`;
+    }
+}
+
+function sortTeamsByDisplayMode(teams) {
+    if (!Array.isArray(teams)) return [];
+
+    const tagModeEl = document.getElementById('tag-sort-mode');
+    const tagMode = tagModeEl ? tagModeEl.value : 'none';
+    const customSort = getCustomSortEnabled();
+
+    function getTagPriority(team) {
+        if (tagMode === 'offense') {
+            return team.offense_tag ? 0 : 1;
+        }
+        if (tagMode === 'defense') {
+            return team.defense_tag ? 0 : 1;
+        }
+        return 1;
+    }
+
+    if (!customSort) {
+        if (tagMode === 'none') {
+            return teams.slice();
+        }
+        return teams
+            .map((team, idx) => ({ team, idx }))
+            .sort((a, b) => {
+                const tagA = getTagPriority(a.team);
+                const tagB = getTagPriority(b.team);
+                if (tagA !== tagB) return tagA - tagB;
+                return a.idx - b.idx;
+            })
+            .map(item => item.team);
+    }
+
+    return teams.slice().sort((a, b) => {
+        // In custom-rank mode with tag priority selected, tag grouping applies globally first
+        if (tagMode !== 'none') {
+            const tagA = getTagPriority(a);
+            const tagB = getTagPriority(b);
+            if (tagA !== tagB) return tagA - tagB;
+        }
+
+        // Within a tag group, ranked teams first and ordered by rank
+        const aRanked = !!a.is_want_list;
+        const bRanked = !!b.is_want_list;
+        if (aRanked !== bRanked) return aRanked ? -1 : 1;
+
+        if (aRanked && bRanked) {
+            const rankA = Number(a.want_list_rank) || 9999;
+            const rankB = Number(b.want_list_rank) || 9999;
+            if (rankA !== rankB) return rankA - rankB;
+        }
+
+        return (Number(a.team_number) || 0) - (Number(b.team_number) || 0);
+    });
 }
 
 function loadRecommendations() {
@@ -565,6 +681,7 @@ function loadRecommendations() {
             teamRecommendations = data.recommendations || [];
             // Keep a separate full copy for the team selection modal so we can show declined teams there
             allTeamsForSelection = Array.isArray(data.recommendations) ? data.recommendations.slice() : [];
+            updateRecommendationSortDescription();
             displayRecommendations();
             updateAllianceStrengths();
         })
@@ -584,14 +701,19 @@ function displayRecommendations() {
     }
     
     // Separate teams into those with data and those without, excluding declined teams from recommendations
-    const teamsWithData = teamRecommendations.filter(team => !team.has_no_data && !team.is_declined);
-    const teamsWithoutData = teamRecommendations.filter(team => team.has_no_data && !team.is_declined);
+    const sortedVisibleTeams = sortTeamsByDisplayMode(teamRecommendations.filter(team => !team.is_declined));
+    const teamsWithData = sortedVisibleTeams.filter(team => !team.has_no_data);
+    const teamsWithoutData = sortedVisibleTeams.filter(team => team.has_no_data);
     
     // Build HTML for teams with data (ranked)
+    const useCustomSort = getCustomSortEnabled();
     let html = teamsWithData.map((team, index) => {
         let badgeClass = 'text-primary';
         let warningIcon = '';
-        let rankText = `#${index + 1}`;
+        let rankText = useCustomSort
+            ? (team.is_want_list ? `P#${team.want_list_rank}` : '—')
+            : `#${index + 1}`;
+        const tagBadges = `${team.offense_tag ? '<span class="badge bg-primary me-1">Offense</span>' : ''}${team.defense_tag ? '<span class="badge bg-secondary me-1">Defense</span>' : ''}`;
         
         if (team.is_do_not_pick) {
             badgeClass = 'text-danger';
@@ -620,6 +742,8 @@ function displayRecommendations() {
                     <div>
                         <div class="fw-bold ${badgeClass}">${warningIcon}${rankText} - Team ${team.team_number}</div>
                         <div class="small text-muted">${team.team_name}</div>
+                        ${tagBadges ? `<div class="mt-1">${tagBadges}</div>` : ''}
+                        ${team.pick_note ? `<div class="small text-muted mt-1">${team.pick_note}</div>` : ''}
                     </div>
                     <div class="text-end">                    <div class="fw-bold">${trendHtml}${team.total_points} pts</div>
                     ${predictedHtml}
@@ -651,6 +775,7 @@ function displayRecommendations() {
     html += teamsWithoutData.map(team => {
         let badgeClass = 'text-secondary';
         let warningIcon = '';
+        const tagBadges = `${team.offense_tag ? '<span class="badge bg-primary me-1">Offense</span>' : ''}${team.defense_tag ? '<span class="badge bg-secondary me-1">Defense</span>' : ''}`;
         
         if (team.is_do_not_pick) {
             badgeClass = 'text-danger';
@@ -678,6 +803,8 @@ function displayRecommendations() {
                     <div>
                         <div class="fw-bold ${badgeClass}">${warningIcon}${trendHtml}Team ${team.team_number}</div>
                         <div class="small text-muted">${team.team_name}</div>
+                        ${tagBadges ? `<div class="mt-1">${tagBadges}</div>` : ''}
+                        ${team.pick_note ? `<div class="small text-muted mt-1">${team.pick_note}</div>` : ''}
                     </div>
                     <div class="text-end">
                         <div class="badge bg-secondary">No Data</div>
@@ -798,9 +925,11 @@ function populateTeamSelectionList() {
         return;
     }
     
-    const html = allTeamsForSelection.map(team => {
+    const sortedForSelection = sortTeamsByDisplayMode(allTeamsForSelection);
+    const html = sortedForSelection.map(team => {
         let warningIcon = '';
         let badgeClass = 'bg-primary';
+        const tagBadges = `${team.offense_tag ? '<span class="badge bg-primary me-1">Offense</span>' : ''}${team.defense_tag ? '<span class="badge bg-secondary me-1">Defense</span>' : ''}`;
         
         if (team.is_do_not_pick) {
             warningIcon = '<i class="fas fa-ban text-danger me-2"></i>';
@@ -816,6 +945,8 @@ function populateTeamSelectionList() {
                 <div>
                     <div class="fw-bold">${warningIcon}Team ${team.team_number}</div>
                     <div class="small text-muted">${team.team_name}</div>
+                    ${tagBadges ? `<div class="mt-1">${tagBadges}</div>` : ''}
+                    ${team.pick_note ? `<div class="small text-muted mt-1">${team.pick_note}</div>` : ''}
                 </div>
                 <div class="text-end">
                     <div class="fw-bold text-primary">${team.total_points} pts</div>
@@ -1038,6 +1169,38 @@ function declineTeam(teamNumber) {
 
 .text-bronze {
     color: #cd7f32;
+}
+
+.alliance-toolbar-header {
+    padding-top: 0.85rem;
+    padding-bottom: 0.85rem;
+}
+
+.alliance-toolbar-controls .btn,
+.alliance-toolbar-controls .dropdown-toggle {
+    white-space: nowrap;
+}
+
+.alliance-toolbar-controls .form-check {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.alliance-toolbar-controls .form-check-label {
+    margin-bottom: 0;
+    line-height: 1.2;
+}
+
+#tag-sort-mode {
+    min-width: 150px;
+}
+
+@media (max-width: 1199.98px) {
+    .alliance-toolbar-controls {
+        width: 100%;
+    }
 }
 
 .alliance-card {
