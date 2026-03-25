@@ -5,394 +5,409 @@
 {% block heading %}Qualitative Scouting Details{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="row">
+<div class="container-fluid mt-3">
+    <!-- Header Card -->
+    <div class="row mb-4">
         <div class="col-md-12">
-            <div class="card mb-4">
-                <div class="card-header {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}bg-success{% elif entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %} text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-feather me-2"></i>
-                        {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}
-                        Individual Team Scouting - Team {{ entry.alliance_scouted.replace('team_', '') }}
-                        ({{ entry.match.event.code if entry.match and entry.match.event else '' }} - {{ entry.match.match_type }} {{ entry.match.match_number }})
-                        {% else %}
-                        {{ entry.match.event.code if entry.match and entry.match.event else '' }} - 
-                        {{ entry.match.match_type }} {{ entry.match.match_number }}
-                        {% endif %}
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <dl class="row">
-                                <dt class="col-sm-4">Match:</dt>
-                                <dd class="col-sm-8">
-                                    <span class="badge bg-secondary">{{ entry.match.event.code if entry.match and entry.match.event else '' }}</span>
-                                    {{ entry.match.match_type }} {{ entry.match.match_number }}
-                                </dd>
-                                
-                                {% if entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}
-                                <dt class="col-sm-4">Team Number:</dt>
-                                <dd class="col-sm-8">
-                                    <span class="badge bg-success">{{ entry.alliance_scouted.replace('team_', '') }}</span>
-                                </dd>
-                                <dt class="col-sm-4">Type:</dt>
-                                <dd class="col-sm-8"><span class="badge bg-success">Individual</span></dd>
+            <div class="card border-0 shadow-sm">
+                {% set is_individual = entry.alliance_scouted and entry.alliance_scouted.startswith('team_') %}
+                {% set alliance_color = 'success' if is_individual else ('danger' if entry.alliance_scouted == 'red' else 'primary' if entry.alliance_scouted == 'blue' else 'secondary') %}
+                
+                <div class="card-header bg-{{ alliance_color }} text-white">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <h5 class="mb-0">
+                                <i class="fas fa-feather me-2"></i>
+                                {% if is_individual %}
+                                    Individual Scout: Team {{ entry.alliance_scouted.replace('team_', '') }}
                                 {% else %}
-                                <dt class="col-sm-4">Alliance Scouted:</dt>
-                                <dd class="col-sm-8">
-                                    <span class="badge {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
-                                        {{ entry.alliance_scouted|title }}
-                                    </span>
-                                </dd>
+                                    {{ entry.alliance_scouted|title }} Alliance
                                 {% endif %}
-                            </dl>
+                            </h5>
                         </div>
+                        <div class="col-auto">
+                            <small>{{ entry.match.event.code if entry.match and entry.match.event else 'N/A' }} | {{ entry.match.match_type }} {{ entry.match.match_number }}</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Meta Info Section -->
+                <div class="card-body">
+                    <div class="row gx-4">
                         <div class="col-md-6">
-                            <dl class="row">
-                                <dt class="col-sm-4">Scout:</dt>
-                                <dd class="col-sm-8">{{ entry.scout_name }}</dd>
-                                
-                                <dt class="col-sm-4">Timestamp:</dt>
-                                <dd class="col-sm-8">{{ entry.timestamp.strftime('%Y-%m-%d %H:%M') if entry.timestamp else '' }}</dd>
-                            </dl>
+                            <div class="small text-muted">
+                                <div class="mb-2"><strong>Scout:</strong> {{ entry.scout_name }}</div>
+                                <div><strong>Recorded:</strong> {{ entry.timestamp.strftime('%Y-%m-%d %H:%M') if entry.timestamp else 'N/A' }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-md-end">
                         </div>
                     </div>
-
-                    {% if entry.data and entry.data.get('_match_summary') %}
-                    <div class="mb-3">
-                        <strong>Match summary:</strong>
-                        <div class="small text-muted mt-1">
-                            {% set ms = entry.data['_match_summary'] %}
-                            {% if ms.roles_performed %}<div><strong>Roles:</strong> {{ ms.roles_performed|join(', ') }}</div>{% endif %}
-                            {% if ms.can_score_while_moving %}<div><strong>Field:</strong> Scores while moving</div>{% endif %}
-                            {% if ms.driver_ability %}<div><strong>Driver ability:</strong> {{ ms.driver_ability }}/5</div>{% endif %}
-                            {% if ms.defense_effectiveness %}<div><strong>Defense effectiveness:</strong> {{ ms.defense_effectiveness }}/5</div>{% endif %}
-                            {% if ms.shot_accuracy is not none %}<div><strong>Shot accuracy:</strong> {{ ms.shot_accuracy }}/5</div>{% endif %}
-                            {% if ms.predicted_winner %}
-                                <div><strong>Predicted Winner:</strong> <span class="badge bg-{{ 'danger' if ms.predicted_winner == 'red' else 'primary' if ms.predicted_winner == 'blue' else 'secondary' }}">{{ ms.predicted_winner|upper }}</span></div>
-                            {% endif %}
-                            {% if ms.got_beached %}<div><strong>Notes:</strong> Got beached</div>{% endif %}
-                            {% if ms.feeder_type and ms.feeder_type|length > 0 %}<div><strong>Feeder type:</strong> {{ ms.feeder_type|join(', ') }}</div>{% endif %}
-                        </div>
-                    </div>
-                    {% endif %}
-
+                </div>
+            </div>
+        </div>
+    </div>
 
                     <!-- Red Alliance Data -->
                     {% if data.red and (entry.alliance_scouted == 'red' or entry.alliance_scouted == 'both') %}
-                    <div class="mb-4">
-                        <h5 class="text-danger mb-3">
-                            <i class="fas fa-square me-2"></i>Red Alliance
-                        </h5>
-                        <div class="row">
-                            {% for team_key, team_data in data.red.items() %}
-                            {% set team_num = team_key.replace('team_', '') %}
-                            <div class="col-md-4 mb-3">
-                                <div class="card border-danger">
-                                    <div class="card-header bg-danger text-white">
-                                        <h6 class="mb-0">Team {{ team_num }}</h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="mb-2">
-                                            <strong>Ranking <span class="text-muted small">(lower is better)</span>:</strong>
-                                            {% if team_data.get('ranking') is not none %}
-                                            <span class="badge {% if team_data.ranking == 1 %}bg-success{% elif team_data.ranking == 2 %}bg-primary{% else %}bg-warning{% endif %}">
-                                                {{ team_data.ranking }}
-                                            </span>
-                                            {% else %}
-                                            <span class="text-muted">Not ranked</span>
-                                            {% endif %}
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <h5 class="text-danger mb-3"><i class="fas fa-square me-2"></i>Red Alliance Teams</h5>
+                            <div class="row">
+                                {% for team_key, team_data in data.red.items() %}
+                                {% set team_num = team_key.replace('team_', '') %}
+                                <div class="col-lg-6 col-xl-4 mb-3">
+                                    <div class="card h-100 border-danger border-start border-3 shadow-sm">
+                                        <div class="card-header bg-light border-bottom">
+                                            <h6 class="mb-0 text-danger"><strong>Team {{ team_num }}</strong></h6>
                                         </div>
-                                        {% if team_data.get('driver_rating') or team_data.get('robot_rating') or team_data.get('overall_rating') %}
-                                        <div class="mb-2">
-                                            {% if team_data.get('driver_rating') %}
-                                            <strong>Driver:</strong> <span class="text-muted small">(higher is better)</span>
-                                            <span class="badge {% if team_data.driver_rating >= 4 %}bg-success{% elif team_data.driver_rating >= 3 %}bg-primary{% elif team_data.driver_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %} me-2">{{ team_data.driver_rating }}/5</span>
-                                            {% endif %}
-                                            {% if team_data.get('robot_rating') %}
-                                            <strong>Robot:</strong>
-                                            <span class="badge {% if team_data.robot_rating >= 4 %}bg-success{% elif team_data.robot_rating >= 3 %}bg-primary{% elif team_data.robot_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %} me-2">{{ team_data.robot_rating }}/5</span>
-                                            {% endif %}
-                                            {% if team_data.get('overall_rating') %}
-                                            <strong>Overall:</strong>
-                                            <span class="badge {% if team_data.overall_rating >= 4 %}bg-success{% elif team_data.overall_rating >= 3 %}bg-primary{% elif team_data.overall_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ team_data.overall_rating }}/5</span>
-                                            {% endif %}
-                                        </div>
-                                        {% endif %}
-                                        {% if team_data.get('cycling') or team_data.get('stealing') or team_data.get('scoring') or team_data.get('feeding') or team_data.get('defending') or team_data.get('did_not_contribute') %}
-                                        <div class="mb-2">
-                                            <strong>Roles:</strong>
-                                            <div class="mt-1">
-                                                {% if team_data.get('cycling') %}<span class="badge bg-primary me-1">Cycling</span>{% endif %}
-                                                {% if team_data.get('stealing') %}<span class="badge bg-warning text-dark me-1">Stealing</span>{% endif %}
-                                                {% if team_data.get('scoring') %}<span class="badge bg-success me-1">Scoring</span>{% endif %}
-                                                {% if team_data.get('feeding') %}<span class="badge bg-info me-1">Feeding</span>{% endif %}
-                                                {% if team_data.get('defending') %}<span class="badge bg-danger me-1">Defending</span>{% endif %}
-                                                {% if team_data.get('did_not_contribute') %}<span class="badge bg-secondary me-1">Did Not Contribute</span>{% endif %}
+                                        <div class="card-body">
+                                            <!-- Ratings Row -->
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                {% if team_data.get('overall_rating') %}
+                                                <div class="mb-2">
+                                                    <small class="text-muted">Overall Rating:</small>
+                                                    <span class="badge fs-6 {% if team_data.overall_rating >= 4 %}bg-success{% elif team_data.overall_rating >= 3 %}bg-primary{% elif team_data.overall_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ team_data.overall_rating }}/5</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if team_data.get('driver_rating') %}
+                                                <div>
+                                                    <small class="text-muted">Driver Rating:</small>
+                                                    <span class="badge fs-6 {% if team_data.driver_rating >= 4 %}bg-success{% elif team_data.driver_rating >= 3 %}bg-primary{% elif team_data.driver_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ team_data.driver_rating }}/5</span>
+                                                </div>
+                                                {% endif %}
                                             </div>
-                                        </div>
-                                        {% endif %}
-                                        {% if team_data.get('can_score_while_moving') %}
-                                        <div class="mb-2"><span class="badge bg-info me-1"><i class="fas fa-running me-1"></i>Scores while moving</span></div>
-                                        {% endif %}
-                                        {% if team_data.get('got_beached') %}
-                                        <div class="mb-2"><span class="badge bg-warning text-dark me-1"><i class="fas fa-exclamation-triangle me-1"></i>Got Beached</span></div>
-                                        {% endif %}
-                                        <div class="mb-2">
-                                            <strong>Endgame:</strong>
-                                            <p class="mb-0 mt-1">{{ team_data.endgame }}</p>
-                                        </div>
 
-                                        {% if team_data.get('endgame_climb_result') %}
-                                        <div class="mb-2">
-                                            <strong>Endgame climb:</strong>
-                                            <span class="badge {% if team_data.endgame_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %}">{{ team_data.endgame_climb_result|title }}</span>
-                                            {% if team_data.endgame_climb_level %}<small class="text-muted ms-2">Level: {{ team_data.endgame_climb_level }}</small>{% endif %}
-                                        </div>
-                                        {% endif %}
+                                            <!-- Roles -->
+                                            {% set active_roles = [] %}
+                                            {% if team_data.get('cycling') %}{% set _ = active_roles.append(('Cycling', 'bg-primary')) %}{% endif %}
+                                            {% if team_data.get('stealing') %}{% set _ = active_roles.append(('Stealing', 'bg-warning')) %}{% endif %}
+                                            {% if team_data.get('scoring') %}{% set _ = active_roles.append(('Scoring', 'bg-success')) %}{% endif %}
+                                            {% if team_data.get('feeding') %}{% set _ = active_roles.append(('Feeding', 'bg-info')) %}{% endif %}
+                                            {% if team_data.get('defending') %}{% set _ = active_roles.append(('Defending', 'bg-danger')) %}{% endif %}
+                                            {% if team_data.get('did_not_contribute') %}{% set _ = active_roles.append(('Did Not Contribute', 'bg-secondary')) %}{% endif %}
 
-                                        {% if team_data.get('auto_climb_result') %}
-                                        <div class="mb-2">
-                                            <strong>Auto climb:</strong>
-                                            <span class="badge {% if team_data.auto_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %}">{{ team_data.auto_climb_result|title }}</span>
-                                        </div>
-                                        {% endif %}
+                                            {% if active_roles %}
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                <small class="text-muted d-block mb-2">Roles:</small>
+                                                {% for role_name, role_color in active_roles %}
+                                                    <span class="badge {{ role_color }} text-dark me-1 mb-1">{{ role_name }}</span>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
 
-                                        {% if team_data.get('feeder_type') %}
-                                        <div class="mb-2">
-                                            <strong>Feeder:</strong>
-                                            {% for f in team_data.feeder_type %}
-                                                <span class="badge bg-info me-1">{{ f.replace('_',' ').title() }}</span>
-                                            {% endfor %}
-                                        </div>
-                                        {% endif %}
+                                            <!-- Performance Flags -->
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                {% if team_data.get('can_score_while_moving') %}
+                                                    <span class="badge bg-info text-dark me-1 mb-1"><i class="fas fa-running me-1"></i>Scores while moving</span>
+                                                {% endif %}
+                                                {% if team_data.get('got_beached') %}
+                                                    <span class="badge bg-warning text-dark me-1 mb-1"><i class="fas fa-exclamation-triangle me-1"></i>Got Beached</span>
+                                                {% endif %}
+                                            </div>
 
-                                        <div>
-                                            <strong>Notes:</strong>
-                                            <p class="mb-0 mt-1">
-                                                {{ team_data.notes if team_data.notes else 'No notes' }}
-                                            </p>
+                                            <!-- Climb Results -->
+                                            {% if team_data.get('auto_climb_result') or team_data.get('endgame_climb_result') %}
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                {% if team_data.get('auto_climb_result') %}
+                                                <div class="mb-1">
+                                                    <small class="text-muted">Auto Climb:</small>
+                                                    <span class="badge {% if team_data.auto_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %} text-white">{{ team_data.auto_climb_result|title }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if team_data.get('endgame_climb_result') %}
+                                                <div>
+                                                    <small class="text-muted">Endgame Climb:</small>
+                                                    <span class="badge {% if team_data.endgame_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %} text-white">{{ team_data.endgame_climb_result|title }}</span>
+                                                    {% if team_data.endgame_climb_level %}<small class="text-muted ms-2">(Level {{ team_data.endgame_climb_level }})</small>{% endif %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            {% endif %}
+
+                                            <!-- Feeder Type -->
+                                            {% if team_data.get('feeder_type') %}
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                <small class="text-muted d-block mb-2">Feeder Type:</small>
+                                                {% for f in team_data.feeder_type %}
+                                                    <span class="badge bg-info text-dark me-1 mb-1">{{ f.replace('_', ' ').title() }}</span>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+
+                                            <!-- Endgame Description -->
+                                            {% if team_data.get('endgame') %}
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                <small class="text-muted d-block mb-2">Endgame:</small>
+                                                <p class="small mb-0">{{ team_data.endgame }}</p>
+                                            </div>
+                                            {% endif %}
+
+                                            <!-- Notes -->
+                                            <div>
+                                                <small class="text-muted d-block mb-2">Notes:</small>
+                                                <p class="small text-secondary mb-0">
+                                                    {% if team_data.get('notes') %}
+                                                        {{ team_data.notes }}
+                                                    {% else %}
+                                                        <em>No notes provided</em>
+                                                    {% endif %}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+                                {% endfor %}
                             </div>
-                            {% endfor %}
                         </div>
                     </div>
                     {% endif %}
 
                     <!-- Blue Alliance Data -->
                     {% if data.blue and (entry.alliance_scouted == 'blue' or entry.alliance_scouted == 'both') %}
-                    <div class="mb-4">
-                        <h5 class="text-primary mb-3">
-                            <i class="fas fa-square me-2"></i>Blue Alliance
-                        </h5>
-                        <div class="row">
-                            {% for team_key, team_data in data.blue.items() %}
-                            {% set team_num = team_key.replace('team_', '') %}
-                            <div class="col-md-4 mb-3">
-                                <div class="card border-primary">
-                                    <div class="card-header bg-primary text-white">
-                                        <h6 class="mb-0">Team {{ team_num }}</h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="mb-2">
-                                            <strong>Ranking <span class="text-muted small">(lower is better)</span>:</strong>
-                                            {% if team_data.get('ranking') is not none %}
-                                            <span class="badge {% if team_data.ranking == 1 %}bg-success{% elif team_data.ranking == 2 %}bg-primary{% else %}bg-warning{% endif %}">
-                                                {{ team_data.ranking }}
-                                            </span>
-                                            {% else %}
-                                            <span class="text-muted">Not ranked</span>
-                                            {% endif %}
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <h5 class="text-primary mb-3"><i class="fas fa-square me-2"></i>Blue Alliance Teams</h5>
+                            <div class="row">
+                                {% for team_key, team_data in data.blue.items() %}
+                                {% set team_num = team_key.replace('team_', '') %}
+                                <div class="col-lg-6 col-xl-4 mb-3">
+                                    <div class="card h-100 border-primary border-start border-3 shadow-sm">
+                                        <div class="card-header bg-light border-bottom">
+                                            <h6 class="mb-0 text-primary"><strong>Team {{ team_num }}</strong></h6>
                                         </div>
-                                        {% if team_data.get('driver_rating') or team_data.get('robot_rating') or team_data.get('overall_rating') %}
-                                        <div class="mb-2">
-                                            {% if team_data.get('driver_rating') %}
-                                            <strong>Driver:</strong> <span class="text-muted small">(higher is better)</span>
-                                            <span class="badge {% if team_data.driver_rating >= 4 %}bg-success{% elif team_data.driver_rating >= 3 %}bg-primary{% elif team_data.driver_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %} me-2">{{ team_data.driver_rating }}/5</span>
-                                            {% endif %}
-                                            {% if team_data.get('robot_rating') %}
-                                            <strong>Robot:</strong>
-                                            <span class="badge {% if team_data.robot_rating >= 4 %}bg-success{% elif team_data.robot_rating >= 3 %}bg-primary{% elif team_data.robot_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %} me-2">{{ team_data.robot_rating }}/5</span>
-                                            {% endif %}
-                                            {% if team_data.get('overall_rating') %}
-                                            <strong>Overall:</strong>
-                                            <span class="badge {% if team_data.overall_rating >= 4 %}bg-success{% elif team_data.overall_rating >= 3 %}bg-primary{% elif team_data.overall_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ team_data.overall_rating }}/5</span>
-                                            {% endif %}
-                                        </div>
-                                        {% endif %}
-                                        {% if team_data.get('cycling') or team_data.get('stealing') or team_data.get('scoring') or team_data.get('feeding') or team_data.get('defending') or team_data.get('did_not_contribute') %}
-                                        <div class="mb-2">
-                                            <strong>Roles:</strong>
-                                            <div class="mt-1">
-                                                {% if team_data.get('cycling') %}<span class="badge bg-primary me-1">Cycling</span>{% endif %}
-                                                {% if team_data.get('stealing') %}<span class="badge bg-warning text-dark me-1">Stealing</span>{% endif %}
-                                                {% if team_data.get('scoring') %}<span class="badge bg-success me-1">Scoring</span>{% endif %}
-                                                {% if team_data.get('feeding') %}<span class="badge bg-info me-1">Feeding</span>{% endif %}
-                                                {% if team_data.get('defending') %}<span class="badge bg-danger me-1">Defending</span>{% endif %}
-                                                {% if team_data.get('did_not_contribute') %}<span class="badge bg-secondary me-1">Did Not Contribute</span>{% endif %}
+                                        <div class="card-body">
+                                            <!-- Ratings Row -->
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                {% if team_data.get('overall_rating') %}
+                                                <div class="mb-2">
+                                                    <small class="text-muted">Overall Rating:</small>
+                                                    <span class="badge fs-6 {% if team_data.overall_rating >= 4 %}bg-success{% elif team_data.overall_rating >= 3 %}bg-primary{% elif team_data.overall_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ team_data.overall_rating }}/5</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if team_data.get('driver_rating') %}
+                                                <div>
+                                                    <small class="text-muted">Driver Rating:</small>
+                                                    <span class="badge fs-6 {% if team_data.driver_rating >= 4 %}bg-success{% elif team_data.driver_rating >= 3 %}bg-primary{% elif team_data.driver_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ team_data.driver_rating }}/5</span>
+                                                </div>
+                                                {% endif %}
                                             </div>
-                                        </div>
-                                        {% endif %}
-                                        {% if team_data.get('can_score_while_moving') %}
-                                        <div class="mb-2"><span class="badge bg-info me-1"><i class="fas fa-running me-1"></i>Scores while moving</span></div>
-                                        {% endif %}
-                                        {% if team_data.get('got_beached') %}
-                                        <div class="mb-2"><span class="badge bg-warning text-dark me-1"><i class="fas fa-exclamation-triangle me-1"></i>Got Beached</span></div>
-                                        {% endif %}
 
-                                        {% if team_data.get('endgame_climb_result') %}
-                                        <div class="mb-2">
-                                            <strong>Endgame climb:</strong>
-                                            <span class="badge {% if team_data.endgame_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %}">{{ team_data.endgame_climb_result|title }}</span>
-                                            {% if team_data.endgame_climb_level %}<small class="text-muted ms-2">Level: {{ team_data.endgame_climb_level }}</small>{% endif %}
-                                        </div>
-                                        {% endif %}
+                                            <!-- Roles -->
+                                            {% set active_roles = [] %}
+                                            {% if team_data.get('cycling') %}{% set _ = active_roles.append(('Cycling', 'bg-primary')) %}{% endif %}
+                                            {% if team_data.get('stealing') %}{% set _ = active_roles.append(('Stealing', 'bg-warning')) %}{% endif %}
+                                            {% if team_data.get('scoring') %}{% set _ = active_roles.append(('Scoring', 'bg-success')) %}{% endif %}
+                                            {% if team_data.get('feeding') %}{% set _ = active_roles.append(('Feeding', 'bg-info')) %}{% endif %}
+                                            {% if team_data.get('defending') %}{% set _ = active_roles.append(('Defending', 'bg-danger')) %}{% endif %}
+                                            {% if team_data.get('did_not_contribute') %}{% set _ = active_roles.append(('Did Not Contribute', 'bg-secondary')) %}{% endif %}
 
-                                        {% if team_data.get('auto_climb_result') %}
-                                        <div class="mb-2">
-                                            <strong>Auto climb:</strong>
-                                            <span class="badge {% if team_data.auto_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %}">{{ team_data.auto_climb_result|title }}</span>
-                                        </div>
-                                        {% endif %}
+                                            {% if active_roles %}
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                <small class="text-muted d-block mb-2">Roles:</small>
+                                                {% for role_name, role_color in active_roles %}
+                                                    <span class="badge {{ role_color }} text-dark me-1 mb-1">{{ role_name }}</span>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
 
-                                        {% if team_data.get('feeder_type') %}
-                                        <div class="mb-2">
-                                            <strong>Feeder:</strong>
-                                            {% for f in team_data.feeder_type %}
-                                                <span class="badge bg-info me-1">{{ f.replace('_',' ').title() }}</span>
-                                            {% endfor %}
-                                        </div>
-                                        {% endif %}
+                                            <!-- Performance Flags -->
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                {% if team_data.get('can_score_while_moving') %}
+                                                    <span class="badge bg-info text-dark me-1 mb-1"><i class="fas fa-running me-1"></i>Scores while moving</span>
+                                                {% endif %}
+                                                {% if team_data.get('got_beached') %}
+                                                    <span class="badge bg-warning text-dark me-1 mb-1"><i class="fas fa-exclamation-triangle me-1"></i>Got Beached</span>
+                                                {% endif %}
+                                            </div>
 
-                                        <div>
-                                            <strong>Notes:</strong>
-                                            <p class="mb-0 mt-1">
-                                                {{ team_data.notes if team_data.notes else 'No notes' }}
-                                            </p>
+                                            <!-- Climb Results -->
+                                            {% if team_data.get('auto_climb_result') or team_data.get('endgame_climb_result') %}
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                {% if team_data.get('auto_climb_result') %}
+                                                <div class="mb-1">
+                                                    <small class="text-muted">Auto Climb:</small>
+                                                    <span class="badge {% if team_data.auto_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %} text-white">{{ team_data.auto_climb_result|title }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if team_data.get('endgame_climb_result') %}
+                                                <div>
+                                                    <small class="text-muted">Endgame Climb:</small>
+                                                    <span class="badge {% if team_data.endgame_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %} text-white">{{ team_data.endgame_climb_result|title }}</span>
+                                                    {% if team_data.endgame_climb_level %}<small class="text-muted ms-2">(Level {{ team_data.endgame_climb_level }})</small>{% endif %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            {% endif %}
+
+                                            <!-- Feeder Type -->
+                                            {% if team_data.get('feeder_type') %}
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                <small class="text-muted d-block mb-2">Feeder Type:</small>
+                                                {% for f in team_data.feeder_type %}
+                                                    <span class="badge bg-info text-dark me-1 mb-1">{{ f.replace('_', ' ').title() }}</span>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+
+                                            <!-- Endgame Description -->
+                                            {% if team_data.get('endgame') %}
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                <small class="text-muted d-block mb-2">Endgame:</small>
+                                                <p class="small mb-0">{{ team_data.endgame }}</p>
+                                            </div>
+                                            {% endif %}
+
+                                            <!-- Notes -->
+                                            <div>
+                                                <small class="text-muted d-block mb-2">Notes:</small>
+                                                <p class="small text-secondary mb-0">
+                                                    {% if team_data.get('notes') %}
+                                                        {{ team_data.notes }}
+                                                    {% else %}
+                                                        <em>No notes provided</em>
+                                                    {% endif %}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+                                {% endfor %}
                             </div>
-                            {% endfor %}
                         </div>
                     </div>
                     {% endif %}
 
                     <!-- Individual Team Data -->
                     {% if data.individual %}
-                    <div class="mb-4">
-                        <h5 class="text-success mb-3">
-                            <i class="fas fa-user me-2"></i>Individual Team Scouting
-                        </h5>
-                        <div class="row">
-                            {% for team_key, team_data in data.individual.items() %}
-                            {% set team_num = team_key.replace('team_', '') %}
-                            <div class="col-md-6 mb-3">
-                                <div class="card border-success">
-                                    <div class="card-header bg-success text-white">
-                                        <h6 class="mb-0">Team {{ team_num }}</h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="mb-2">
-                                            <strong>Ranking <span class="text-muted small">(lower is better)</span>:</strong>
-                                            {% if team_data.get('ranking') is not none %}
-                                            <span class="badge {% if team_data.ranking == 1 %}bg-success{% elif team_data.ranking == 2 %}bg-primary{% elif team_data.ranking == 3 %}bg-warning{% else %}bg-secondary{% endif %}">
-                                                {{ team_data.ranking }}
-                                                {% if team_data.ranking == 1 %}- Excellent
-                                                {% elif team_data.ranking == 2 %}- Good
-                                                {% elif team_data.ranking == 3 %}- Average
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <h5 class="text-success mb-3"><i class="fas fa-user me-2"></i>Individual Team Scouting</h5>
+                            <div class="row">
+                                {% for team_key, team_data in data.individual.items() %}
+                                {% set team_num = team_key.replace('team_', '') %}
+                                <div class="col-lg-6 col-xl-4 mb-3">
+                                    <div class="card h-100 border-success border-start border-3 shadow-sm">
+                                        <div class="card-header bg-light border-bottom">
+                                            <h6 class="mb-0 text-success"><strong>Team {{ team_num }}</strong></h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <!-- Ratings Row -->
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                {% if team_data.get('overall_rating') %}
+                                                <div class="mb-2">
+                                                    <small class="text-muted">Overall Rating:</small>
+                                                    <span class="badge fs-6 {% if team_data.overall_rating >= 4 %}bg-success{% elif team_data.overall_rating >= 3 %}bg-primary{% elif team_data.overall_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ team_data.overall_rating }}/5</span>
+                                                </div>
                                                 {% endif %}
-                                            </span>
-                                            {% else %}
-                                            <span class="text-muted">Not ranked</span>
-                                            {% endif %}
-                                        </div>
-                                        {% if team_data.get('driver_rating') or team_data.get('robot_rating') or team_data.get('overall_rating') %}
-                                        <div class="mb-2">
-                                            {% if team_data.get('driver_rating') %}
-                                            <strong>Driver:</strong> <span class="text-muted small">(higher is better)</span>
-                                            <span class="badge {% if team_data.driver_rating >= 4 %}bg-success{% elif team_data.driver_rating >= 3 %}bg-primary{% elif team_data.driver_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %} me-2">{{ team_data.driver_rating }}/5</span>
-                                            {% endif %}
-                                            {% if team_data.get('robot_rating') %}
-                                            <strong>Robot:</strong>
-                                            <span class="badge {% if team_data.robot_rating >= 4 %}bg-success{% elif team_data.robot_rating >= 3 %}bg-primary{% elif team_data.robot_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %} me-2">{{ team_data.robot_rating }}/5</span>
-                                            {% endif %}
-                                            {% if team_data.get('overall_rating') %}
-                                            <strong>Overall:</strong>
-                                            <span class="badge {% if team_data.overall_rating >= 4 %}bg-success{% elif team_data.overall_rating >= 3 %}bg-primary{% elif team_data.overall_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ team_data.overall_rating }}/5</span>
-                                            {% endif %}
-                                        </div>
-                                        {% endif %}
-                                        {% if team_data.get('cycling') or team_data.get('stealing') or team_data.get('scoring') or team_data.get('feeding') or team_data.get('defending') or team_data.get('did_not_contribute') %}
-                                        <div class="mb-2">
-                                            <strong>Roles:</strong>
-                                            <div class="mt-1">
-                                                {% if team_data.get('cycling') %}<span class="badge bg-primary me-1">Cycling</span>{% endif %}
-                                                {% if team_data.get('stealing') %}<span class="badge bg-warning text-dark me-1">Stealing</span>{% endif %}
-                                                {% if team_data.get('scoring') %}<span class="badge bg-success me-1">Scoring</span>{% endif %}
-                                                {% if team_data.get('feeding') %}<span class="badge bg-info me-1">Feeding</span>{% endif %}
-                                                {% if team_data.get('defending') %}<span class="badge bg-danger me-1">Defending</span>{% endif %}
-                                                {% if team_data.get('did_not_contribute') %}<span class="badge bg-secondary me-1">Did Not Contribute</span>{% endif %}
+                                                {% if team_data.get('driver_rating') %}
+                                                <div>
+                                                    <small class="text-muted">Driver Rating:</small>
+                                                    <span class="badge fs-6 {% if team_data.driver_rating >= 4 %}bg-success{% elif team_data.driver_rating >= 3 %}bg-primary{% elif team_data.driver_rating >= 2 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ team_data.driver_rating }}/5</span>
+                                                </div>
+                                                {% endif %}
                                             </div>
-                                        </div>
-                                        {% endif %}
-                                        {% if team_data.get('can_score_while_moving') %}
-                                        <div class="mb-2"><span class="badge bg-info me-1"><i class="fas fa-running me-1"></i>Scores while moving</span></div>
-                                        {% endif %}
-                                        {% if team_data.get('got_beached') %}
-                                        <div class="mb-2"><span class="badge bg-warning text-dark me-1"><i class="fas fa-exclamation-triangle me-1"></i>Got Beached</span></div>
-                                        {% endif %}
-                                        {% if team_data.get('endgame_climb_result') %}
-                                        <div class="mb-2">
-                                            <strong>Endgame climb:</strong>
-                                            <span class="badge {% if team_data.endgame_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %}">{{ team_data.endgame_climb_result|title }}</span>
-                                            {% if team_data.endgame_climb_level %}<small class="text-muted ms-2">Level: {{ team_data.endgame_climb_level }}</small>{% endif %}
-                                        </div>
-                                        {% endif %}
 
-                                        {% if team_data.get('auto_climb_result') %}
-                                        <div class="mb-2">
-                                            <strong>Auto climb:</strong>
-                                            <span class="badge {% if team_data.auto_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %}">{{ team_data.auto_climb_result|title }}</span>
-                                        </div>
-                                        {% endif %}
+                                            <!-- Roles -->
+                                            {% set active_roles = [] %}
+                                            {% if team_data.get('cycling') %}{% set _ = active_roles.append(('Cycling', 'bg-primary')) %}{% endif %}
+                                            {% if team_data.get('stealing') %}{% set _ = active_roles.append(('Stealing', 'bg-warning')) %}{% endif %}
+                                            {% if team_data.get('scoring') %}{% set _ = active_roles.append(('Scoring', 'bg-success')) %}{% endif %}
+                                            {% if team_data.get('feeding') %}{% set _ = active_roles.append(('Feeding', 'bg-info')) %}{% endif %}
+                                            {% if team_data.get('defending') %}{% set _ = active_roles.append(('Defending', 'bg-danger')) %}{% endif %}
+                                            {% if team_data.get('did_not_contribute') %}{% set _ = active_roles.append(('Did Not Contribute', 'bg-secondary')) %}{% endif %}
 
-                                        {% if team_data.get('feeder_type') %}
-                                        <div class="mb-2">
-                                            <strong>Feeder:</strong>
-                                            {% for f in team_data.feeder_type %}
-                                                <span class="badge bg-info me-1">{{ f.replace('_',' ').title() }}</span>
-                                            {% endfor %}
-                                        </div>
-                                        {% endif %}
+                                            {% if active_roles %}
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                <small class="text-muted d-block mb-2">Roles:</small>
+                                                {% for role_name, role_color in active_roles %}
+                                                    <span class="badge {{ role_color }} text-dark me-1 mb-1">{{ role_name }}</span>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
 
-                                        <div>
-                                            <strong>Notes:</strong>
-                                            <p class="mb-0 mt-1">
-                                                {{ team_data.notes if team_data.notes else 'No notes' }}
-                                            </p>
+                                            <!-- Performance Flags -->
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                {% if team_data.get('can_score_while_moving') %}
+                                                    <span class="badge bg-info text-dark me-1 mb-1"><i class="fas fa-running me-1"></i>Scores while moving</span>
+                                                {% endif %}
+                                                {% if team_data.get('got_beached') %}
+                                                    <span class="badge bg-warning text-dark me-1 mb-1"><i class="fas fa-exclamation-triangle me-1"></i>Got Beached</span>
+                                                {% endif %}
+                                            </div>
+
+                                            <!-- Climb Results -->
+                                            {% if team_data.get('auto_climb_result') or team_data.get('endgame_climb_result') %}
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                {% if team_data.get('auto_climb_result') %}
+                                                <div class="mb-1">
+                                                    <small class="text-muted">Auto Climb:</small>
+                                                    <span class="badge {% if team_data.auto_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %} text-white">{{ team_data.auto_climb_result|title }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if team_data.get('endgame_climb_result') %}
+                                                <div>
+                                                    <small class="text-muted">Endgame Climb:</small>
+                                                    <span class="badge {% if team_data.endgame_climb_result == 'success' %}bg-success{% else %}bg-danger{% endif %} text-white">{{ team_data.endgame_climb_result|title }}</span>
+                                                    {% if team_data.endgame_climb_level %}<small class="text-muted ms-2">(Level {{ team_data.endgame_climb_level }})</small>{% endif %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            {% endif %}
+
+                                            <!-- Feeder Type -->
+                                            {% if team_data.get('feeder_type') %}
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                <small class="text-muted d-block mb-2">Feeder Type:</small>
+                                                {% for f in team_data.feeder_type %}
+                                                    <span class="badge bg-info text-dark me-1 mb-1">{{ f.replace('_', ' ').title() }}</span>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+
+                                            <!-- Endgame Description -->
+                                            {% if team_data.get('endgame') %}
+                                            <div class="mb-3 pb-3 border-bottom">
+                                                <small class="text-muted d-block mb-2">Endgame:</small>
+                                                <p class="small mb-0">{{ team_data.endgame }}</p>
+                                            </div>
+                                            {% endif %}
+
+                                            <!-- Notes -->
+                                            <div>
+                                                <small class="text-muted d-block mb-2">Notes:</small>
+                                                <p class="small text-secondary mb-0">
+                                                    {% if team_data.get('notes') %}
+                                                        {{ team_data.notes }}
+                                                    {% else %}
+                                                        <em>No notes provided</em>
+                                                    {% endif %}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+                                {% endfor %}
                             </div>
-                            {% endfor %}
                         </div>
                     </div>
                     {% endif %}
 
-                    <div class="text-center mt-4">
-                        <a href="{{ url_for('scouting.qualitative_scouting') }}" class="btn btn-secondary">
-                            <i class="fas fa-arrow-left me-2"></i>Back to Qualitative Scouting
-                        </a>
-                        <a href="{{ url_for('scouting.qualitative_qr_code', entry_id=entry.id) }}" class="btn btn-success">
-                            <i class="fas fa-qrcode me-2"></i>Generate QR Code
-                        </a>
-                        <a href="{{ url_for('matches.view', match_id=entry.match_id) }}" class="btn btn-primary">
-                            <i class="fas fa-eye me-2"></i>View Match
-                        </a>
+                    <!-- Action Buttons -->
+                    <div class="row mt-5 mb-4">
+                        <div class="col-md-12">
+                            <div class="d-flex gap-3 justify-content-center flex-wrap">
+                                <a href="{{ url_for('scouting.qualitative_scouting') }}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-arrow-left me-2"></i>Back
+                                </a>
+                                <a href="{{ url_for('scouting.qualitative_qr_code', entry_id=entry.id) }}" class="btn btn-success">
+                                    <i class="fas fa-qrcode me-2"></i>QR Code
+                                </a>
+                                <a href="{{ url_for('matches.view', match_id=entry.match_id) }}" class="btn btn-primary">
+                                    <i class="fas fa-eye me-2"></i>View Match
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

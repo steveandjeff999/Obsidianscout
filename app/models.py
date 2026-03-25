@@ -1306,6 +1306,17 @@ class WantListEntry(TeamListEntry):
         'polymorphic_identity': 'want_list'
     }
 
+
+class TeamTagEntry(TeamListEntry):
+    """Per-team tag entries (e.g., offense/defense) scoped to event and scouting team.
+
+    Tag metadata is stored in `reason` as encoded JSON so this can reuse the shared
+    TeamListEntry table without additional schema changes.
+    """
+    __mapper_args__ = {
+        'polymorphic_identity': 'team_tag'
+    }
+
 class AllianceSelection(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     alliance_number = db.Column(db.Integer, nullable=False)  # 1-8 for 8 alliances

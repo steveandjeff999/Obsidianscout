@@ -331,7 +331,7 @@
     color: black !important;
 }
 
-/* Make driver/robot rating buttons clearly visible in dark mode when selected */
+/* Make rating buttons clearly visible in dark mode when selected */
 .dark-mode .ranking-buttons .btn-outline-secondary.active {
     background-color: #6c757d !important;
     border-color: #6c757d !important;
@@ -353,33 +353,9 @@
     box-shadow: 0 0 0 3px rgba(255,193,7,0.45) !important;
 }
 
-/* Ranking button active states (light + dark) */
-.ranking-btn.active {
-    font-weight: bold;
-    box-shadow: 0 0 0 3px rgba(255,255,255,0.35) !important;
-}
-.ranking-btn.btn-outline-success.active {
-    background-color: #198754 !important;
-    border-color: #198754 !important;
-    color: #fff !important;
-}
-.ranking-btn.btn-outline-primary.active {
-    background-color: #0d6efd !important;
-    border-color: #0d6efd !important;
-    color: #fff !important;
-}
-.ranking-btn.btn-outline-secondary.active {
-    background-color: #6c757d !important;
-    border-color: #6c757d !important;
-    color: #fff !important;
-}
-
 /* Extra contrast in dark mode */
 .dark-mode .overall-rating-btn.active {
     box-shadow: 0 0 0 3px rgba(255,193,7,0.7) !important;
-}
-.dark-mode .ranking-btn.active {
-    box-shadow: 0 0 0 3px rgba(255,255,255,0.6) !important;
 }
 </style>
 
@@ -538,10 +514,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const orBtn = card.querySelector('.overall-rating-btn.active');
                 if (orBtn) obj[`${prefix}_overall`] = orBtn.dataset.rating;
 
-                // ranking
-                const rankBtn = card.querySelector('.ranking-btn.active');
-                if (rankBtn) obj[`${prefix}_rank`] = rankBtn.dataset.ranking;
-
                 // any checkboxes with data-role, data-feeder, data-traversal
                 card.querySelectorAll('input[type="checkbox"]').forEach(cb => {
                     if (cb.dataset.role) {
@@ -563,8 +535,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const ac = card.querySelector('input.auto-result-radio:checked');
                 if (ac) obj[`${prefix}_autoclimb`] = ac.value;
 
-                // selects: driver, defense, shot, robot
-                ['driver-rating-sel','defense-eff-sel','shot-acc-sel','robot-rating-sel'].forEach(cls => {
+                // selects: driver, defense, shot
+                ['driver-rating-sel','defense-eff-sel','shot-acc-sel'].forEach(cls => {
                     const sel = card.querySelector(`.${cls}`);
                     if (sel && sel.value) obj[`${prefix}_${cls}`] = sel.value;
                 });
@@ -621,12 +593,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     const btn = card.querySelector(`.overall-rating-btn[data-rating="${val}"]`);
                     if (btn) { btn.classList.add('active'); restored = true; }
                 }
-                // rank
-                if (data[`${prefix}_rank`]) {
-                    const val = data[`${prefix}_rank`];
-                    const btn = card.querySelector(`.ranking-btn[data-ranking="${val}"]`);
-                    if (btn) { btn.classList.add('active'); restored = true; }
-                }
                 // roles/feeder/traversal
                 ['role','feeder','traversal'].forEach(type => {
                     for (const key in data) {
@@ -653,7 +619,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (r) { r.checked = true; restored = true; }
                 }
                 // select fields
-                ['driver-rating-sel','defense-eff-sel','shot-acc-sel','robot-rating-sel'].forEach(cls => {
+                ['driver-rating-sel','defense-eff-sel','shot-acc-sel'].forEach(cls => {
                     const sel = card.querySelector(`.${cls}`);
                     if (sel && data[`${prefix}_${cls}`]) { sel.value = data[`${prefix}_${cls}`]; restored = true; }
                 });
@@ -745,7 +711,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var DRIVER_OPTS  = [{v:1,l:'Poor'},{v:2,l:'Below avg'},{v:3,l:'Average'},{v:4,l:'Good'},{v:5,l:'Excellent'}];
     var DEFENSE_OPTS = [{v:1,l:'None'},{v:2,l:'Minor'},{v:3,l:'Moderate'},{v:4,l:'Effective'},{v:5,l:'Dominant'}];
-    var ROBOT_OPTS   = [{v:1,l:'Poor'},{v:2,l:'Below avg'},{v:3,l:'Average'},{v:4,l:'Good'},{v:5,l:'Excellent'}];
     var SHOT_OPTS    = [{v:0,l:'No shots'},{v:1,l:'<25%'},{v:2,l:'25\u201350%'},{v:3,l:'50\u201375%'},{v:4,l:'75\u201390%'},{v:5,l:'>90%'}];
 
     function buildTeamCardHTML(teamNum, alliance, isIndividual) {
@@ -800,8 +765,6 @@ document.addEventListener('DOMContentLoaded', function() {
             mkSelect('defense-eff-sel', teamNum, alliance, DEFENSE_OPTS, '\u2014 Defense \u2014') + '</div>' +
             '<div class="col-6"><label class="form-label mb-1" style="font-size:0.72rem;">Shot Accuracy</label>' +
             mkSelect('shot-acc-sel', teamNum, alliance, SHOT_OPTS, '\u2014 Accuracy \u2014') + '</div>' +
-            '<div class="col-6"><label class="form-label mb-1" style="font-size:0.72rem;">Robot Rating</label>' +
-            mkSelect('robot-rating-sel', teamNum, alliance, ROBOT_OPTS, '\u2014 Robot \u2014') + '</div>' +
             '</div>';
 
         // ── OVERALL RATING (required, prominent buttons) ───────────────
@@ -813,18 +776,6 @@ document.addEventListener('DOMContentLoaded', function() {
             '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn flex-fill" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="3">3</button>' +
             '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn flex-fill" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="4">4</button>' +
             '<button type="button" class="btn btn-sm btn-outline-warning overall-rating-btn flex-fill" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-rating="5">5</button>' +
-            '</div>' +
-            '</div>';
-
-        // ── RANKING + ENDGAME + AUTOCLIMB ─────────────────────────────
-        html += '<div class="row g-2 mb-2 align-items-end">' +
-            '<div class="col-auto">' +
-            '<label class="form-label mb-1" style="font-size:0.72rem;">Ranking (1=best)</label>' +
-            '<div class="d-flex gap-1">' +
-            '<button type="button" class="btn btn-sm btn-outline-success ranking-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-ranking="1">1st</button>' +
-            '<button type="button" class="btn btn-sm btn-outline-primary ranking-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-ranking="2">2nd</button>' +
-            '<button type="button" class="btn btn-sm btn-outline-secondary ranking-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-ranking="3">3rd</button>' +
-            '</div>' +
             '</div>' +
             '</div>';
 
@@ -870,16 +821,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function attachCardListeners(container) {
-        // Ranking buttons (1-3)
-        container.querySelectorAll('.ranking-btn').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                var siblings = this.parentElement.querySelectorAll('.ranking-btn');
-                siblings.forEach(function(s) { s.classList.remove('active'); s.setAttribute('aria-pressed', 'false'); });
-                this.classList.add('active'); this.setAttribute('aria-pressed', 'true');
-                saveAutosaveDataQual();
-            });
-        });
         // Overall rating buttons only (others are now selects)
         container.querySelectorAll('.overall-rating-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -1320,11 +1261,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function loadOneTeamData(teamNum, alliance, td) {
-        // Ranking
-        if (td.ranking) {
-            var rb = document.querySelector('.ranking-btn[data-team="' + teamNum + '"][data-alliance="' + alliance + '"][data-ranking="' + td.ranking + '"]');
-            if (rb) { rb.classList.add('active'); rb.setAttribute('aria-pressed', 'true'); }
-        }
         // Overall rating (button)
         if (td.overall_rating !== undefined && td.overall_rating !== null) {
             var ob = document.querySelector('.overall-rating-btn[data-team="' + teamNum + '"][data-alliance="' + alliance + '"][data-rating="' + td.overall_rating + '"]');
@@ -1333,7 +1269,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Dropdown ratings
         var selMap = {
             driver_rating: '.driver-rating-sel',
-            robot_rating: '.robot-rating-sel',
             defense_effectiveness: '.defense-eff-sel',
             shot_accuracy: '.shot-acc-sel'
         };
@@ -1414,11 +1349,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         var csmCb = document.querySelector('.field-traversal-check[data-team="' + teamNum + '"][data-alliance="' + alliance + '"][data-traversal="can_score_while_moving"]');
         var driverSel  = document.querySelector('.driver-rating-sel[data-team="' + teamNum + '"][data-alliance="' + alliance + '"]');
-        var robotSel   = document.querySelector('.robot-rating-sel[data-team="' + teamNum + '"][data-alliance="' + alliance + '"]');
         var defSel     = document.querySelector('.defense-eff-sel[data-team="' + teamNum + '"][data-alliance="' + alliance + '"]');
         var shotSel    = document.querySelector('.shot-acc-sel[data-team="' + teamNum + '"][data-alliance="' + alliance + '"]');
         var overallBtn = document.querySelector('.overall-rating-btn[data-team="' + teamNum + '"][data-alliance="' + alliance + '"].active');
-        var rankBtn   = document.querySelector('.ranking-btn[data-team="' + teamNum + '"][data-alliance="' + alliance + '"].active');
         var beachedCb = document.querySelector('.got-beached-check[data-team="' + teamNum + '"][data-alliance="' + alliance + '"]');
         var egResultEl = document.querySelector('.endgame-result-radio[data-team="' + teamNum + '"][data-alliance="' + alliance + '"]:checked');
         var egLevelEl  = document.querySelector('.endgame-level-select[data-team="' + teamNum + '"][data-alliance="' + alliance + '"]');
@@ -1444,8 +1377,6 @@ document.addEventListener('DOMContentLoaded', function() {
             endgame_climb_level: egLevelEl ? (egLevelEl.value || null) : null,
             auto_climb_result: acResultEl ? acResultEl.value : null,
             // Existing fields
-            ranking: rankBtn ? parseInt(rankBtn.dataset.ranking) : null,
-            robot_rating: (robotSel && robotSel.value !== '') ? parseInt(robotSel.value) : null,
             overall_rating: overallBtn ? parseInt(overallBtn.dataset.rating) : null,
             notes: notesEl ? notesEl.value.trim() : '',
             // Backward compat aliases

@@ -67,18 +67,9 @@
             if (teamSel) dedupeSelectOptions(teamSel);
         } catch (e) { /* ignore */ }
 
-        // Cache data on page load if online
-        if (navigator.onLine) {
-            cacheScoutingData();
-
-            // try syncing any previously saved offline forms right away
-            syncOfflineForms();
-            
-            // Start pre-caching forms after initial data is cached
-            setTimeout(() => {
-                preCacheAllForms();
-            }, 2000); // Wait 2 seconds to avoid blocking initial page load
-        }
+        // Cache data from the current page immediately.
+        // This works even when there is no internet but the local scout server is reachable.
+        cacheScoutingData();
 
         // Listen for online/offline events
         window.addEventListener('online', handleOnline);
@@ -110,7 +101,17 @@
         // Ensure server status and save button visibility reflect current connectivity on initial load
         try {
             // Do an immediate server check and schedule periodic checks
-            refreshServerStatus();
+            refreshServerStatus().then(serverReachable => {
+                if (serverReachable) {
+                    // try syncing any previously saved offline forms right away
+                    syncOfflineForms();
+
+                    // Start pre-caching forms after initial data is cached
+                    setTimeout(() => {
+                        preCacheAllForms();
+                    }, 2000); // Wait 2 seconds to avoid blocking initial page load
+                }
+            });
             if (!window._scoutingServerPingInterval) {
                 window._scoutingServerPingInterval = setInterval(refreshServerStatus, 15000); // every 15s
                 // Expose helpers for other modules to reuse
@@ -242,11 +243,6 @@
      * Pre-cache/update universal form template (always fetch to ensure latest config)
      */
     async function preCacheAllForms() {
-        if (!navigator.onLine) {
-            console.log('[Offline Manager] Cannot pre-cache form while offline');
-            return;
-        }
-        
         // Always update template to ensure latest config (no longer check if already cached)
         console.log('[Offline Manager] Updating form template cache...');
         
@@ -336,9 +332,7 @@
             const age = Date.now() - parseInt(timestamp);
             if (age > CACHE_DURATION) {
                 console.log('[Offline Manager] Cache is stale, refreshing...');
-                if (navigator.onLine) {
-                    cacheScoutingData();
-                }
+                cacheScoutingData();
             } else {
                 console.log(`[Offline Manager] Cache is fresh (${Math.round(age / 1000 / 60)} minutes old)`);
             }
@@ -835,7 +829,7 @@
         },
         enablePreCache: function(enabled) {
             localStorage.setItem('scouting_precache_enabled', enabled ? 'true' : 'false');
-            if (enabled && navigator.onLine) {
+            if (enabled) {
                 preCacheAllForms();
             }
         }

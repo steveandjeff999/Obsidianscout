@@ -6,5 +6,9 @@
   "tests/test_service_worker.py": true,
   "tools/test_graph_data.py": true,
   "tools/test_single_graph.py": true,
-  "tests/test_statbotics_api_utils.py::test_refresh_opr_epa_for_event_calls_backends": true
+  "tests/test_statbotics_api_utils.py::test_refresh_opr_epa_for_event_calls_backends": true,
+  "tests/test_alliances_recommend_dedupe.py::test_recommendations_dedupes_teams": true,
+  "tests/test_alliances_recommend_dedupe_by_team_number.py::test_recommendations_dedupes_by_team_number": true,
+  "tests/test_simulation_run_team_selection.py::test_simulation_run_prefers_scoped_team": true,
+  "tests/test_simulations_dedupe.py::test_simulations_dedupe": true
 }
