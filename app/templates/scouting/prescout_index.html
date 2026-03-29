@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block title %}Pre-Scout Dashboard{% endblock %}
+{% block heading %}Pre-Scout Dashboard{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-clipboard-check me-2"></i>Pre-Scout</h5>
+                {% if current_event %}
+                <span class="badge bg-light text-dark">{{ current_event.code }}</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">Collect early team data before event match scouting starts.</p>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{{ url_for('scouting.prescout_form') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-clipboard me-2"></i>Match Pre-Scout
+                    </a>
+                    <a href="{{ url_for('scouting.qualitative_prescout') }}" class="btn btn-success btn-lg">
+                        <i class="fas fa-feather me-2"></i>Qualitative Pre-Scout
+                    </a>
+                    <a href="{{ url_for('pit_scouting.prescout_form') }}" class="btn btn-outline-primary btn-lg">
+                        <i class="fas fa-tools me-2"></i>Pit Pre-Scout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Total Entries</h6>
+                <h2 class="mb-0">{{ total_entries }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Teams Pre-Scouted</h6>
+                <h2 class="mb-0">{{ total_teams_scouted }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Recent Pre-Scout Entries</h6>
+            </div>
+            <div class="card-body">
+                {% if recent_pit_data %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Team</th>
+                                <th>Scout</th>
+                                <th>Timestamp</th>
+                                <th class="text-end">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in recent_pit_data %}
+                            <tr>
+                                <td>{{ entry.team.team_number if entry.team else 'Unknown' }}</td>
+                                <td>{{ entry.scout_name or 'Unknown' }}</td>
+                                <td>{{ entry.timestamp.strftime('%Y-%m-%d %H:%M') if entry.timestamp else 'Unknown' }}</td>
+                                <td class="text-end">
+                                    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('pit_scouting.view', id=entry.id) }}">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No pre-scout data saved yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -6,6 +6,7 @@ from app import db, socketio
 import json
 import uuid
 from datetime import datetime, timezone
+from sqlalchemy.exc import IntegrityError
 from app.utils.timezone_utils import utc_now_iso
 from app.utils.config_manager import get_id_to_perm_id_mapping, get_effective_game_config
 from app.utils.sync_manager import SyncManager
@@ -29,6 +30,64 @@ def get_theme_context():
         'themes': theme_manager.get_available_themes(),
         'current_theme_id': theme_manager.current_theme
     }
+
+
+def get_prescout_event_code():
+    """Build the per-season PREESCOUT event code (e.g., 2026PREESCOUT)."""
+    season = None
+    try:
+        game_config = get_effective_game_config()
+        if isinstance(game_config, dict):
+            season = game_config.get('season')
+    except Exception:
+        season = None
+
+    if not season:
+        season = datetime.now(timezone.utc).year
+
+    try:
+        season = int(season)
+    except Exception:
+        season = datetime.now(timezone.utc).year
+
+    return f"{season}PREESCOUT"
+
+
+def get_or_create_prescout_event():
+    """Get or create the current team's PREESCOUT event for the active season."""
+    event_code = get_prescout_event_code()
+    event_year = datetime.now(timezone.utc).year
+    try:
+        if len(event_code) >= 4 and str(event_code)[:4].isdigit():
+            event_year = int(str(event_code)[:4])
+    except Exception:
+        pass
+
+    scouting_team_number = getattr(current_user, 'scouting_team_number', None)
+
+    existing_event = Event.query.filter_by(
+        code=event_code,
+        scouting_team_number=scouting_team_number
+    ).first()
+    if existing_event:
+        return existing_event
+
+    prescout_event = Event(
+        name=f"{event_year} Pre-Scout",
+        code=event_code,
+        year=event_year,
+        scouting_team_number=scouting_team_number
+    )
+    db.session.add(prescout_event)
+    try:
+        db.session.commit()
+        return prescout_event
+    except IntegrityError:
+        db.session.rollback()
+        return Event.query.filter_by(
+            code=event_code,
+            scouting_team_number=scouting_team_number
+        ).first()
 
 def auto_sync_alliance_pit_data(pit_data_entry):
     """Automatically sync new pit scouting data to alliance members if alliance mode is active"""
@@ -132,6 +191,36 @@ def auto_sync_alliance_pit_data(pit_data_entry):
     except Exception as e:
         current_app.logger.error(f"Error in auto-sync alliance pit data: {str(e)}")
 bp = Blueprint('pit_scouting', __name__, url_prefix='/pit_scouting')
+
+
+@bp.route('/prescout')
+@login_required
+def prescout_index():
+    """Pre-scout dashboard for early data collection."""
+    pit_config = get_effective_pit_config()
+    prescout_event = get_or_create_prescout_event()
+
+    prescout_data = PitScoutingData.query.filter_by(
+        event_id=prescout_event.id,
+        scouting_team_number=getattr(current_user, 'scouting_team_number', None)
+    ).order_by(PitScoutingData.timestamp.desc()).all()
+
+    team_ids = set()
+    for entry in prescout_data:
+        if getattr(entry, 'team_id', None):
+            team_ids.add(entry.team_id)
+
+    return render_template(
+        'scouting/prescout_index.html',
+        pit_config=pit_config,
+        current_event=prescout_event,
+        recent_pit_data=prescout_data[:10],
+        total_entries=len(prescout_data),
+        total_teams_scouted=len(team_ids),
+        **get_theme_context()
+    )
+
+
 @bp.route('/')
 @login_required
 def index():
@@ -254,6 +343,18 @@ def index():
 @login_required
 def form():
     """Dynamic pit scouting form"""
+    is_prescout = (
+        request.endpoint == 'pit_scouting.prescout_form'
+        or request.args.get('prescout', '').lower() in ('1', 'true', 'yes')
+        or request.form.get('prescout', '').lower() in ('1', 'true', 'yes')
+    )
+    form_endpoint = 'pit_scouting.prescout_form' if is_prescout else 'pit_scouting.form'
+    back_endpoint = 'pit_scouting.prescout_index' if is_prescout else 'pit_scouting.index'
+
+    prescout_event = None
+    if is_prescout:
+        prescout_event = get_or_create_prescout_event()
+
     team_param = request.args.get('team')
     if team_param:
         try:
@@ -268,10 +369,13 @@ def form():
     if team_param_int:
         team_obj = Team.query.filter_by(team_number=team_param_int).first()
         if team_obj:
-            pit_data = PitScoutingData.query.filter_by(
+            pit_query = PitScoutingData.query.filter_by(
                 team_id=team_obj.id,
                 scout_id=current_user.id
-            ).order_by(PitScoutingData.timestamp.desc()).first()
+            )
+            if is_prescout and prescout_event:
+                pit_query = pit_query.filter_by(event_id=prescout_event.id)
+            pit_data = pit_query.order_by(PitScoutingData.timestamp.desc()).first()
     # track whether the form is being used to edit an existing entry
     edit_mode = True if pit_data else False
 
@@ -281,7 +385,8 @@ def form():
             'success': True,
             'team_number': team_param_int,
             'pit_data': pit_data.data if pit_data else {},
-            'edit_mode': edit_mode
+            'edit_mode': edit_mode,
+            'is_prescout': is_prescout
         })
 
     # Always load the current user's scouting team pit config
@@ -289,15 +394,20 @@ def form():
     pit_config = get_current_pit_config()
     
     # Get current event based on team-scoped/alliance-aware game configuration
-    game_config = get_effective_game_config()
-    current_event_code = game_config.get('current_event_code')
-    current_event = None
-    if current_event_code:
-        current_event = get_event_by_code(current_event_code)
+    current_event = prescout_event if is_prescout else None
+    if not is_prescout:
+        game_config = get_effective_game_config()
+        current_event_code = game_config.get('current_event_code')
+        if current_event_code:
+            current_event = get_event_by_code(current_event_code)
     
     # Get teams - use alliance teams if alliance mode is active
     is_alliance_mode = is_alliance_mode_active()
-    if is_alliance_mode:
+    if is_prescout:
+        teams = filter_teams_by_scouting_team().all()
+        if not teams:
+            teams = Team.query.order_by(Team.team_number).all()
+    elif is_alliance_mode:
         if current_event:
             teams, _ = get_all_teams_for_alliance(event_id=current_event.id)
         else:
@@ -347,7 +457,10 @@ def form():
     # Gather all pit entries for these teams so the form can show scouted status
     team_ids = [t.id for t in teams]
     if team_ids:
-        form_all_pit_entries = PitScoutingData.query.filter(PitScoutingData.team_id.in_(team_ids)).all()
+        form_entries_query = PitScoutingData.query.filter(PitScoutingData.team_id.in_(team_ids))
+        if is_prescout and prescout_event:
+            form_entries_query = form_entries_query.filter(PitScoutingData.event_id == prescout_event.id)
+        form_all_pit_entries = form_entries_query.all()
     else:
         form_all_pit_entries = []
 
@@ -377,7 +490,7 @@ def form():
             team_number = request.form.get('team_number')
             if not team_number:
                 flash('Team number is required', 'error')
-                return redirect(url_for('pit_scouting.form'))
+                return redirect(url_for(form_endpoint))
             
             # Find or create team
             team = Team.query.filter_by(team_number=int(team_number)).first()
@@ -387,10 +500,13 @@ def form():
                 db.session.commit()
             
             # Check if this team has already been scouted by this scout
-            existing_data = PitScoutingData.query.filter_by(
+            existing_query = PitScoutingData.query.filter_by(
                 team_id=team.id,
                 scout_id=current_user.id
-            ).first()
+            )
+            if is_prescout and prescout_event:
+                existing_query = existing_query.filter_by(event_id=prescout_event.id)
+            existing_data = existing_query.first()
             # If data exists for this scout/team, overwrite it with the new submission
             if existing_data:
                 try:
@@ -428,15 +544,18 @@ def form():
 
                     # Auto-sync and emit update
                     auto_sync_alliance_pit_data(existing_data)
-                    if current_event:
+                    if current_event and isinstance(getattr(current_event, 'id', None), int):
                         emit_pit_data_update(current_event.id, 'updated', existing_data.to_dict())
 
-                    flash(f'Pit scouting data for Team {team_number} updated successfully!', 'success')
+                    if is_prescout:
+                        flash(f'Pre-scout data for Team {team_number} updated successfully!', 'success')
+                    else:
+                        flash(f'Pit scouting data for Team {team_number} updated successfully!', 'success')
                     return redirect(url_for('pit_scouting.view', id=existing_data.id))
                 except Exception as e:
                     db.session.rollback()
                     flash(f'Error updating existing pit scouting data: {str(e)}', 'error')
-                    return redirect(url_for('pit_scouting.form'))
+                    return redirect(url_for(form_endpoint))
             
             # Collect form data based on pit config
             form_data = {}
@@ -466,11 +585,13 @@ def form():
                         # Handle text, textarea, select fields
                         form_data[element_id] = request.form.get(element_id, '')
             
+            target_event = prescout_event if is_prescout else current_event
+
             # Create pit scouting data entry
             pit_data = PitScoutingData(
                 local_id=str(uuid.uuid4()),
                 team_id=team.id,
-                event_id=current_event.id if (current_event and isinstance(getattr(current_event, 'id', None), int)) else None,
+                event_id=target_event.id if (target_event and isinstance(getattr(target_event, 'id', None), int)) else None,
                 scouting_team_number=getattr(current_user, 'scouting_team_number', None),
                 scout_name=current_user.username,
                 scout_id=current_user.id,
@@ -487,16 +608,19 @@ def form():
             auto_sync_alliance_pit_data(pit_data)
             
             # Emit real-time update
-            if current_event and isinstance(getattr(current_event, 'id', None), int):
-                emit_pit_data_update(current_event.id, 'added', pit_data.to_dict())
+            if target_event and isinstance(getattr(target_event, 'id', None), int):
+                emit_pit_data_update(target_event.id, 'added', pit_data.to_dict())
             
-            flash(f'Pit scouting data for Team {team_number} saved successfully!', 'success')
+            if is_prescout:
+                flash(f'Pre-scout data for Team {team_number} saved successfully!', 'success')
+            else:
+                flash(f'Pit scouting data for Team {team_number} saved successfully!', 'success')
             return redirect(url_for('pit_scouting.view', id=pit_data.id))
             
         except Exception as e:
             db.session.rollback()
             flash(f'Error saving pit scouting data: {str(e)}', 'error')
-            return redirect(url_for('pit_scouting.form'))
+            return redirect(url_for(form_endpoint))
     
     # For GET request, show the form
     # Build a JSON-serializable representation of teams for use in JS
@@ -524,7 +648,18 @@ def form():
                           pit_data=pit_data,
                           team_param_int=team_param_int,
                           edit_mode=edit_mode,
+                          is_prescout=is_prescout,
+                          form_ajax_url=url_for(form_endpoint),
+                          back_url=url_for(back_endpoint),
+                          draft_storage_key='prescout_draft' if is_prescout else 'pit_scouting_draft',
                           **get_theme_context())
+
+
+@bp.route('/prescout/form', methods=['GET', 'POST'])
+@login_required
+def prescout_form():
+    """Alias for pit form in pre-scout mode."""
+    return form()
 
 @bp.route('/list', endpoint='list')
 @login_required

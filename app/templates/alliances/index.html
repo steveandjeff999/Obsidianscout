@@ -57,6 +57,14 @@
                             <option value="defense">Defense first</option>
                         </select>
                     </div>
+                    <div class="align-self-center">
+                        <select class="form-select form-select-sm" id="custom-tag-filter" title="Custom tag filter">
+                            <option value="none" selected>No custom tag filter</option>
+                            <option value="low-to-high">Custom tags: Low to High</option>
+                            <option value="high-to-low">Custom tags: High to Low</option>
+                        </select>
+                        {{ help.help_icon('Filter and sort by GitHub-style tags. Intelligently sorts numbers, priorities (high/medium/low), and text. Use formats like "1 2 3", "priority:high", or "role:driver".', 'GitHub-style tag filtering') }}
+                    </div>
                     {% if not (current_event.is_alliance|default(false)) %}
                     <a href="{{ url_for('alliances.manage_lists', event_id=current_event.id) }}" 
                        class="btn btn-info btn-sm">
@@ -591,6 +599,17 @@ function setupEventListeners() {
             }
         });
     }
+    
+    const customTagFilter = document.getElementById('custom-tag-filter');
+    if (customTagFilter) {
+        customTagFilter.addEventListener('change', function() {
+            displayRecommendations();
+            const modalEl = document.getElementById('teamSelectionModal');
+            if (modalEl && modalEl.classList.contains('show')) {
+                populateTeamSelectionList();
+            }
+        });
+    }
 }
 
 function getCustomSortEnabled() {
@@ -605,15 +624,24 @@ function updateRecommendationSortDescription() {
     const tagModeEl = document.getElementById('tag-sort-mode');
     const tagMode = tagModeEl ? tagModeEl.value : 'none';
     const tagText = tagMode === 'offense' ? ' (Offense first)' : (tagMode === 'defense' ? ' (Defense first)' : '');
+    
+    const customTagFilterEl = document.getElementById('custom-tag-filter');
+    const customTagFilter = customTagFilterEl ? customTagFilterEl.value : 'none';
+    let customTagText = '';
+    if (customTagFilter === 'low-to-high') {
+        customTagText = ' - Custom tags sorted low to high';
+    } else if (customTagFilter === 'high-to-low') {
+        customTagText = ' - Custom tags sorted high to low';
+    }
 
     if (getCustomSortEnabled()) {
         description.textContent = tagMode === 'none'
-            ? 'Teams sorted by your custom pick list rank first, then unranked teams'
-            : `Teams sorted by tag priority first${tagText}, then custom pick list rank`;
+            ? `Teams sorted by your custom pick list rank first, then unranked teams${customTagText}`
+            : `Teams sorted by tag priority first${tagText}, then custom pick list rank${customTagText}`;
     } else {
         description.textContent = tagMode === 'none'
-            ? 'Teams ranked by average total points scored'
-            : `Teams ranked by average total points scored${tagText}`;
+            ? `Teams ranked by average total points scored${customTagText}`
+            : `Teams ranked by average total points scored${tagText}${customTagText}`;
     }
 }
 
@@ -622,6 +650,8 @@ function sortTeamsByDisplayMode(teams) {
 
     const tagModeEl = document.getElementById('tag-sort-mode');
     const tagMode = tagModeEl ? tagModeEl.value : 'none';
+    const customTagFilterEl = document.getElementById('custom-tag-filter');
+    const customTagFilter = customTagFilterEl ? customTagFilterEl.value : 'none';
     const customSort = getCustomSortEnabled();
 
     function getTagPriority(team) {
@@ -634,11 +664,144 @@ function sortTeamsByDisplayMode(teams) {
         return 1;
     }
 
+    // Helper function to parse tag and get intelligent sort value
+    function getTagSortKey(tag) {
+        if (!tag) return { sortValue: Infinity, priority: 999, type: 'empty' };
+        
+        tag = String(tag).trim();
+        
+        // Check if tag is numeric
+        const numMatch = tag.match(/^(-?\d+)$/);
+        if (numMatch) {
+            return {
+                sortValue: parseInt(numMatch[1], 10),
+                priority: 0,
+                type: 'numeric',
+                raw: tag
+            };
+        }
+        
+        // Check if tag has category prefix (GitHub-style: "category:value")
+        const categoryMatch = tag.match(/^([^:]+):(.+)$/);
+        if (categoryMatch) {
+            const category = categoryMatch[1].toLowerCase();
+            const value = categoryMatch[2].toLowerCase();
+            
+            // Check for priority categories
+            if (category === 'priority' || category === 'p') {
+                const priorityMap = { 'critical': 0, 'high': 1, 'medium': 2, 'normal': 3, 'low': 4, 'trivial': 5 };
+                const priorityVal = priorityMap[value] !== undefined ? priorityMap[value] : 10;
+                return {
+                    sortValue: priorityVal,
+                    priority: 1,
+                    type: 'priority',
+                    category: category,
+                    raw: tag
+                };
+            }
+            
+            // Check for numeric category values (role:1, position:2, etc.)
+            const numVal = parseInt(value, 10);
+            if (!isNaN(numVal)) {
+                return {
+                    sortValue: numVal,
+                    priority: 2,
+                    type: 'numeric-category',
+                    category: category,
+                    raw: tag
+                };
+            }
+            
+            // Generic category:value - sort by category then value alphabetically
+            return {
+                sortValue: value.charCodeAt(0) + (value.length * 0.01),
+                priority: 3,
+                type: 'category',
+                category: category,
+                raw: tag
+            };
+        }
+        
+        // Single letter/word tags (offense, defense, a, b, c, etc.)
+        const singleLetterMatch = tag.match(/^([a-zA-Z])$/);
+        if (singleLetterMatch) {
+            const letter = singleLetterMatch[1].toUpperCase();
+            return {
+                sortValue: letter.charCodeAt(0),
+                priority: 4,
+                type: 'letter',
+                raw: tag
+            };
+        }
+        
+        // Known keywords
+        if (tag === 'offense' || tag === 'offensive' || tag === 'o') {
+            return { sortValue: 0, priority: 5, type: 'keyword', raw: tag };
+        }
+        if (tag === 'defense' || tag === 'defensive' || tag === 'd') {
+            return { sortValue: 1, priority: 5, type: 'keyword', raw: tag };
+        }
+        
+        // Generic text - sort by first char code
+        return {
+            sortValue: tag.charCodeAt(0) + (tag.length * 0.001),
+            priority: 6,
+            type: 'text',
+            raw: tag
+        };
+    }
+
+    // Helper function to convert tag to sortable value (handles numeric and alpha tags)
+    function getCustomTagSortValue(tags) {
+        if (!tags || tags.length === 0) return { sortValue: Infinity, priority: 999 };
+        const tag = tags[0];
+        return getTagSortKey(tag);
+    }
+
+    // Apply custom tag filter first if enabled
+    let filteredTeams = teams;
+    if (customTagFilter !== 'none') {
+        console.log('Custom tag filter enabled:', customTagFilter);
+        console.log('Sample team custom_tags:', teams.slice(0, 3).map(t => ({ team: t.team_number, tags: t.custom_tags })));
+        
+        const teamsWithTags = teams.filter(team => team.custom_tags && Array.isArray(team.custom_tags) && team.custom_tags.length > 0);
+        const teamsWithoutTags = teams.filter(team => !team.custom_tags || !Array.isArray(team.custom_tags) || team.custom_tags.length === 0);
+        
+        console.log(`Teams with tags: ${teamsWithTags.length}, Teams without tags: ${teamsWithoutTags.length}`);
+        
+        // Sort teams with tags by custom tag value - intelligent sorting
+        teamsWithTags.sort((a, b) => {
+            const keyA = getCustomTagSortValue(a.custom_tags);
+            const keyB = getCustomTagSortValue(b.custom_tags);
+            
+            // First compare by priority type (numeric < priority < category < letter < keyword < text)
+            if (keyA.priority !== keyB.priority) {
+                return keyA.priority - keyB.priority;
+            }
+            
+            // Within same priority, compare by sort value
+            if (keyA.sortValue !== keyB.sortValue) {
+                return customTagFilter === 'low-to-high' ? keyA.sortValue - keyB.sortValue : keyB.sortValue - keyA.sortValue;
+            }
+            
+            // If same sort value, sort by team number
+            return (Number(a.team_number) || 0) - (Number(b.team_number) || 0);
+        });
+        
+        console.log('Sorted teams with tags:', teamsWithTags.slice(0, 5).map(t => ({ 
+            team: t.team_number, 
+            tags: t.custom_tags, 
+            sortKey: getCustomTagSortValue(t.custom_tags) 
+        })));
+        
+        return [...teamsWithTags, ...teamsWithoutTags];
+    }
+
     if (!customSort) {
         if (tagMode === 'none') {
-            return teams.slice();
+            return filteredTeams.slice();
         }
-        return teams
+        return filteredTeams
             .map((team, idx) => ({ team, idx }))
             .sort((a, b) => {
                 const tagA = getTagPriority(a.team);
@@ -649,7 +812,7 @@ function sortTeamsByDisplayMode(teams) {
             .map(item => item.team);
     }
 
-    return teams.slice().sort((a, b) => {
+    return filteredTeams.slice().sort((a, b) => {
         // In custom-rank mode with tag priority selected, tag grouping applies globally first
         if (tagMode !== 'none') {
             const tagA = getTagPriority(a);
@@ -681,6 +844,14 @@ function loadRecommendations() {
             teamRecommendations = data.recommendations || [];
             // Keep a separate full copy for the team selection modal so we can show declined teams there
             allTeamsForSelection = Array.isArray(data.recommendations) ? data.recommendations.slice() : [];
+            
+            // Log custom tags info for debugging
+            const teamsWithCustomTags = teamRecommendations.filter(t => t.custom_tags && t.custom_tags.length > 0);
+            console.log(`Loaded ${teamRecommendations.length} teams, ${teamsWithCustomTags.length} have custom tags`);
+            if (teamsWithCustomTags.length > 0) {
+                console.log('Sample teams with tags:', teamsWithCustomTags.slice(0, 3).map(t => ({ team: t.team_number, tags: t.custom_tags })));
+            }
+            
             updateRecommendationSortDescription();
             displayRecommendations();
             updateAllianceStrengths();
@@ -713,7 +884,7 @@ function displayRecommendations() {
         let rankText = useCustomSort
             ? (team.is_want_list ? `P#${team.want_list_rank}` : '—')
             : `#${index + 1}`;
-        const tagBadges = `${team.offense_tag ? '<span class="badge bg-primary me-1">Offense</span>' : ''}${team.defense_tag ? '<span class="badge bg-secondary me-1">Defense</span>' : ''}`;
+        const tagBadges = `${team.custom_tags && team.custom_tags.length > 0 ? team.custom_tags.map(t => `<span class="badge bg-info me-1">${t}</span>`).join('') : ''}${team.offense_tag ? '<span class="badge bg-primary me-1">Offense</span>' : ''}${team.defense_tag ? '<span class="badge bg-secondary me-1">Defense</span>' : ''}`;
         
         if (team.is_do_not_pick) {
             badgeClass = 'text-danger';
@@ -775,7 +946,7 @@ function displayRecommendations() {
     html += teamsWithoutData.map(team => {
         let badgeClass = 'text-secondary';
         let warningIcon = '';
-        const tagBadges = `${team.offense_tag ? '<span class="badge bg-primary me-1">Offense</span>' : ''}${team.defense_tag ? '<span class="badge bg-secondary me-1">Defense</span>' : ''}`;
+        const tagBadges = `${team.custom_tags && team.custom_tags.length > 0 ? team.custom_tags.map(t => `<span class="badge bg-info me-1">${t}</span>`).join('') : ''}${team.offense_tag ? '<span class="badge bg-primary me-1">Offense</span>' : ''}${team.defense_tag ? '<span class="badge bg-secondary me-1">Defense</span>' : ''}`;
         
         if (team.is_do_not_pick) {
             badgeClass = 'text-danger';
@@ -929,7 +1100,7 @@ function populateTeamSelectionList() {
     const html = sortedForSelection.map(team => {
         let warningIcon = '';
         let badgeClass = 'bg-primary';
-        const tagBadges = `${team.offense_tag ? '<span class="badge bg-primary me-1">Offense</span>' : ''}${team.defense_tag ? '<span class="badge bg-secondary me-1">Defense</span>' : ''}`;
+        const tagBadges = `${team.custom_tags && team.custom_tags.length > 0 ? team.custom_tags.map(t => `<span class="badge bg-info me-1">${t}</span>`).join('') : ''}${team.offense_tag ? '<span class="badge bg-primary me-1">Offense</span>' : ''}${team.defense_tag ? '<span class="badge bg-secondary me-1">Defense</span>' : ''}`;
         
         if (team.is_do_not_pick) {
             warningIcon = '<i class="fas fa-ban text-danger me-2"></i>';

@@ -37,7 +37,15 @@ catch {
 
 # Check if virtual environment exists
 $venvPath = Join-Path $scriptPath ".venv"
-$venvActivate = Join-Path $venvPath "Scripts\Activate.ps1"
+
+if ($IsWindows) {
+    $venvActivate = Join-Path $venvPath "Scripts\Activate.ps1"
+    $venvPython = Join-Path $venvPath "Scripts\python.exe"
+}
+else {
+    $venvActivate = Join-Path $venvPath "bin/Activate.ps1"
+    $venvPython = Join-Path $venvPath "bin/python"
+}
 
 if (-not (Test-Path $venvActivate)) {
     Write-Host "WARNING: Virtual environment not found!" -ForegroundColor Yellow
@@ -55,8 +63,8 @@ if (-not (Test-Path $venvActivate)) {
     Write-Host "Virtual environment created successfully" -ForegroundColor Green
     Write-Host ""
     Write-Host "Installing dependencies..." -ForegroundColor Cyan
-    
-    & "$venvPath\Scripts\pip.exe" install -r requirements.txt
+
+    & $venvPython -m pip install -r requirements.txt
     
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERROR: Failed to install dependencies" -ForegroundColor Red
@@ -68,19 +76,33 @@ if (-not (Test-Path $venvActivate)) {
     Write-Host ""
 }
 
-# Activate virtual environment
-Write-Host "Activating virtual environment..." -ForegroundColor Cyan
-
-try {
-    & $venvActivate
-    Write-Host "Virtual environment activated: $env:VIRTUAL_ENV" -ForegroundColor Green
-    Write-Host ""
-}
-catch {
-    Write-Host "ERROR: Failed to activate virtual environment" -ForegroundColor Red
-    Write-Host "Try running: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Yellow
+# Ensure virtual environment Python exists
+if (-not (Test-Path $venvPython)) {
+    Write-Host "ERROR: Virtual environment Python not found at $venvPython" -ForegroundColor Red
     Read-Host "Press Enter to exit"
     exit 1
+}
+
+# Activate virtual environment when activation script exists
+if (Test-Path $venvActivate) {
+    Write-Host "Activating virtual environment..." -ForegroundColor Cyan
+
+    try {
+        & $venvActivate
+        Write-Host "Virtual environment activated: $env:VIRTUAL_ENV" -ForegroundColor Green
+        Write-Host ""
+    }
+    catch {
+        Write-Host "WARNING: Activation script failed; continuing with venv Python directly" -ForegroundColor Yellow
+        if ($IsWindows) {
+            Write-Host "If needed on Windows, run: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Yellow
+        }
+        Write-Host ""
+    }
+}
+else {
+    Write-Host "Activation script not found; continuing with venv Python directly" -ForegroundColor Yellow
+    Write-Host ""
 }
 
 # Check if required files exist
@@ -105,7 +127,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 try {
-    python run.py
+    & $venvPython run.py
 }
 catch {
     Write-Host ""

@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
 
-{% block title %}Scouting Form{% endblock %}
+{% block title %}{% if is_prescout %}Pre-Scout Match Form{% else %}Scouting Form{% endif %}{% endblock %}
 
-{% block heading %}Scouting Form{% endblock %}
+{% block heading %}{% if is_prescout %}Pre-Scout Match Form{% else %}Scouting Form{% endif %}{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/scouting_form.css') }}">
 {% endblock %}
 {% block subheading %}
-<div id="form-subheading" class="text-muted mb-4">Select team and match below</div>
+<div id="form-subheading" class="text-muted mb-4">{% if is_prescout %}Select team and pre-scout slot below{% else %}Select team and match below{% endif %}</div>
 {% endblock %}
 
 {% block content %}
@@ -20,8 +20,26 @@
             </div>
             <div class="card-body">
                 <form id="team-match-form" aria-label="Team and Match selection">
+                    {% if is_prescout %}
+                    <input type="hidden" name="prescout" value="1">
+                    {% endif %}
                     <div class="row">
-                        <div class="col-md-6 mb-2">
+                        {% if is_prescout %}
+                        <div class="col-md-5 mb-2">
+                            <label for="prescout-team-number" class="form-label">Team Number</label>
+                            <input type="number" class="form-control" id="prescout-team-number" min="1" step="1" placeholder="Enter team number">
+                        </div>
+                        <div class="col-md-5 mb-2">
+                            <label for="prescout-match-number" class="form-label">Match Number</label>
+                            <input type="number" class="form-control" id="prescout-match-number" min="1" step="1" placeholder="Enter match number">
+                        </div>
+                        <div class="col-md-2 mb-2 d-flex align-items-end">
+                            <button type="button" id="prescout-load-btn" class="btn btn-primary w-100">
+                                <i class="fas fa-play me-1"></i> Load Form
+                            </button>
+                        </div>
+                        {% endif %}
+                        <div class="col-md-6 mb-2 {% if is_prescout %}d-none{% endif %}">
                             <label for="match-selector" class="form-label">Select Match</label>
                             <!-- Search input for matches -->
                             <div class="input-group mb-1">
@@ -42,7 +60,7 @@
                                 <button type="button" id="match-increment" class="btn btn-outline-secondary btn-sm" title="Next match" aria-label="Next match">+</button>
                             </div>
                         </div>
-                        <div class="col-md-6 mb-2">
+                        <div class="col-md-6 mb-2 {% if is_prescout %}d-none{% endif %}">
                             <label for="team-selector" class="form-label">Select Team</label>
                             <!-- Search input for teams -->
                             <div class="input-group mb-1">
@@ -58,6 +76,11 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        {% if is_prescout %}
+                        <div class="col-12">
+                            <small class="text-muted">Pre-Scout uses manual team/match entry because these events are not API-synced.</small>
+                        </div>
+                        {% endif %}
                         <!-- Quick prediction UI removed -->
                     </div>
                 </form>
@@ -1338,6 +1361,10 @@
         const teamSelector = document.getElementById('team-selector');
         const matchSelector = document.getElementById('match-selector');
         const teamMatchForm = document.getElementById('team-match-form');
+        const isPrescout = {{ 'true' if is_prescout else 'false' }};
+        const prescoutTeamInput = document.getElementById('prescout-team-number');
+        const prescoutMatchInput = document.getElementById('prescout-match-number');
+        const prescoutLoadBtn = document.getElementById('prescout-load-btn');
         
         // autosave helpers - defined outside of condition so they are always available
         function getAutosaveKey(teamId, matchId) {
@@ -1681,10 +1708,16 @@
             
             // Load form when team and match are selected
             function loadForm() {
-                const teamId = document.getElementById('team-selector').value;
-                const matchId = document.getElementById('match-selector').value;
+                const teamId = document.getElementById('team-selector') ? document.getElementById('team-selector').value : '';
+                const matchId = document.getElementById('match-selector') ? document.getElementById('match-selector').value : '';
+                const teamNumber = prescoutTeamInput ? (prescoutTeamInput.value || '').trim() : '';
+                const matchNumber = prescoutMatchInput ? (prescoutMatchInput.value || '').trim() : '';
                 
-                if (!teamId || !matchId) return;
+                if (isPrescout) {
+                    if (!teamNumber || !matchNumber) return;
+                } else {
+                    if (!teamId || !matchId) return;
+                }
                 
                 // Show loading indicator
                 const formContent = document.getElementById('form-content');
@@ -1737,11 +1770,17 @@
 
                 // Create form data for the AJAX request
                 const formData = new FormData();
-                formData.append('team_id', teamId);
-                formData.append('match_id', matchId);
+                if (isPrescout) {
+                    formData.append('team_number', teamNumber);
+                    formData.append('match_number', matchNumber);
+                    formData.append('prescout', '1');
+                } else {
+                    formData.append('team_id', teamId);
+                    formData.append('match_id', matchId);
+                }
 
                 // Make AJAX request
-                fetch('{{ url_for("scouting.scouting_form") }}', {
+                fetch('{{ form_action_url }}', {
                     method: 'POST',
                     body: formData,
                     headers: {
@@ -1788,7 +1827,11 @@
                         try {
                             const _sub = document.getElementById('form-subheading');
                             if (_sub) {
-                                _sub.textContent = `${data.team_number} - ${data.team_name} | ${data.match_type} ${data.match_number}`;
+                                if (isPrescout) {
+                                    _sub.textContent = `Team ${data.team_number} | Match ${data.match_number} (Pre-Scout)`;
+                                } else {
+                                    _sub.textContent = `${data.team_number} - ${data.team_name} | ${data.match_type} ${data.match_number}`;
+                                }
                             }
                         } catch (e) { /* ignore if DOM not ready */ }
 
@@ -1900,6 +1943,15 @@
             
             // Auto-submit when both selections are made
             function checkSelections() {
+                if (isPrescout) {
+                    const teamNumber = prescoutTeamInput ? (prescoutTeamInput.value || '').trim() : '';
+                    const matchNumber = prescoutMatchInput ? (prescoutMatchInput.value || '').trim() : '';
+                    const ready = !!teamNumber && !!matchNumber;
+                    if (prescoutTeamInput) prescoutTeamInput.classList.toggle('border-success', ready);
+                    if (prescoutMatchInput) prescoutMatchInput.classList.toggle('border-success', ready);
+                    return;
+                }
+
                 const teamId = teamSelector.value;
                 const matchId = matchSelector.value;
                 
@@ -1935,6 +1987,31 @@
             // Attach event listeners
             teamSelector.addEventListener('change', checkSelections);
             matchSelector.addEventListener('change', checkSelections);
+
+            if (isPrescout) {
+                if (prescoutLoadBtn) {
+                    prescoutLoadBtn.addEventListener('click', loadForm);
+                }
+                if (prescoutTeamInput) {
+                    prescoutTeamInput.addEventListener('input', checkSelections);
+                    prescoutTeamInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            loadForm();
+                        }
+                    });
+                }
+                if (prescoutMatchInput) {
+                    prescoutMatchInput.addEventListener('input', checkSelections);
+                    prescoutMatchInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            loadForm();
+                        }
+                    });
+                }
+                checkSelections();
+            }
 
             // Create custom dropdown wrappers for better styling and consistent appearance
             function createCustomSelects() {

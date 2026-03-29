@@ -4,7 +4,6 @@
   "scripts/test_template.py": true,
   "tests/test_mobile_scoping.py": true,
   "tests/test_service_worker.py": true,
-  "tools/test_graph_data.py": true,
   "tools/test_single_graph.py": true,
   "tests/test_statbotics_api_utils.py::test_refresh_opr_epa_for_event_calls_backends": true,
   "tests/test_alliances_recommend_dedupe.py::test_recommendations_dedupes_teams": true,
