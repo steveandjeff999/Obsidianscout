@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 {% import '_help_icon.html' as help %}
 
-{% block title %}Qualitative Scouting{% endblock %}
+{% block title %}{% if is_prescout %}Pre-Scout Qualitative{% else %}Qualitative Scouting{% endif %}{% endblock %}
 
-{% block heading %}Qualitative Scouting{% endblock %}
+{% block heading %}{% if is_prescout %}Pre-Scout Qualitative{% else %}Qualitative Scouting{% endif %}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -12,6 +12,11 @@
             <h2 class="mb-0"><i class="fas fa-feather me-2"></i>Qualitative Scouting</h2>
         </div>
         <div>
+            {% if is_prescout %}
+            <a href="{{ url_for('pit_scouting.prescout_index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Pre-Scout
+            </a>
+            {% endif %}
             <a href="{{ url_for('scouting.qualitative_leaderboard') }}" class="btn btn-warning">
                 <i class="fas fa-trophy me-2"></i>Leaderboard
             </a>
@@ -111,6 +116,23 @@
 
                         <!-- Individual team scouting section -->
                         <div id="team-scouting-section" style="display: none;">
+                            {% if is_prescout %}
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="prescout-match-number" class="form-label">Match Number</label>
+                                    <input type="number" class="form-control" id="prescout-match-number" min="1" step="1" placeholder="e.g. 1">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="prescout-team-number" class="form-label">Team Number</label>
+                                    <input type="number" class="form-control" id="prescout-team-number" min="1" step="1" placeholder="e.g. 254">
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end">
+                                    <button type="button" class="btn btn-primary w-100" id="prescout-load-team-btn">
+                                        <i class="fas fa-search me-2"></i>Load Team
+                                    </button>
+                                </div>
+                            </div>
+                            {% endif %}
                             <div class="row mb-3">
                                 <div class="col-md-6">
                                     <label for="indiv-match-selector" class="form-label">Select Match</label>
@@ -381,6 +403,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const isPrescout = {{ 'true' if is_prescout else 'false' }};
     const matchSelector = document.getElementById('match-selector');
     const allianceRadios = document.querySelectorAll('input[name="alliance"]');
     const scoutModeRadios = document.querySelectorAll('input[name="scout-mode"]');
@@ -393,6 +416,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const individualTeamSection = document.getElementById('individual-team-section');
     const indivMatchSelector = document.getElementById('indiv-match-selector');
     const indivTeamSelector = document.getElementById('indiv-team-selector');
+    const prescoutMatchNumberInput = document.getElementById('prescout-match-number');
+    const prescoutTeamNumberInput = document.getElementById('prescout-team-number');
+    const prescoutLoadTeamBtn = document.getElementById('prescout-load-team-btn');
     const individualTeamContainer = document.getElementById('individual-team-container');
     const redSection = document.getElementById('red-teams-section');
     const blueSection = document.getElementById('blue-teams-section');
@@ -407,6 +433,24 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentEntryId = null;
     let matchesCache = {};
     let currentScoutMode = 'match'; // 'match' or 'team'
+
+    if (isPrescout) {
+        setTimeout(function() {
+            const modeTeamRadio = document.getElementById('mode-team');
+            const modeMatchRadio = document.getElementById('mode-match');
+            if (modeTeamRadio) {
+                modeTeamRadio.checked = true;
+                modeTeamRadio.dispatchEvent(new Event('change'));
+            }
+            if (modeMatchRadio) {
+                modeMatchRadio.disabled = true;
+            }
+            if (teamScoutingSection) {
+                const selectorRow = teamScoutingSection.querySelector('.row.mb-3:last-child');
+                if (selectorRow) selectorRow.style.display = 'none';
+            }
+        }, 0);
+    }
 
     // helper to temporarily suppress autosave while we're restoring state
     let qualAutosaveSuppress = false;
@@ -864,7 +908,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 blueSection.style.display = 'none';
                 
                 // Show team card if already selected
-                if (indivTeamSelector.value) {
+                if (isPrescout && prescoutTeamNumberInput && prescoutMatchNumberInput) {
+                    saveBtn.disabled = true;
+                    qrBtn.disabled = true;
+                } else if (indivTeamSelector.value) {
                     createIndividualTeamCard(indivTeamSelector.value);
                     individualTeamSection.style.display = 'block';
                     saveBtn.disabled = false;
@@ -878,6 +925,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Handle individual match selection -> populate team list
+    if (indivMatchSelector) {
     indivMatchSelector.addEventListener('change', function() {
         const matchId = this.value;
         indivTeamSelector.innerHTML = '<option value="">-- Select a Team --</option>';
@@ -956,8 +1004,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
             });
     });
+    }
     
     // Handle individual team selection -> show team card
+    if (indivTeamSelector) {
     indivTeamSelector.addEventListener('change', function() {
         // also repair labels when selection changes
         fixIndivTeamOptionText();
@@ -979,6 +1029,62 @@ document.addEventListener('DOMContentLoaded', function() {
         // after card creation/restoration, persist current state
         saveAutosaveDataQual();
     });
+    }
+
+    function loadPrescoutIndividualTeam() {
+        if (!isPrescout || !prescoutTeamNumberInput || !prescoutMatchNumberInput) {
+            return;
+        }
+
+        const teamNum = parseInt(prescoutTeamNumberInput.value, 10);
+        const matchNumber = parseInt(prescoutMatchNumberInput.value, 10);
+
+        if (!Number.isInteger(teamNum) || teamNum <= 0 || !Number.isInteger(matchNumber) || matchNumber <= 0) {
+            alert('Enter valid team and match numbers to continue.');
+            return;
+        }
+
+        currentIndivMatchData = {
+            success: true,
+            match: {
+                id: null,
+                match_number: matchNumber,
+                match_type: 'prescout',
+                event_code: ''
+            }
+        };
+
+        createIndividualTeamCard(teamNum);
+        individualTeamSection.style.display = 'block';
+        saveBtn.disabled = false;
+        qrBtn.disabled = false;
+        try {
+            localStorage.setItem('last_qual_team_id', String(teamNum));
+            localStorage.setItem('last_qual_match_id', String(matchNumber));
+        } catch(e) {}
+        saveAutosaveDataQual();
+        try { loadAutosaveDataQual(); } catch(e) {}
+    }
+
+    if (prescoutLoadTeamBtn) {
+        prescoutLoadTeamBtn.addEventListener('click', loadPrescoutIndividualTeam);
+    }
+    if (prescoutTeamNumberInput) {
+        prescoutTeamNumberInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                loadPrescoutIndividualTeam();
+            }
+        });
+    }
+    if (prescoutMatchNumberInput) {
+        prescoutMatchNumberInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                loadPrescoutIndividualTeam();
+            }
+        });
+    }
     
     // Create card for individual team scouting
     function createIndividualTeamCard(teamNum) {
@@ -1391,10 +1497,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function collectFormData() {
         if (currentScoutMode === 'team') {
             // Individual team scouting mode
-            const indivMatchId = indivMatchSelector.value;
-            const teamNum = indivTeamSelector.value;
+            const indivMatchId = isPrescout ? (currentIndivMatchData && currentIndivMatchData.match ? currentIndivMatchData.match.id : null) : indivMatchSelector.value;
+            const teamNum = isPrescout ? (prescoutTeamNumberInput ? prescoutTeamNumberInput.value : '') : indivTeamSelector.value;
+            const manualMatchNumber = isPrescout ? (prescoutMatchNumberInput ? parseInt(prescoutMatchNumberInput.value, 10) : null) : null;
 
-            if (!indivMatchId || !teamNum) { return null; }
+            if ((isPrescout && (!teamNum || !manualMatchNumber)) || (!isPrescout && (!indivMatchId || !teamNum))) { return null; }
 
             const teamData = {};
             teamData['team_' + teamNum] = collectOneTeamData(teamNum, 'individual');
@@ -1425,8 +1532,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return {
                 qualitative: true,
                 individual_team: true,
-                match_id: parseInt(indivMatchId),
-                match_number: currentIndivMatchData ? currentIndivMatchData.match.match_number : extractMatchNumber(indivMatchText),
+                match_id: indivMatchId ? parseInt(indivMatchId) : null,
+                match_number: isPrescout ? manualMatchNumber : (currentIndivMatchData ? currentIndivMatchData.match.match_number : extractMatchNumber(indivMatchText)),
                 match_type: currentIndivMatchData ? currentIndivMatchData.match.match_type : extractMatchType(indivMatchText),
                 event_code: currentIndivMatchData ? (currentIndivMatchData.match.event_code || '') : extractEventCode(indivMatchText),
                 team_number: parseInt(teamNum),
@@ -1523,6 +1630,7 @@ document.addEventListener('DOMContentLoaded', function() {
             savePayload = {
                 individual_team: true,
                 match_id: formData.match_id,
+                match_number: formData.match_number,
                 team_number: formData.team_number,
                 team_data: formData.team_data,
                 show_auto_climb: formData.show_auto_climb,
@@ -1543,6 +1651,8 @@ document.addEventListener('DOMContentLoaded', function() {
             savePayload.match_summary = formData.match_summary;
         }
         
+        savePayload.prescout = isPrescout;
+
         fetch('{{ url_for("scouting.save_qualitative_scouting") }}', {
             method: 'POST',
             headers: {

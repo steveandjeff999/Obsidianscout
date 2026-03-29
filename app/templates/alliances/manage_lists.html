@@ -242,9 +242,9 @@
         <div class="card border-primary">
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0">
-                    <i class="fas fa-tags me-2"></i>Team Tags {{ help.help_icon('Add offense/defense tags in a separate list. Tag priority can be used with both point sort and custom rank sort.', 'Team tags') }}
+                    <i class="fas fa-tags me-2"></i>Team Tags {{ help.help_icon('Add GitHub-style tags. Use any format: numbers, letters, categories (e.g., "priority:high", "type:offense"). Tags are sorted intelligently.', 'Team tags') }}
                 </h5>
-                <small>Separate list for offense/defense tags used by recommendation sorting</small>
+                <small>GitHub-style tags for recommendation sorting - use any format like "1 2 3", "a b c", "priority:high priority:low", etc.</small>
             </div>
             <div class="card-body">
                 <div class="mb-3">
@@ -255,9 +255,11 @@
                             <option value="{{ team.team_number }}">{{ team.team_number }} - {{ team.team_name or 'Unknown' }}</option>
                             {% endfor %}
                         </select>
-                        <button class="btn btn-primary" onclick="addTeamTags()">
-                            <i class="fas fa-plus me-1"></i>Save Tags
-                        </button>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label">Custom Tags (space-separated)</label>
+                        <input type="text" class="form-control" id="teamTagCustom" placeholder='Examples: "1 2 3", "a b c", "priority:high", "type:offense type:defense"' maxlength="200">
+                        <small class="text-muted d-block mt-1">Use any format - numbers, letters, or categories with colons (e.g., priority:high, role:driver)</small>
                     </div>
                     <div class="mt-2 d-flex gap-3">
                         <div class="form-check">
@@ -272,16 +274,29 @@
                     <div class="mt-2">
                         <input type="text" class="form-control" id="teamTagNote" placeholder="Short note (optional)" maxlength="120">
                     </div>
+                    <div class="mt-2 d-flex gap-2">
+                        <button class="btn btn-primary" onclick="addTeamTags()">
+                            <i class="fas fa-plus me-1"></i>Save Tags
+                        </button>
+                        <button class="btn btn-outline-danger" id="clearAllTagsBtn" onclick="clearAllTagsPrompt()" title="Click twice to clear all tags">
+                            <i class="fas fa-trash me-1"></i>Clear All Tags
+                        </button>
+                    </div>
                 </div>
 
                 <div id="teamTagsList">
                     {% if team_tag_display_entries %}
                     {% for entry in team_tag_display_entries %}
-                    <div class="d-flex justify-content-between align-items-center border-bottom py-2" data-team-id="{{ entry.team_id }}">
-                        <div>
+                    <div class="d-flex justify-content-between align-items-center border-bottom py-2" data-team-id="{{ entry.team_id }}" data-team-number="{{ entry.team.team_number }}" data-team-name="{{ entry.team.team_name or '' }}" data-custom-tags="{{ (entry.custom_tags|join(' ')) if entry.custom_tags else '' }}" data-offense-tag="{{ 1 if entry.offense_tag else 0 }}" data-defense-tag="{{ 1 if entry.defense_tag else 0 }}" data-note="{{ entry.note or '' }}">
+                        <div class="team-tag-view">
                             <strong>Team {{ entry.team.team_number }}</strong>
                             {% if entry.team.team_name %} - {{ entry.team.team_name }}{% endif %}
                             <div class="mt-1">
+                                {% if entry.custom_tags %}
+                                    {% for tag in entry.custom_tags %}
+                                    <span class="badge bg-info me-1" title="{{ tag }}">{{ tag }}</span>
+                                    {% endfor %}
+                                {% endif %}
                                 {% if entry.offense_tag %}
                                 <span class="badge bg-primary me-1">Offense</span>
                                 {% endif %}
@@ -293,13 +308,18 @@
                             <br><small class="text-muted">{{ entry.note }}</small>
                             {% endif %}
                         </div>
-                        <button class="btn btn-sm btn-outline-danger" onclick="removeTeamTags({{ entry.team_id }})">
-                            <i class="fas fa-times"></i>
-                        </button>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="startEditTeamTags({{ entry.team_id }})" title="Edit tags and note">
+                                <i class="fas fa-pen"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="removeTeamTags({{ entry.team_id }})" title="Remove tags">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
                     </div>
                     {% endfor %}
                     {% else %}
-                    <div class="text-muted text-center py-3">No teams tagged yet</div>
+                    <div class="text-muted text-center py-3 team-tags-empty">No teams tagged yet</div>
                     {% endif %}
                 </div>
             </div>
@@ -343,6 +363,33 @@ const manageEventId = (function(){
     const h = document.getElementById('manage-event-id-holder');
     return h ? h.dataset.eventId : null;
 })();
+
+// Helper function to reload page while preserving scroll position
+function reloadPreservingScroll() {
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+    sessionStorage.setItem('scrollPosition', scrollY);
+    location.reload();
+}
+
+// Restore scroll position after page reload - try multiple hooks to ensure it works
+function restoreScrollPosition() {
+    const scrollY = sessionStorage.getItem('scrollPosition');
+    if (scrollY !== null) {
+        const position = parseInt(scrollY, 10);
+        window.scrollTo(0, position);
+        // Also try with a small delay for safety
+        setTimeout(() => {
+            window.scrollTo(0, position);
+        }, 10);
+        sessionStorage.removeItem('scrollPosition');
+    }
+}
+
+// Restore on DOMContentLoaded (earlier than load event)
+document.addEventListener('DOMContentLoaded', restoreScrollPosition);
+
+// Also restore on load event as backup
+window.addEventListener('load', restoreScrollPosition);
 
 document.addEventListener('DOMContentLoaded', function() {
     initializeSocketIO();
@@ -596,8 +643,8 @@ function addToWantList() {
             // Clear inputs
             document.getElementById('wantListTeamSelect').value = '';
             document.getElementById('wantListReason').value = '';
-            // UI will update via socket or reload
-            location.reload();
+            // UI will update via SocketIO automatically
+            showSuccessMessage('Team added to want list');
         } else {
             alert('Error: ' + data.message);
         }
@@ -610,6 +657,7 @@ function addToWantList() {
 
 function addTeamTags() {
     const teamNumber = document.getElementById('teamTagTeamSelect').value;
+    const customTags = document.getElementById('teamTagCustom').value.trim();
     const offenseTag = document.getElementById('teamTagOffense').checked;
     const defenseTag = document.getElementById('teamTagDefense').checked;
     const note = document.getElementById('teamTagNote').value;
@@ -618,8 +666,13 @@ function addTeamTags() {
         alert('Please select a team');
         return;
     }
-    if (!offenseTag && !defenseTag) {
-        alert('Select at least one tag (Offense or Defense)');
+    
+    // Parse custom tags (space-separated)
+    const customTagsList = parseCustomTags(customTags);
+    
+    // Validate that at least one tag is provided
+    if (customTagsList.length === 0 && !offenseTag && !defenseTag) {
+        alert('Add at least one tag (custom tags or Offense/Defense)');
         return;
     }
 
@@ -631,6 +684,7 @@ function addTeamTags() {
         body: JSON.stringify({
             team_number: teamNumber,
             event_id: manageEventId,
+            custom_tags: customTags,
             offense_tag: offenseTag,
             defense_tag: defenseTag,
             note: note
@@ -639,11 +693,214 @@ function addTeamTags() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            // Update UI dynamically without reloading
+            const teamSelectEl = document.getElementById('teamTagTeamSelect');
+            const selectedTeamOption = teamSelectEl.options[teamSelectEl.selectedIndex];
+            const selectedText = selectedTeamOption ? selectedTeamOption.text : '';
+            const teamNameParts = selectedText.split(' - ');
+            const teamName = teamNameParts.length > 1 ? teamNameParts.slice(1).join(' - ') : '';
+            
+            // Find existing entry or create new one
+            const listContainer = document.getElementById('teamTagsList');
+            const existingEntry = listContainer.querySelector(`[data-team-id="${data.team_id}"]`);
+            
+            const entryHtml = renderTeamTagEntry({
+                team_id: data.team_id,
+                team_number: data.team_number,
+                team_name: teamName,
+                custom_tags: customTagsList,
+                offense_tag: offenseTag,
+                defense_tag: defenseTag,
+                note: note
+            });
+            
+            if (existingEntry) {
+                existingEntry.outerHTML = entryHtml;
+            } else {
+                // Remove "no teams tagged yet" message if it exists
+                const emptyMsg = listContainer.querySelector('.team-tags-empty');
+                if (emptyMsg) emptyMsg.remove();
+                
+                listContainer.insertAdjacentHTML('beforeend', entryHtml);
+            }
+            
+            // Clear inputs
             document.getElementById('teamTagTeamSelect').value = '';
+            document.getElementById('teamTagCustom').value = '';
             document.getElementById('teamTagOffense').checked = false;
             document.getElementById('teamTagDefense').checked = false;
             document.getElementById('teamTagNote').value = '';
-            location.reload();
+            
+            // Show success message
+            showSuccessMessage('Tag saved successfully');
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Network error occurred');
+    });
+}
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function parseCustomTags(text) {
+    return (text || '').trim().split(/\s+/).filter(t => t.length > 0);
+}
+
+function renderTagBadges(customTagsList, offenseTag, defenseTag) {
+    let tagBadgesHtml = '';
+    if (customTagsList.length > 0) {
+        tagBadgesHtml += customTagsList.map(t => `<span class="badge bg-info me-1" title="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('');
+    }
+    if (offenseTag) {
+        tagBadgesHtml += '<span class="badge bg-primary me-1">Offense</span>';
+    }
+    if (defenseTag) {
+        tagBadgesHtml += '<span class="badge bg-secondary me-1">Defense</span>';
+    }
+    return tagBadgesHtml;
+}
+
+function renderTeamTagEntry(entry) {
+    const customTagsList = Array.isArray(entry.custom_tags) ? entry.custom_tags : parseCustomTags(entry.custom_tags || '');
+    const offenseTag = !!entry.offense_tag;
+    const defenseTag = !!entry.defense_tag;
+    const note = entry.note || '';
+    const teamName = entry.team_name || '';
+    const teamNameHtml = teamName ? ` - ${escapeHtml(teamName)}` : '';
+    const noteHtml = note ? `<br><small class="text-muted">${escapeHtml(note)}</small>` : '';
+    const tagBadgesHtml = renderTagBadges(customTagsList, offenseTag, defenseTag);
+
+    return `
+        <div class="d-flex justify-content-between align-items-center border-bottom py-2" data-team-id="${entry.team_id}" data-team-number="${entry.team_number}" data-team-name="${escapeHtml(teamName)}" data-custom-tags="${escapeHtml(customTagsList.join(' '))}" data-offense-tag="${offenseTag ? 1 : 0}" data-defense-tag="${defenseTag ? 1 : 0}" data-note="${escapeHtml(note)}">
+            <div class="team-tag-view">
+                <strong>Team ${entry.team_number}</strong>${teamNameHtml}
+                <div class="mt-1">
+                    ${tagBadgesHtml}
+                </div>
+                ${noteHtml}
+            </div>
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-outline-secondary" onclick="startEditTeamTags(${entry.team_id})" title="Edit tags and note">
+                    <i class="fas fa-pen"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeTeamTags(${entry.team_id})" title="Remove tags">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function startEditTeamTags(teamId) {
+    const entry = document.querySelector(`#teamTagsList [data-team-id="${teamId}"]`);
+    if (!entry || entry.dataset.editing === '1') {
+        return;
+    }
+
+    const teamNumber = entry.dataset.teamNumber || '';
+    const teamName = entry.dataset.teamName || '';
+    const customTags = entry.dataset.customTags || '';
+    const offenseTag = entry.dataset.offenseTag === '1';
+    const defenseTag = entry.dataset.defenseTag === '1';
+    const note = entry.dataset.note || '';
+    const teamNameHtml = teamName ? ` - ${escapeHtml(teamName)}` : '';
+
+    entry.dataset.editing = '1';
+    entry.innerHTML = `
+        <div class="w-100">
+            <div class="fw-semibold mb-2">Team ${escapeHtml(teamNumber)}${teamNameHtml}</div>
+            <input type="text" class="form-control form-control-sm mb-2" data-edit-custom-tags value="${escapeHtml(customTags)}" placeholder="Custom tags (space-separated)">
+            <div class="d-flex gap-3 mb-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" data-edit-offense ${offenseTag ? 'checked' : ''}>
+                    <label class="form-check-label">Offense</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" data-edit-defense ${defenseTag ? 'checked' : ''}>
+                    <label class="form-check-label">Defense</label>
+                </div>
+            </div>
+            <input type="text" class="form-control form-control-sm mb-2" data-edit-note value="${escapeHtml(note)}" placeholder="Short note (optional)" maxlength="120">
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-primary" onclick="saveEditTeamTags(${teamId})"><i class="fas fa-save me-1"></i>Save</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="cancelEditTeamTags(${teamId})"><i class="fas fa-ban me-1"></i>Cancel</button>
+            </div>
+        </div>
+    `;
+}
+
+function cancelEditTeamTags(teamId) {
+    const entry = document.querySelector(`#teamTagsList [data-team-id="${teamId}"]`);
+    if (!entry) {
+        return;
+    }
+
+    const customTagsList = parseCustomTags(entry.dataset.customTags || '');
+    entry.outerHTML = renderTeamTagEntry({
+        team_id: Number(entry.dataset.teamId || teamId),
+        team_number: entry.dataset.teamNumber || '',
+        team_name: entry.dataset.teamName || '',
+        custom_tags: customTagsList,
+        offense_tag: entry.dataset.offenseTag === '1',
+        defense_tag: entry.dataset.defenseTag === '1',
+        note: entry.dataset.note || ''
+    });
+}
+
+function saveEditTeamTags(teamId) {
+    const entry = document.querySelector(`#teamTagsList [data-team-id="${teamId}"]`);
+    if (!entry) {
+        return;
+    }
+
+    const customTags = (entry.querySelector('[data-edit-custom-tags]') || {}).value || '';
+    const offenseTag = !!(entry.querySelector('[data-edit-offense]') || {}).checked;
+    const defenseTag = !!(entry.querySelector('[data-edit-defense]') || {}).checked;
+    const note = ((entry.querySelector('[data-edit-note]') || {}).value || '').trim();
+    const customTagsList = parseCustomTags(customTags);
+
+    if (customTagsList.length === 0 && !offenseTag && !defenseTag) {
+        alert('Add at least one tag (custom tags or Offense/Defense)');
+        return;
+    }
+
+    fetch('/alliances/api/team_tags/add', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            team_number: entry.dataset.teamNumber,
+            event_id: manageEventId,
+            custom_tags: customTags,
+            offense_tag: offenseTag,
+            defense_tag: defenseTag,
+            note: note
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            entry.outerHTML = renderTeamTagEntry({
+                team_id: data.team_id,
+                team_number: data.team_number,
+                team_name: entry.dataset.teamName || '',
+                custom_tags: customTagsList,
+                offense_tag: offenseTag,
+                defense_tag: defenseTag,
+                note: note
+            });
+            showSuccessMessage('Tag updated successfully');
         } else {
             alert('Error: ' + data.message);
         }
@@ -672,7 +929,19 @@ function removeTeamTags(teamId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            location.reload();
+            // Remove from UI dynamically
+            const listContainer = document.getElementById('teamTagsList');
+            const entry = listContainer.querySelector(`[data-team-id="${teamId}"]`);
+            if (entry) {
+                entry.remove();
+            }
+            
+            // If no more entries, show empty message
+            if (listContainer.children.length === 0) {
+                listContainer.innerHTML = '<div class="text-muted text-center py-3 team-tags-empty">No teams tagged yet</div>';
+            }
+            
+            showSuccessMessage('Tag removed successfully');
         } else {
             alert('Error: ' + data.message);
         }
@@ -681,6 +950,84 @@ function removeTeamTags(teamId) {
         console.error('Error:', error);
         alert('Network error occurred');
     });
+}
+
+let clearAllTagsConfirmPending = false;
+
+function clearAllTagsPrompt() {
+    const btn = document.getElementById('clearAllTagsBtn');
+    
+    if (!clearAllTagsConfirmPending) {
+        // First click - show confirmation
+        clearAllTagsConfirmPending = true;
+        btn.classList.add('btn-danger');
+        btn.classList.remove('btn-outline-danger');
+        btn.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Click again to confirm';
+        btn.title = 'Click again to confirm clearing all tags';
+        
+        // Reset after 3 seconds if not clicked
+        setTimeout(() => {
+            if (clearAllTagsConfirmPending) {
+                clearAllTagsConfirmPending = false;
+                btn.classList.remove('btn-danger');
+                btn.classList.add('btn-outline-danger');
+                btn.innerHTML = '<i class="fas fa-trash me-1"></i>Clear All Tags';
+                btn.title = 'Click twice to clear all tags';
+            }
+        }, 3000);
+    } else {
+        // Second click - execute
+        clearAllTagsConfirmPending = false;
+        clearAllTags();
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-outline-danger');
+        btn.innerHTML = '<i class="fas fa-trash me-1"></i>Clear All Tags';
+        btn.title = 'Click twice to clear all tags';
+    }
+}
+
+function clearAllTags() {
+    fetch('/alliances/api/team_tags/clear_all', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            event_id: manageEventId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Clear list UI
+            const listContainer = document.getElementById('teamTagsList');
+            listContainer.innerHTML = '<div class="text-muted text-center py-3 team-tags-empty">No teams tagged yet</div>';
+            showSuccessMessage('All tags cleared successfully');
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Network error occurred');
+    });
+}
+
+function showSuccessMessage(message) {
+    // Create temporary success message
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+    msgDiv.style.zIndex = '9999';
+    msgDiv.innerHTML = `
+        <i class="fas fa-check-circle me-2"></i>${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(msgDiv);
+    
+    // Auto dismiss after 3 seconds
+    setTimeout(() => {
+        msgDiv.remove();
+    }, 3000);
 }
 
 function removeFromWantList(teamId) {
@@ -701,7 +1048,8 @@ function removeFromWantList(teamId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            location.reload();
+            // UI will update via SocketIO automatically
+            showSuccessMessage('Team removed from want list');
         } else {
             alert('Error: ' + data.message);
         }
@@ -794,13 +1142,13 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (!data.success) {
                 alert('Error updating order: ' + data.message);
-                location.reload();
+                reloadPreservingScroll();
             }
         })
         .catch(error => {
             console.error('Error:', error);
             alert('Network error occurred');
-            location.reload();
+            reloadPreservingScroll();
         });
     }
     

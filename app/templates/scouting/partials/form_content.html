@@ -187,7 +187,10 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
         </div>
     </div>
 
-    <form id="scouting-form" class="scouting-form" action="{{ url_for('scouting.scouting_form') }}" method="post" onsubmit="return false;">
+    <form id="scouting-form" class="scouting-form" action="{{ form_action_url if form_action_url is defined else url_for('scouting.scouting_form') }}" method="post" onsubmit="return false;">
+        {% if is_prescout %}
+        <input type="hidden" name="prescout" value="1">
+        {% endif %}
         <input type="hidden" name="team_id" value="{{ team.id }}">
         <input type="hidden" name="team_number" value="{{ team.team_number }}">
         <input type="hidden" name="match_id" value="{{ match.id }}">

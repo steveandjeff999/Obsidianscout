@@ -2,11 +2,19 @@
 {% import '_help_icon.html' as help %}
 
 {% block title %}
-    {% if edit_mode %}Edit Pit Scouting{% else %}Pit Scouting Form{% endif %}
+    {% if is_prescout %}
+        {% if edit_mode %}Edit Pre-Scout{% else %}Pre-Scout Form{% endif %}
+    {% else %}
+        {% if edit_mode %}Edit Pit Scouting{% else %}Pit Scouting Form{% endif %}
+    {% endif %}
 {% endblock %}
 
 {% block heading %}
-    {% if edit_mode %}Edit Pit Scouting - Team {{ pit_data.team.team_number }}{% else %}Pit Scouting Form{% endif %}
+    {% if is_prescout %}
+        {% if edit_mode %}Edit Pre-Scout - Team {{ pit_data.team.team_number }}{% else %}Pre-Scout Form{% endif %}
+    {% else %}
+        {% if edit_mode %}Edit Pit Scouting - Team {{ pit_data.team.team_number }}{% else %}Pit Scouting Form{% endif %}
+    {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -27,9 +35,22 @@
             </div>
             <div class="card-body">
                 <form method="POST" id="pit-scouting-form">
+                    {% if is_prescout %}
+                    <input type="hidden" name="prescout" value="1">
+                    {% endif %}
                     <!-- Team selector dropdown -->
                     <div class="mb-3">
                         <label for="team_number" class="form-label fw-semibold">Team</label>
+                        {% if is_prescout %}
+                        <div class="input-group input-group-lg">
+                            <input type="number" id="team_number" name="team_number" class="form-control" min="1" step="1" required
+                                   value="{% if (edit_mode and pit_data and pit_data.team) %}{{ pit_data.team.team_number }}{% elif team_param_int %}{{ team_param_int }}{% endif %}"
+                                   placeholder="Enter team number">
+                            <button type="button" class="btn btn-outline-primary" id="load-team-btn">
+                                <i class="fas fa-search me-1"></i>Load
+                            </button>
+                        </div>
+                        {% else %}
                         <select id="team_number" name="team_number" class="form-select form-select-lg" required data-no-mapped-display="1"> <!-- explicit opt‑out of mapped display, avoids duplicate team number badge -->
                             <option value="">Select a team...</option>
                             {% for t in teams %}
@@ -38,6 +59,7 @@
                                 </option>
                             {% endfor %}
                         </select>
+                        {% endif %}
                     </div>
                     {% for section in pit_config.pit_scouting.sections %}
                     <div class="section-container mb-3">
@@ -140,7 +162,7 @@
                     
                     <!-- Floating action bar for easier saving on mobile -->
                     <div class="floating-actions d-flex justify-content-end gap-2 mt-3">
-                        <a href="{{ url_for('pit_scouting.index') }}" class="btn btn-outline-secondary btn-lg">
+                        <a href="{{ back_url }}" class="btn btn-outline-secondary btn-lg">
                             <i class="fas fa-arrow-left me-1"></i> Back
                         </a>
                         <button type="submit" id="pit-submit-btn" class="btn btn-primary btn-lg">
@@ -153,18 +175,31 @@
                 <script>
                 // reload the page with team parameter when selection changes
                 document.addEventListener('DOMContentLoaded', function() {
-                    const teamSelect = document.getElementById('team_number');
-                    if (teamSelect) {
-                        teamSelect.addEventListener('change', function() {
-                            const selected = this.value;
-                            const url = new URL(window.location.href);
-                            if (selected) {
-                                url.searchParams.set('team', selected);
-                            } else {
-                                url.searchParams.delete('team');
+                    const teamInput = document.getElementById('team_number');
+                    const loadTeamBtn = document.getElementById('load-team-btn');
+
+                    function loadTeamFromInput() {
+                        if (!teamInput) return;
+                        const selected = (teamInput.value || '').trim();
+                        const url = new URL(window.location.href);
+                        if (selected) {
+                            url.searchParams.set('team', selected);
+                        } else {
+                            url.searchParams.delete('team');
+                        }
+                        window.location.href = url.toString();
+                    }
+
+                    if (loadTeamBtn) {
+                        loadTeamBtn.addEventListener('click', loadTeamFromInput);
+                        teamInput.addEventListener('keydown', function(e) {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                loadTeamFromInput();
                             }
-                            window.location.href = url.toString();
                         });
+                    } else if (teamInput) {
+                        teamInput.addEventListener('change', loadTeamFromInput);
                     }
                 });
                 </script>
@@ -270,7 +305,7 @@ document.addEventListener('DOMContentLoaded', function() {
         teamNumberInput.addEventListener('change', function() {
             const teamNum = this.value;
             // clear any saved draft (we'll repopulate via AJAX if needed)
-            localStorage.removeItem('pit_scouting_draft');
+            localStorage.removeItem('{{ draft_storage_key }}');
             sessionStorage.removeItem('preserved_pit_form_data');
 
             clearForm();
@@ -288,7 +323,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (teamNum) {
                 // fetch existing data for this scout/team
-                fetch(`/pit_scouting/form?team=${encodeURIComponent(teamNum)}&ajax=1`)
+                fetch(`{{ form_ajax_url }}?team=${encodeURIComponent(teamNum)}&ajax=1`)
                     .then(resp => resp.json())
                     .then(data => {
                         if (data.success) {
@@ -420,12 +455,12 @@ function saveFormDataToLocalStorage() {
         }
     }
     
-    localStorage.setItem('pit_scouting_draft', JSON.stringify(data));
+    localStorage.setItem('{{ draft_storage_key }}', JSON.stringify(data));
 }
 
 // Load form data from localStorage
 function loadFormDataFromLocalStorage() {
-    const savedData = localStorage.getItem('pit_scouting_draft');
+    const savedData = localStorage.getItem('{{ draft_storage_key }}');
     if (savedData) {
         try {
             const data = JSON.parse(savedData);
@@ -462,6 +497,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const successAlerts = document.querySelectorAll('.alert-success');
     if (successAlerts.length > 0) {
         localStorage.removeItem('pit_scouting_draft');
+        localStorage.removeItem('{{ draft_storage_key }}');
     }
     
     // Global config reload handler

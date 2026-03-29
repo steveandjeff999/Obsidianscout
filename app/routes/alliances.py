@@ -59,6 +59,8 @@ def _encode_pick_meta(note, offense_tag=False, defense_tag=False):
 def _decode_team_tag_meta(reason):
     parsed = {
         'note': '',
+        'custom_tags': [],
+        # Legacy fields for backward compatibility
         'offense_tag': False,
         'defense_tag': False
     }
@@ -70,6 +72,14 @@ def _decode_team_tag_meta(reason):
         try:
             payload = json.loads(raw_json)
             parsed['note'] = str(payload.get('note', '') or '')[:120]
+            # Support new custom_tags format
+            if 'custom_tags' in payload:
+                parsed['custom_tags'] = payload.get('custom_tags', [])
+                if isinstance(parsed['custom_tags'], str):
+                    parsed['custom_tags'] = [t.strip() for t in parsed['custom_tags'].split() if t.strip()]
+                else:
+                    parsed['custom_tags'] = [str(t).strip() for t in (parsed['custom_tags'] or [])]
+            # Legacy support for offense/defense tags
             parsed['offense_tag'] = bool(payload.get('offense_tag', False))
             parsed['defense_tag'] = bool(payload.get('defense_tag', False))
             return parsed
@@ -80,10 +90,20 @@ def _decode_team_tag_meta(reason):
     return parsed
 
 
-def _encode_team_tag_meta(note, offense_tag=False, defense_tag=False):
+def _encode_team_tag_meta(note, custom_tags=None, offense_tag=False, defense_tag=False):
     clean_note = (note or '').strip()[:120]
+    # Convert custom_tags to list if needed
+    tags_list = []
+    if custom_tags:
+        if isinstance(custom_tags, str):
+            tags_list = [t.strip() for t in custom_tags.split() if t.strip()]
+        elif isinstance(custom_tags, list):
+            tags_list = [str(t).strip() for t in custom_tags]
+    
     payload = {
         'note': clean_note,
+        'custom_tags': tags_list,
+        # Keep legacy fields for backward compatibility
         'offense_tag': bool(offense_tag),
         'defense_tag': bool(defense_tag)
     }
@@ -322,6 +342,7 @@ def get_recommendations(event_id):
         for entry in team_tag_entries:
             meta = _decode_team_tag_meta(entry.reason)
             team_tags[entry.team_id] = {
+                'custom_tags': meta.get('custom_tags', []),
                 'offense_tag': meta['offense_tag'],
                 'defense_tag': meta['defense_tag'],
                 'pick_note': meta['note']
@@ -335,6 +356,7 @@ def get_recommendations(event_id):
         for team in all_teams:
             if team.id not in picked_teams:
                 tag_meta = team_tags.get(team.id, want_list_tags.get(team.id, {
+                    'custom_tags': [],
                     'offense_tag': False,
                     'defense_tag': False,
                     'pick_note': ''
@@ -354,6 +376,7 @@ def get_recommendations(event_id):
                             'is_do_not_pick': team.id in do_not_pick_teams,
                             'is_want_list': team.id in want_list_teams,
                             'want_list_rank': want_list_teams.get(team.id, 999),
+                            'custom_tags': tag_meta.get('custom_tags', []),
                             'offense_tag': tag_meta.get('offense_tag', False),
                             'defense_tag': tag_meta.get('defense_tag', False),
                             'pick_note': tag_meta.get('pick_note', '')
@@ -382,6 +405,7 @@ def get_recommendations(event_id):
                             'has_no_data': True,
                             'is_want_list': team.id in want_list_teams,
                             'want_list_rank': want_list_teams.get(team.id, 999),
+                            'custom_tags': tag_meta.get('custom_tags', []),
                             'offense_tag': tag_meta.get('offense_tag', False),
                             'defense_tag': tag_meta.get('defense_tag', False),
                             'pick_note': tag_meta.get('pick_note', '')
@@ -402,6 +426,7 @@ def get_recommendations(event_id):
                         'has_no_data': True,
                         'is_want_list': team.id in want_list_teams,
                         'want_list_rank': want_list_teams.get(team.id, 999),
+                        'custom_tags': tag_meta.get('custom_tags', []),
                         'offense_tag': tag_meta.get('offense_tag', False),
                         'defense_tag': tag_meta.get('defense_tag', False),
                         'pick_note': tag_meta.get('pick_note', '')
@@ -630,6 +655,7 @@ def get_recommendations(event_id):
                 'has_no_data': rec.get('has_no_data', False),
                 'is_want_list': rec.get('is_want_list', False),
                 'want_list_rank': rec.get('want_list_rank', 999),
+                'custom_tags': rec.get('custom_tags', []),
                 'offense_tag': rec.get('offense_tag', False),
                 'defense_tag': rec.get('defense_tag', False),
                 'pick_note': rec.get('pick_note', '')
@@ -825,6 +851,7 @@ def manage_lists(event_id):
             'team_id': entry.team_id,
             'team': entry.team,
             'note': meta['note'],
+            'custom_tags': meta.get('custom_tags', []),
             'offense_tag': meta['offense_tag'],
             'defense_tag': meta['defense_tag']
         })
@@ -1073,20 +1100,29 @@ def remove_from_list():
 
 @bp.route('/api/team_tags/add', methods=['POST'])
 def add_team_tags():
-    """Add or update offense/defense tags for a team in an event."""
+    """Add or update tags for a team in an event. Supports both legacy offense/defense tags and new custom tags."""
     data = request.get_json() or {}
 
     team_number = data.get('team_number')
     event_id = data.get('event_id')
     offense_tag = bool(data.get('offense_tag', False))
     defense_tag = bool(data.get('defense_tag', False))
+    custom_tags = data.get('custom_tags', '')
     note = data.get('note', '')
 
     if not all([team_number, event_id]):
         return jsonify({'success': False, 'message': 'Missing required fields'})
 
-    if not offense_tag and not defense_tag:
-        return jsonify({'success': False, 'message': 'Select at least one tag (offense or defense)'})
+    # Validate that at least one tag is provided (custom or legacy)
+    tags_list = []
+    if custom_tags:
+        if isinstance(custom_tags, str):
+            tags_list = [t.strip() for t in custom_tags.split() if t.strip()]
+        elif isinstance(custom_tags, list):
+            tags_list = [str(t).strip() for t in custom_tags if t]
+    
+    if not tags_list and not offense_tag and not defense_tag:
+        return jsonify({'success': False, 'message': 'Add at least one tag (custom tags or Offense/Defense)'})
 
     team = filter_teams_by_scouting_team().filter_by(team_number=team_number).first()
     if not team:
@@ -1099,7 +1135,7 @@ def add_team_tags():
             scouting_team_number=current_user.scouting_team_number
         ).first()
 
-        encoded = _encode_team_tag_meta(note, offense_tag=offense_tag, defense_tag=defense_tag)
+        encoded = _encode_team_tag_meta(note, custom_tags=tags_list, offense_tag=offense_tag, defense_tag=defense_tag)
 
         if existing:
             existing.reason = encoded
@@ -1120,6 +1156,7 @@ def add_team_tags():
             'message': f'Tags saved for Team {team.team_number}',
             'team_id': team.id,
             'team_number': team.team_number,
+            'custom_tags': tags_list,
             'offense_tag': offense_tag,
             'defense_tag': defense_tag,
             'note': (note or '').strip()[:120]
@@ -1159,6 +1196,29 @@ def remove_team_tags():
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
 
 
+@bp.route('/api/team_tags/clear_all', methods=['POST'])
+def clear_all_team_tags():
+    """Clear all team tags for an event."""
+    data = request.get_json() or {}
+    event_id = data.get('event_id')
+
+    if not event_id:
+        return jsonify({'success': False, 'message': 'Missing event_id'})
+
+    try:
+        # Delete all team tag entries for this event and scouting team
+        TeamTagEntry.query.filter_by(
+            event_id=event_id,
+            scouting_team_number=current_user.scouting_team_number
+        ).delete()
+        db.session.commit()
+        emit_recommendations_update(event_id)
+        return jsonify({'success': True, 'message': 'All team tags cleared'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
+
+
 @bp.route('/api/team_tags/get/<int:event_id>')
 def get_team_tags(event_id):
     """Get all team tag entries for an event."""
@@ -1175,6 +1235,7 @@ def get_team_tags(event_id):
                 'team_id': entry.team_id,
                 'team_number': entry.team.team_number,
                 'team_name': entry.team.team_name or f'Team {entry.team.team_number}',
+                'custom_tags': meta.get('custom_tags', []),
                 'offense_tag': meta['offense_tag'],
                 'defense_tag': meta['defense_tag'],
                 'note': meta['note']

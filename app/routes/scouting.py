@@ -39,6 +39,130 @@ def get_theme_context():
         'current_theme_id': theme_manager.current_theme
     }
 
+
+def get_prescout_event_code():
+    """Build the per-season PREESCOUT event code (e.g., 2026PREESCOUT)."""
+    season = None
+    try:
+        game_config = get_effective_game_config()
+        if isinstance(game_config, dict):
+            season = game_config.get('season')
+    except Exception:
+        season = None
+
+    if not season:
+        season = datetime.now(timezone.utc).year
+
+    try:
+        season = int(season)
+    except Exception:
+        season = datetime.now(timezone.utc).year
+
+    return f"{season}PREESCOUT"
+
+
+def get_or_create_prescout_event():
+    """Get or create PREESCOUT event scoped to current scouting team."""
+    event_code = get_prescout_event_code()
+    event_year = datetime.now(timezone.utc).year
+    try:
+        if len(event_code) >= 4 and str(event_code)[:4].isdigit():
+            event_year = int(str(event_code)[:4])
+    except Exception:
+        pass
+
+    scouting_team_number = getattr(current_user, 'scouting_team_number', None)
+    existing = Event.query.filter_by(code=event_code, scouting_team_number=scouting_team_number).first()
+    if existing:
+        return existing
+
+    new_event = Event(
+        name=f"{event_year} Pre-Scout",
+        code=event_code,
+        year=event_year,
+        scouting_team_number=scouting_team_number
+    )
+    db.session.add(new_event)
+    db.session.commit()
+    return new_event
+
+
+def ensure_prescout_matches_for_teams(prescout_event, teams):
+    """Ensure one synthetic pre-scout match exists per team for the PREESCOUT event."""
+    if not prescout_event:
+        return []
+
+    teams = teams or []
+    existing_matches = Match.query.filter_by(event_id=prescout_event.id, match_type='prescout').all()
+    by_team_number = {}
+    for match in existing_matches:
+        try:
+            if match.red_alliance and str(match.red_alliance).strip().isdigit():
+                by_team_number[int(str(match.red_alliance).strip())] = match
+        except Exception:
+            continue
+
+    created = False
+    for team in teams:
+        team_number = getattr(team, 'team_number', None)
+        if not isinstance(team_number, int):
+            continue
+        if team_number in by_team_number:
+            continue
+        synthetic = Match(
+            match_number=team_number,
+            match_type='prescout',
+            event_id=prescout_event.id,
+            red_alliance=str(team_number),
+            blue_alliance='',
+            scouting_team_number=getattr(current_user, 'scouting_team_number', None)
+        )
+        db.session.add(synthetic)
+        by_team_number[team_number] = synthetic
+        created = True
+
+    if created:
+        db.session.commit()
+
+    return [by_team_number[tn] for tn in sorted(by_team_number.keys())]
+
+
+def get_or_create_prescout_match_for_team(prescout_event, team, match_number):
+    """Get or create a specific pre-scout match and ensure team membership on that match."""
+    if not prescout_event or not team or not isinstance(match_number, int):
+        return None
+
+    match = Match.query.filter_by(
+        event_id=prescout_event.id,
+        match_type='prescout',
+        match_number=match_number
+    ).first()
+
+    team_num_str = str(team.team_number)
+
+    if not match:
+        match = Match(
+            match_number=match_number,
+            match_type='prescout',
+            event_id=prescout_event.id,
+            red_alliance=team_num_str,
+            blue_alliance='',
+            scouting_team_number=getattr(current_user, 'scouting_team_number', None)
+        )
+        db.session.add(match)
+        db.session.commit()
+        return match
+
+    red_teams = [t.strip() for t in (match.red_alliance or '').split(',') if t.strip()]
+    blue_teams = [t.strip() for t in (match.blue_alliance or '').split(',') if t.strip()]
+
+    if team_num_str not in red_teams and team_num_str not in blue_teams:
+        red_teams.append(team_num_str)
+        match.red_alliance = ','.join(red_teams)
+        db.session.commit()
+
+    return match
+
 def auto_sync_alliance_data(scouting_data_entry):
     """Automatically sync new scouting data to alliance members if alliance mode is active"""
     try:
@@ -466,18 +590,27 @@ def index():
 @bp.route('/form', methods=['GET', 'POST'])
 def scouting_form():
     """Dynamic scouting form based on game configuration"""
+    is_prescout = (
+        request.endpoint == 'scouting.prescout_form'
+        or request.args.get('prescout', '').lower() in ('1', 'true', 'yes')
+        or request.form.get('prescout', '').lower() in ('1', 'true', 'yes')
+    )
+    form_endpoint = 'scouting.prescout_form' if is_prescout else 'scouting.scouting_form'
+
     # Get game configuration (using alliance config if active)
     game_config = get_effective_game_config()
     
     # Get current event based on configuration
     current_event_code = game_config.get('current_event_code')
     current_event = None
-    if current_event_code:
+    if is_prescout:
+        current_event = get_or_create_prescout_event()
+    elif current_event_code:
         current_event = get_event_by_code(current_event_code)  # Use filtered function
     
     # Check if alliance mode is active
     alliance_id = get_active_alliance_id()
-    is_alliance_mode = alliance_id is not None
+    is_alliance_mode = (alliance_id is not None) and not is_prescout
 
     # If no current_event and not in alliance mode, default to the current team's most-recent event
     try:
@@ -489,7 +622,11 @@ def scouting_form():
         pass
     
     # Get teams - use alliance teams if in alliance mode
-    if is_alliance_mode:
+    if is_prescout:
+        teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
+        if not teams:
+            teams = Team.query.order_by(Team.team_number).all()
+    elif is_alliance_mode:
         if current_event:
             teams, _ = get_all_teams_for_alliance(event_id=current_event.id)
         else:
@@ -533,7 +670,9 @@ def scouting_form():
     }
     
     # Get matches - use alliance matches if in alliance mode
-    if is_alliance_mode:
+    if is_prescout:
+        all_matches = ensure_prescout_matches_for_teams(current_event, teams)
+    elif is_alliance_mode:
         if current_event:
             all_matches, _ = get_all_matches_for_alliance(event_id=current_event.id)
         else:
@@ -575,6 +714,20 @@ def scouting_form():
         
         team_id = request.form.get('team_id', type=int)
         match_id = request.form.get('match_id', type=int)
+        team_number = request.form.get('team_number', type=int)
+        match_number = request.form.get('match_number', type=int)
+
+        if is_prescout and (not team_id or not match_id) and team_number and match_number:
+            team_obj = Team.query.filter_by(team_number=team_number).first()
+            if not team_obj:
+                team_obj = Team(team_number=team_number, scouting_team_number=getattr(current_user, 'scouting_team_number', None))
+                db.session.add(team_obj)
+                db.session.commit()
+
+            prescout_match = get_or_create_prescout_match_for_team(current_event, team_obj, match_number)
+            if prescout_match:
+                team_id = team_obj.id
+                match_id = prescout_match.id
         
         current_app.logger.info(f"Team ID: {team_id}, Match ID: {match_id}")
         
@@ -651,6 +804,8 @@ def scouting_form():
                                 game_config=game_config,
                                 alliance=alliance,
                                 existing_data=existing_data,
+                                form_action_url=url_for(form_endpoint),
+                                is_prescout=is_prescout,
                                 **theme_context)
         except Exception as e:
             current_app.logger.error(f"Error rendering form template: {str(e)}")
@@ -686,6 +841,8 @@ def scouting_form():
             flash('Please select a team and match', 'warning')
             return render_template('scouting/form.html', teams=teams, matches=matches, 
                                 game_config=game_config, team=None, match=None,
+                                form_action_url=url_for(form_endpoint),
+                                is_prescout=is_prescout,
                                 **get_theme_context())
         
         team = Team.query.get_or_404(team_id)
@@ -876,6 +1033,8 @@ def scouting_form():
                               form_data=form_data,
                               alliance=alliance,
                               existing_data=existing_data,
+                              form_action_url=url_for(form_endpoint),
+                              is_prescout=is_prescout,
                               **get_theme_context())
     else:
         # Show form with team/match selection first
@@ -886,7 +1045,16 @@ def scouting_form():
                               team=None, 
                               match=None,
                               show_team_match_selection=True,
+                              form_action_url=url_for(form_endpoint),
+                              is_prescout=is_prescout,
                               **get_theme_context())  # Flag to show selection form
+
+
+@bp.route('/prescout/form', methods=['GET', 'POST'])
+@login_required
+def prescout_form():
+    """Alias for scouting form in pre-scout mode."""
+    return scouting_form()
 
 @bp.route('/qr')
 def qr_code_display():
@@ -1723,6 +1891,11 @@ def view_text_elements():
 @login_required
 def qualitative_scouting():
     """Display qualitative scouting form"""
+    is_prescout = (
+        request.endpoint == 'scouting.qualitative_prescout'
+        or request.args.get('prescout', '').lower() in ('1', 'true', 'yes')
+    )
+
     # roll back any previous failed transaction before running queries
     from app import db
     try:
@@ -1733,15 +1906,22 @@ def qualitative_scouting():
     game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code') if isinstance(game_config, dict) else None
     current_event = None
-    if current_event_code:
+    if is_prescout:
+        current_event = get_or_create_prescout_event()
+    elif current_event_code:
         current_event = get_event_by_code(current_event_code)
 
     # Respect alliance mode
     alliance_id = get_active_alliance_id()
-    is_alliance_mode = alliance_id is not None
+    is_alliance_mode = (alliance_id is not None) and not is_prescout
 
     # Determine matches to show: prefer current_event if available
-    if is_alliance_mode:
+    if is_prescout:
+        teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
+        if not teams:
+            teams = Team.query.order_by(Team.team_number).all()
+        matches = ensure_prescout_matches_for_teams(current_event, teams)
+    elif is_alliance_mode:
         # Use alliance-specific match set when in alliance mode
         if current_event:
             matches, _ = get_all_matches_for_alliance(event_id=current_event.id)
@@ -1786,7 +1966,15 @@ def qualitative_scouting():
                          matches=matches,
                          existing_data=existing_data,
                          is_alliance_mode=is_alliance_mode,
+                         is_prescout=is_prescout,
                          **get_theme_context())
+
+
+@bp.route('/qualitative/prescout')
+@login_required
+def qualitative_prescout():
+    """Alias for qualitative scouting in pre-scout mode."""
+    return qualitative_scouting()
 
 
 @bp.route('/qualitative/match/<int:match_id>')
@@ -1822,6 +2010,7 @@ def save_qualitative_scouting():
     try:
         data = request.get_json()
         individual_team = data.get('individual_team', False)
+        prescout_flag = str(data.get('prescout', '')).lower() in ('1', 'true', 'yes')
 
         def _strip_legacy_ranking(entry):
             """Remove deprecated 1-3 ranking from newly saved qualitative entries."""
@@ -1848,7 +2037,41 @@ def save_qualitative_scouting():
                 match_summary.pop('predicted_winner', None)
 
             if not team_number or not match_id:
-                return jsonify({'success': False, 'message': 'Missing team number or match'}), 400
+                if prescout_flag and team_number:
+                    prescout_event = get_or_create_prescout_event()
+                    team_obj = None
+                    try:
+                        team_num_int = int(team_number)
+                    except Exception:
+                        team_num_int = None
+
+                    if team_num_int:
+                        team_obj = Team.query.filter_by(team_number=team_num_int).first()
+                        if not team_obj:
+                            team_obj = Team(
+                                team_number=team_num_int,
+                                scouting_team_number=getattr(current_user, 'scouting_team_number', None)
+                            )
+                            db.session.add(team_obj)
+                            db.session.commit()
+
+                    if team_obj:
+                        input_match_number = data.get('match_number')
+                        try:
+                            input_match_number = int(input_match_number) if input_match_number is not None else None
+                        except Exception:
+                            input_match_number = None
+
+                        if input_match_number:
+                            prescout_match = get_or_create_prescout_match_for_team(prescout_event, team_obj, input_match_number)
+                            if prescout_match:
+                                match_id = prescout_match.id
+                        else:
+                            prescout_matches = ensure_prescout_matches_for_teams(prescout_event, [team_obj])
+                            if prescout_matches:
+                                match_id = prescout_matches[0].id
+                if not match_id:
+                    return jsonify({'success': False, 'message': 'Missing team number or match'}), 400
 
             # Server-side validation: overall rating (1-5) required for individual entries
             individual_block = team_data.get('individual', {})
