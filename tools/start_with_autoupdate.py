@@ -13,7 +13,7 @@ from tools.apply_alembic_upgrades import apply_upgrades_for_binds
 def run_autoupdate_and_start(no_backup=False, dry_run=False, no_autogen=False, extra_args=None):
     app = create_app()
     binds = list({'default': app.config.get('SQLALCHEMY_DATABASE_URI')}.keys()) + list((app.config.get('SQLALCHEMY_BINDS') or {}).keys())
-    apply_upgrades_for_binds(app, binds, no_backup=no_backup, dry_run=dry_run, log_widget=None, auto_stamp=True, auto_delete=True, auto_generate=not no_autogen)
+    apply_upgrades_for_binds(app, binds, no_backup=no_backup, dry_run=dry_run, log_widget=None, auto_stamp=True, auto_delete=False, auto_generate=not no_autogen)
 
     # Start the app in a subprocess to preserve process isolation
     args = [sys.executable, 'run.py']

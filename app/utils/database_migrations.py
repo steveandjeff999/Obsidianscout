@@ -170,6 +170,9 @@ MIGRATIONS = [
     ('scouting_team_settings', 'created_at', 'DATETIME', None),
     ('scouting_team_settings', 'updated_at', 'DATETIME', None),
     ('scouting_team_settings', 'hidden_nav_items', "TEXT DEFAULT '[]'", None),
+    # Prescout data phasing (team-wide admin settings)
+    ('scouting_team_settings', 'prescout_phaseout_matches', 'INTEGER DEFAULT 3', None),
+    ('scouting_team_settings', 'prescout_phaseout_enabled', 'BOOLEAN DEFAULT 0', None),
     
     # -------------------------------------------------------------------------
     # StrategyDrawing table migrations (default bind)
@@ -241,6 +244,12 @@ MIGRATIONS = [
     ('team', 'starting_points', 'FLOAT DEFAULT 0', None),
     ('team', 'starting_points_threshold', 'INTEGER DEFAULT 2', None),
     ('team', 'starting_points_enabled', 'BOOLEAN DEFAULT 0', None),
+    
+    # -------------------------------------------------------------------------
+    # Team table prescout data phasing
+    # -------------------------------------------------------------------------
+    ('team', 'prescout_phaseout_matches', 'INTEGER DEFAULT 3', None),
+    ('team', 'prescout_phaseout_enabled', 'BOOLEAN DEFAULT 0', None),
     # -------------------------------------------------------------------------
 
     # SharedGraph table migrations (default bind)
@@ -495,6 +504,31 @@ def run_all_migrations(db):
         print(f"  Warning: could not migrate last_login to last_used: {e}")
     
     return total_columns_added
+
+
+def ensure_prescout_phaseout_settings_columns(db):
+    """Safely ensure ScoutingTeamSettings prescout phaseout columns exist.
+
+    This is a targeted startup self-heal that only checks/adds the two
+    prescout admin-setting columns and does not run broad migrations.
+    """
+    engine = get_engine_for_bind(db, None)
+    existing_columns = get_table_columns(engine, 'scouting_team_settings')
+    if existing_columns is None:
+        return 0
+
+    added = 0
+    if 'prescout_phaseout_matches' not in existing_columns:
+        if add_column(engine, 'scouting_team_settings', 'prescout_phaseout_matches', 'INTEGER DEFAULT 3'):
+            added += 1
+
+    if 'prescout_phaseout_enabled' not in existing_columns:
+        if add_column(engine, 'scouting_team_settings', 'prescout_phaseout_enabled', 'BOOLEAN DEFAULT 0'):
+            added += 1
+
+    if added > 0:
+        print(f"Startup self-heal: added {added} prescout phaseout column(s) to scouting_team_settings")
+    return added
 
 
 def check_missing_columns(db):

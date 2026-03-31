@@ -184,6 +184,11 @@ class ScoutingTeamSettings(db.Model):
     #   'scouted_with_statbotics'  – use scouted data, fill gaps with Statbotics EPA
     #   'statbotics_only'          – use Statbotics EPA exclusively
     epa_source = db.Column(db.String(30), default='scouted_only', nullable=False)
+    # Prescout data phasing settings: how long to use prescout data before phasing it out
+    # prescout_phaseout_matches: number of real matches before prescout data is excluded (1-5, default: 3)
+    # prescout_phaseout_enabled: whether prescout phasing is enabled for the team
+    prescout_phaseout_matches = db.Column(db.Integer, default=3, nullable=False)
+    prescout_phaseout_enabled = db.Column(db.Boolean, default=False, nullable=False)
     # JSON-encoded list of sidebar nav item keys that are hidden for this team.
     # Example: '["qualitative_scouting", "sponsors", "contact"]'
     hidden_nav_items = db.Column(db.Text, nullable=True, default='[]')

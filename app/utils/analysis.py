@@ -772,6 +772,81 @@ class _FakeSD:
             return self._sp
         return 0
 
+def apply_prescout_phaseout(team, scouting_data, event_id=None):
+    """Phase out prescout data as real match data becomes available, similar to starting points phasing.
+    
+    Returns a filtered list of scouting data, excluding prescout entries if:
+    1. Prescout phasing is enabled in admin settings
+    2. The team has enough real matches at the event (>= threshold)
+    """
+    if not team or not scouting_data:
+        return scouting_data
+    
+    try:
+        # Get prescout phasing settings from admin settings
+        from app.models import ScoutingTeamSettings
+        team_settings = ScoutingTeamSettings.get_or_create_for_team(team.scouting_team_number)
+        
+        # Check if prescout phasing is enabled
+        phaseout_enabled = team_settings.prescout_phaseout_enabled
+        if not phaseout_enabled:
+            return scouting_data
+        
+        phaseout_threshold = int(team_settings.prescout_phaseout_matches or 3)
+        
+        # Separate prescout data from real event data
+        prescout_data = []
+        real_event_data = []
+        
+        from app.models import Event
+        
+        for data in scouting_data:
+            # Check if this data is from a prescout event
+            is_prescout = False
+            if data.match and data.match.event:
+                event_code = getattr(data.match.event, 'code', '') or ''
+                if 'PREESCOUT' in event_code.upper():
+                    is_prescout = True
+            
+            if is_prescout:
+                prescout_data.append(data)
+            else:
+                real_event_data.append(data)
+        
+        # If no prescout data or no real data, return as-is
+        if not prescout_data:
+            return scouting_data
+        
+        # Count real matches at the current event if event_id is provided
+        real_match_count = len(real_event_data)
+        
+        if event_id and real_match_count == 0:
+            # If event_id is specified but we have no real event data,
+            # count matches from the database that match this event
+            try:
+                from sqlalchemy import func, or_
+                real_match_count = Match.query.filter(
+                    Match.event_id == event_id,
+                    or_(
+                        Match.red_alliance.like(f"%{team.team_number}%"),
+                        Match.blue_alliance.like(f"%{team.team_number}%")
+                    )
+                ).count()
+            except Exception:
+                pass
+        
+        # If we have enough real data, phase out prescout data
+        if real_match_count >= phaseout_threshold:
+            # Return only real event data, excluding prescout
+            return real_event_data
+        else:
+            # Return all data (prescout + real)
+            return scouting_data
+            
+    except Exception as e:
+        # On any error, return original data unchanged
+        return scouting_data
+
 def inject_starting_points(team, scouting_data, event_id=None):
     """Inject synthetic starting points into scouting data if configured."""
     calc_data = list(scouting_data)
@@ -880,6 +955,10 @@ def get_analysis_data_for_team(team_id, event_id=None):
             if scouting_data is None: # if not set by else block above
                  scouting_data = query.all()
 
+    # Apply prescout phasing before injecting starting points
+    if team and scouting_data:
+        scouting_data = apply_prescout_phaseout(team, scouting_data, event_id)
+    
     return inject_starting_points(team, scouting_data, event_id)
 
 def calculate_team_metrics(team_id, event_id=None, game_config=None):

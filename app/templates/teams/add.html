@@ -68,6 +68,30 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Prescout Data Phasing (optional)</label>
+                        <div class="form-text mb-2">Automatically phase out prescout data once the team has real match data. After the team has the specified number of real matches at an event, prescout data will be excluded from analytics.</div>
+                        <div class="row g-2 align-items-center mb-2">
+                            <div class="col-md-4">
+                                <label for="pp_threshold" class="form-text small">Matches before phasing out</label>
+                                <select class="form-select" id="pp_threshold" name="prescout_phaseout_matches">
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3" selected>3 (recommended)</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="pp_enabled" class="form-text small">Enable phasing</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="1" id="pp_enabled" name="prescout_phaseout_enabled">
+                                    <label class="form-check-label" for="pp_enabled">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('teams.index') }}" class="btn btn-secondary">

@@ -261,6 +261,13 @@ if __name__ == '__main__':
     # Initialize database first
     print("Starting FRC Scouting Platform...")
     with app.app_context():
+        # Safe targeted startup migration for prescout admin settings columns.
+        try:
+            from app.utils.database_migrations import ensure_prescout_phaseout_settings_columns
+            ensure_prescout_phaseout_settings_columns(db)
+        except Exception as e:
+            print(f"Warning: targeted prescout startup migration failed: {e}")
+
         try:
             # Check if database needs initialization
             if not check_database_health():

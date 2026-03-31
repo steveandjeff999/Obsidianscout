@@ -1132,3 +1132,123 @@ body:not(.dark-mode) .btn.btn-warning   { color: #000000 !important; }
 body:not(.dark-mode) .btn.btn-info      { color: #000000 !important; }
 
 
+/* =============================================================
+   2026 Fine-Tune Pass - modern visual polish (global)
+   ============================================================= */
+
+:root {
+    --ui-soft-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    --ui-soft-shadow-hover: 0 18px 40px rgba(15, 23, 42, 0.12);
+    --ui-ring: 0 0 0 0.2rem rgba(var(--ui-accent-rgb), 0.15);
+}
+
+body {
+    letter-spacing: 0.01em;
+}
+
+/* Subtle textured backdrop for depth without being distracting */
+body:not(.dark-mode) {
+    background-image:
+        radial-gradient(circle at 12% 8%, rgba(25, 118, 210, 0.06) 0, rgba(25, 118, 210, 0) 34%),
+        radial-gradient(circle at 88% 12%, rgba(16, 185, 129, 0.05) 0, rgba(16, 185, 129, 0) 28%);
+    background-attachment: fixed;
+}
+
+body.dark-mode {
+    background-image:
+        radial-gradient(circle at 12% 8%, rgba(var(--ui-accent-rgb), 0.12) 0, rgba(var(--ui-accent-rgb), 0) 32%),
+        radial-gradient(circle at 88% 12%, rgba(56, 189, 248, 0.08) 0, rgba(56, 189, 248, 0) 24%);
+    background-attachment: fixed;
+}
+
+/* Comfortable spacing on common content wrappers */
+main.container,
+main.container-fluid {
+    padding-top: 1.15rem;
+    padding-bottom: 2rem;
+}
+
+/* Card polish */
+.card,
+.modal-content,
+.dropdown-menu {
+    border-radius: 14px;
+}
+
+.card {
+    box-shadow: var(--ui-soft-shadow);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.card:hover {
+    box-shadow: var(--ui-soft-shadow-hover);
+}
+
+body.dark-mode .card {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Buttons feel snappier and more tactile */
+.btn {
+    font-weight: 600;
+    transition: transform 140ms ease, box-shadow 160ms ease, filter 140ms ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn-primary {
+    box-shadow: 0 8px 20px rgba(var(--ui-accent-rgb), 0.22);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 12px 24px rgba(var(--ui-accent-rgb), 0.3);
+}
+
+/* Form controls: cleaner hover/focus state */
+.form-control,
+.form-select,
+.input-group-text {
+    transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.form-control:hover,
+.form-select:hover {
+    border-color: rgba(var(--ui-accent-rgb), 0.35);
+}
+
+.form-control:focus,
+.form-select:focus {
+    box-shadow: var(--ui-ring) !important;
+}
+
+/* Table readability and scanability */
+.table td,
+.table th {
+    border-color: rgba(148, 163, 184, 0.24);
+}
+
+.table tbody tr {
+    transition: background-color 140ms ease;
+}
+
+/* Better section rhythm on small screens */
+@media (max-width: 768px) {
+    .card,
+    .modal-content {
+        border-radius: 12px;
+    }
+
+    .btn,
+    .form-control,
+    .form-select {
+        min-height: 46px;
+    }
+}
+
+
