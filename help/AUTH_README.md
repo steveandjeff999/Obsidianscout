@@ -39,7 +39,7 @@ The system supports three user roles with different permissions:
 
 1. Initialize the authentication system:
     ```
-    python init_auth.py
+   python other/init_auth.py
     ```
 
     This will create the necessary roles. Default accounts are handled as follows:
@@ -48,11 +48,16 @@ The system supports three user roles with different permissions:
        - Username: `superadmin`
        - Password: `password`
        - Team Number: `0`
-       - The created `superadmin` has `must_change_password=True` so the user must change the password on first login.
+       - The created `superadmin` has `must_change_password=False`.
 
     - The `other/reset_admin.py` script is provided to create or reset an `admin` account (username `admin`, password `password`) at any time:
        ```
        python other/reset_admin.py
+       ```
+
+    - The `reset_superadmin.py` script can also recreate/reset the `superadmin` account if needed:
+       ```
+       python reset_superadmin.py
        ```
 
 2. Log in with the admin account and create additional users as needed.

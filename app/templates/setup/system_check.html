@@ -171,56 +171,6 @@
         </div>
     </div>
 
-    <!-- System Actions -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-tools me-2"></i>System Actions
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <div class="card border-primary h-100">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-sync fa-2x text-primary mb-2"></i>
-                                    <h6>Refresh Check</h6>
-                                    <button class="btn btn-primary" onclick="window.location.reload()">
-                                        <i class="fas fa-sync me-2"></i>Refresh
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="card border-warning h-100">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-database fa-2x text-warning mb-2"></i>
-                                    <h6>Sample Data</h6>
-                                    <button class="btn btn-warning" onclick="initializeSampleData()" id="sample-data-btn">
-                                        <i class="fas fa-plus me-2"></i>Add Sample Data
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="card border-info h-100">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-download fa-2x text-info mb-2"></i>
-                                    <h6>Export Logs</h6>
-                                    <a href="{{ url_for('activity.view_logs') }}" class="btn btn-info">
-                                        <i class="fas fa-eye me-2"></i>View Logs
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Quick Links -->
     <div class="row">
         <div class="col-md-12">

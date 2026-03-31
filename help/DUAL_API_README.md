@@ -75,18 +75,21 @@ A built-in testing interface is available to verify your API configuration:
 ### Testing Workflow
 1. Configure your API credentials
 2. Access the API Testing interface
-3. Run a quick test with a known event code (e.g., `okok`)
+3. Run a quick test with a known event code (e.g., `OKTU`)
 4. Verify both APIs are working correctly
 5. Check fallback functionality by temporarily disabling one API
 
 ## Event Code Formats
 
-
-- Uses simple event codes: `CALA`, `NYRO`, `TXDAL`
+### FIRST Event Code Format
+- Uses simple event codes: `CALA`, `NYRO`, `TXDAL`, `OKTU`
 - Case-insensitive
 - Typically 4-5 characters
 
-
+### TBA Event Key Format
+- Uses a year-prefixed event key format (for example, `2026oktu`)
+- Lowercase event code after the year is most common
+- The application handles conversion between raw codes and API-specific formats
 
 The system automatically handles the conversion between formats.
 
@@ -125,7 +128,7 @@ TBA_API_KEY=your_tba_api_key
 from app.utils.api_utils import get_teams_dual_api
 
 # Get teams for an event using dual API (use raw event code)
-teams = get_teams_dual_api('CALA')  # Automatically handles both APIs
+teams = get_teams_dual_api('OKTU')  # Automatically handles both APIs
 ```
 
 ### Matches Sync
@@ -133,7 +136,7 @@ teams = get_teams_dual_api('CALA')  # Automatically handles both APIs
 from app.utils.api_utils import get_matches_dual_api
 
 # Get matches for an event using dual API
-matches = get_matches_dual_api('CALA')  # Automatically handles both APIs
+matches = get_matches_dual_api('OKTU')  # Automatically handles both APIs
 ```
 
 ### Event Details
@@ -141,7 +144,7 @@ matches = get_matches_dual_api('CALA')  # Automatically handles both APIs
 from app.utils.api_utils import get_event_details_dual_api
 
 # Get event details using dual API
-event_details = get_event_details_dual_api('CALA')
+event_details = get_event_details_dual_api('OKTU')
 ```
 
 ## Data Conversion
@@ -174,12 +177,12 @@ The system automatically converts data from both APIs to a standardized database
 ### Event Data
 ```python
 {
-    'name': 'Los Angeles Regional',
-    'code': 'CALA',
-    'year': 2024,
-    'location': 'Los Angeles, CA, USA',
-    'start_date': '2024-03-07',
-    'end_date': '2024-03-10'
+  'name': 'Example Regional Event',
+  'code': 'OKTU',
+  'year': 2026,
+  'location': 'Example City, ST, USA',
+  'start_date': '2026-03-05',
+  'end_date': '2026-03-08'
 }
 ```
 
@@ -229,7 +232,7 @@ The system automatically converts data from both APIs to a standardized database
 #### "Both APIs failed" Error
 1. Check internet connectivity
 2. Verify API credentials are correct
-3. Test with known event codes (e.g., `2024cala`)
+3. Test with known event codes (e.g., `OKTU`)
 4. Check API testing interface for detailed errors
 
 #### Teams/Matches Not Loading
@@ -258,29 +261,29 @@ logging.basicConfig(level=logging.DEBUG)
 
 #### Teams at Event
 - **Endpoint:** `/event/{event_key}/teams`
-- **Example:** `/event/2024cala/teams`
+- **Example:** `/event/2026oktu/teams`
 
 #### Event Matches
 - **Endpoint:** `/event/{event_key}/matches`
-- **Example:** `/event/2024cala/matches`
+- **Example:** `/event/2026oktu/matches`
 
 #### Event Details
 - **Endpoint:** `/event/{event_key}`
-- **Example:** `/event/2024cala`
+- **Example:** `/event/2026oktu`
 
 ### FIRST API v2.0
 
 #### Teams at Event
 - **Endpoint:** `/v2.0/{season}/teams/event/{event_code}`
-- **Example:** `/v2.0/2024/teams/event/CALA`
+- **Example:** `/v2.0/2026/teams/event/OKTU`
 
 #### Event Matches
 - **Endpoint:** `/v2.0/{season}/schedule/{event_code}`
-- **Example:** `/v2.0/2024/schedule/CALA`
+- **Example:** `/v2.0/2026/schedule/OKTU`
 
 #### Event Details
 - **Endpoint:** `/v2.0/{season}/events?eventCode={event_code}`
-- **Example:** `/v2.0/2024/events?eventCode=CALA`
+- **Example:** `/v2.0/2026/events?eventCode=OKTU`
 
 ## Support and Updates
 

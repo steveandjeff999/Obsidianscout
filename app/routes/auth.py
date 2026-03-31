@@ -1833,7 +1833,7 @@ def save_nav_visibility():
         'comparison', 'config_averages', 'custom_pages', 'strategy', 'strategy_all',
         'strategy_draw', 'strategy_live', 'my_graph_shares', 'my_ranking_shares',
         'trends', 'data', 'simulations',
-        'users', 'chat', 'assistant', 'notifications_nav', 'sponsors', 'contact',
+        'users', 'chat', 'assistant', 'notifications_nav', 'contact',
         'scout_leaderboard', 'documentation', 'setup_tutorial',
     ]
 

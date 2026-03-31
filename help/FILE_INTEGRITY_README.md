@@ -76,9 +76,9 @@ The following files and directories are NOT monitored:
 ## Usage Scenarios
 
 ### Normal Operation
-- System runs normally with background monitoring
+- System runs normally after startup integrity verification
 - No user interaction required
-- Files are checked every 30 seconds
+- Baseline checksums remain available for future verification/reinitialization
 
 ### File Integrity Compromised
 1. System detects file changes
@@ -186,10 +186,3 @@ instance/
 - File-specific monitoring rules
 - Integration with external security systems
 - Audit logging of integrity events
-
-## Security Best Practices
-
-- Use strong, unique passwords for your account.
-- Log out when finished using the app.
-- Do not share your login credentials.
-- Report suspicious activity to your admin immediately.

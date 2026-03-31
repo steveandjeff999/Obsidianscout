@@ -109,7 +109,7 @@ Advanced users can create custom widgets using Python-like code:
 - Define custom data queries
 - Create specialized visualizations
 - Implement team-specific metrics
-- See `CUSTOM_WIDGET_GUIDE.md` for details
+- See `docs/CUSTOM_WIDGET_GUIDE.md` for details
 
 ### Managing Custom Pages
 - **Edit**: Rearrange widgets, add new ones, change settings
@@ -234,7 +234,7 @@ Advanced users can create custom widgets using Python-like code:
 - **Collaborate**: Get input from scouts who watched the robots
 
 ## Need Help?
-- See `CUSTOM_WIDGET_GUIDE.md` for advanced widget creation
+- See `docs/CUSTOM_WIDGET_GUIDE.md` for advanced widget creation
 - Check `API_DOCUMENTATION.md` for programmatic data access
 - Use the in-app **Assistant** for interactive help
 - Contact your team's analytics lead 

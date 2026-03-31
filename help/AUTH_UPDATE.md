@@ -12,7 +12,7 @@ The authentication system was encountering a unique constraint error when trying
    - Now properly converts empty email strings to NULL in database
    - Prevents unique constraint violations
 
-3. **Added email fix script**: `fix_emails.py`
+3. **Added email fix script**: `other/fix_emails.py`
    - Automatically fixes existing users with empty email strings
    - Converts empty strings to NULL values
    - Displays current users and their email status
@@ -21,7 +21,7 @@ The authentication system was encountering a unique constraint error when trying
    - Added custom error handlers for database issues
    - Provides user-friendly error messages and guidance
 
-5. **Created admin reset script**: `reset_admin.py`
+5. **Created admin reset script**: `other/reset_admin.py`
    - Creates or resets the admin user with default credentials
    - Useful for recovering access if admin credentials are lost
 
@@ -34,18 +34,18 @@ The authentication system was encountering a unique constraint error when trying
 
 ### If you encounter email-related errors:
 ```
-python fix_emails.py
+python other/fix_emails.py
 ```
 
 ### If you need to reset the admin account:
 ```
-python reset_admin.py
+python other/reset_admin.py
 ```
 
 ### Follow the updated setup instructions in:
 - `SETUP_INSTRUCTIONS.md`
 - `AUTH_README.md`
-- Use `setup_auth.bat` for guided setup (Windows)
+- Use `help/setup_auth.bat` for guided setup (Windows)
 
 ## Technical Details:
 

@@ -385,13 +385,6 @@ def contact():
 
     return render_template('pages/contact.html', email=target, email_configured=email_configured, **get_theme_context())
 
-@bp.route('/sponsors')
-@login_required
-def sponsors():
-    """Sponsors page to thank site sponsors"""
-    return render_template('sponsors.html', **get_theme_context())
-
-
 # Developer helper: show the 500 error page at /500 for visual testing (returns status 500)
 @bp.route('/500')
 def show_500():

@@ -1,276 +1,62 @@
-# Connections and Real-Time Sync Guide
+# Connections and Sync
 
-Obsidian-Scout features multiple synchronization systems to ensure data consistency across devices, servers, and alliance partners.
+This page explains what to expect from sync and what to do when it fails.
 
-## Overview
+## Sync types
 
-Sync mechanisms available:
-- **Real-Time Replication**: Instant websocket-based sync for live collaboration
-- **Catch-Up Sync**: Periodic synchronization for devices that were offline
-- **Alliance Sync**: Share data with alliance partners during competitions
-- **API Sync**: Automated imports from FIRST API and The Blue Alliance
-- **Server-to-Server Sync**: Multi-instance deployments stay synchronized
+- **Real-time sync**: fast updates between connected devices
+- **Catch-up sync**: recovers missed data after outages
+- **Alliance sync**: shares alliance scouting data when enabled
+- **API sync**: imports event/team/match data from external APIs
 
-## Real-Time Replication
+## What to check first
 
-### How It Works
+- Connection indicator is healthy
+- Devices are using the same event and environment
+- API credentials are valid (if using API sync)
 
-- Uses **WebSocket** technology (Socket.IO) for bidirectional communication
-- Changes propagate instantly (<100ms typically)
-- Supports multiple concurrent users
-- Automatic reconnection if connection drops
-- Queue-based reliability - no data loss during brief disconnections
+## If devices disagree on data
 
-### Supported Operations
+1. Wait briefly for real-time/catch-up sync
+2. Trigger manual sync from admin tools
+3. Refresh both devices and re-check entries
+4. If still mismatched, review sync logs/monitor
 
-- **Scouting data**: New entries, edits, deletions
-- **Pit scouting**: Team information updates
-- **Strategy drawings**: Real-time collaborative canvas
-- **Chat messages**: Direct messages, group chat
-- **Configuration changes**: Game config, pit config updates
-- **Match data**: Score updates, scheduling changes
+## Alliance sync notes
 
-### Monitoring Real-Time Sync
+- Alliance sharing only works for active alliance members
+- Shared match data can be visible across alliance teams
+- Team-private data remains isolated unless explicitly shared
 
-1. Check **connection indicator** in navbar (green dot = connected)
-2. Go to **Admin** > **Sync Monitor** for detailed status
-3. View queue size and worker status
-4. See last sync timestamp
-5. Monitor error rates
+Inline help icons on alliance screens can be toggled in **Settings > Show inline help icons**.
 
-### Performance Considerations
+## API sync notes
 
-- Optimized for low-bandwidth scenarios (minimum 3G connection)
-- Data compressed before transmission
-- Batching reduces overhead for bulk operations
-- Priority queue ensures critical updates go first
+- Configure at least one provider (TBA and/or FIRST)
+- Keep one provider as fallback for reliability
+- Test with a known event code before competition use
 
-## Catch-Up Sync
+## Best practice for events
 
-### Purpose
+- Keep one server instance as the primary source of truth
+- Verify sync health before qualification matches begin
+- Keep QR transfer available as an offline backup path
 
-Catch-up sync handles scenarios where devices were offline or real-time sync failed:
-- Devices returning from network outage
-- New devices joining existing deployment
-- Recovering from sync failures
-- Periodic validation of data consistency
+## Common Sync Problems
 
-### Automatic Catch-Up
-
-- Runs every **5 minutes** by default (configurable)
-- Compares local database timestamps with remote
-- Identifies missing or outdated records
-- Downloads and applies changes
-- Minimal bandwidth usage (only transfers differences)
-
-### Manual Catch-Up Trigger
-
-1. Go to **Admin** > **Sync Monitor**
-2. Click **Trigger Catch-Up Sync**
-3. Select sync scope:
-   - **Full**: All tables
-   - **Teams**: Team data only
-   - **Matches**: Match data only
-   - **Scouting Data**: Match scouting entries
-4. Monitor progress indicator
-5. Status updates in real-time
-
-### Catch-Up Scheduler
-
-- Background process runs continuously
-- Configurable intervals in `app_config.json`
-- Logs all operations for troubleshooting
-- Automatically retries failed operations
-- Exponential backoff for persistent errors
-
-## Alliance Sync
-
-### What is Alliance Sync?
-
-During FRC competitions, teams often form alliances and need to share scouting data. Alliance Sync enables secure, controlled data sharing between alliance partners.
-
-### Setting Up an Alliance
-
-1. **Admin user** goes to **Alliances** > **Scouting Alliances**
-2. Click **Create Alliance**
-3. Enter alliance name (e.g., "Playoff Alliance 1")
-4. Invite partner teams by team number
-5. Partners receive invitation and can accept/decline
-
-### Alliance Member Management
-
-- **Owners** can invite/remove members
-- **Members** can view shared data
-- Members can leave alliance anytime
-- All actions logged for audit trail
-
-### Data Sharing in Alliances
-
-**What gets shared:**
-- Match scouting data for common opponents
-- Team rankings and analysis
-- Strategy notes (if opted in)
-- Match predictions
-
-**What does NOT get shared:**
-- Pit scouting data (unless explicitly shared)
-- Internal team notes marked "private"
-- User account information
-- Configuration settings
-
-### Inline help icons
-The Scouting Alliances pages now include small help icons (a question-mark) next to major headings and controls. Hover (desktop) or tap (mobile) these icons to view short, contextual popovers explaining the feature. If you prefer not to see these inline hints, disable them in **Settings → Show inline help icons**.
-
-
-### Alliance Sync Frequency
-
-- Real-time sync for active matches
-- Every **30 seconds** for upcoming matches
-- Every **3 minutes** for historical data
-- On-demand sync available
-
-### Security & Privacy
-
-- Alliance data isolated from other teams
-- Token-based authentication for all sync operations
-- Members can revoke sharing anytime
-- No data shared without explicit alliance membership
-- Audit logs track all data access
-
-## API Sync (External Data Sources)
-
-### Dual API Support
-
-Obsidian-Scout integrates with official FRC data sources:
-
-#### FIRST API (Official)
-- Event schedules
-- Match results and scores
-- Team registrations
-- Rankings and standings
-
-#### The Blue Alliance API
-- Fallback if FIRST API unavailable
-- Historical data access
-- Additional statistics
-- OPR/DPR/CCWM calculations
-
-### Configuring API Sync
-
-1. Go to **Admin Settings** > **Configuration** > **API Settings**
-2. **For FIRST API:**
-   - Enter username
-   - Enter authorization token
-   - Set base URL (default: https://frc-api.firstinspires.org)
-3. **For The Blue Alliance:**
-   - Enter API key (get from thebluealliance.com/account)
-   - Set base URL (default: https://www.thebluealliance.com/api/v3)
-4. Choose **preferred API source** (FIRST or TBA)
-5. Enable **auto-sync** toggle
-6. Set sync interval (default: 3 minutes)
-7. Save configuration
-
-### Auto-Sync Behavior
-
-- Syncs current event automatically
-- Updates team list for event
-- Imports match schedule
-- Updates match scores as they're posted
-- Fallback to secondary API if primary fails
-- Logs all API requests for debugging
-
-### Manual API Sync
-
-1. Go to **Teams** or **Matches** page
-2. Click **Sync from API** button
-3. Select event (or use current event)
-4. Wait for completion notification
-5. Review imported data
-
-## Server-to-Server Sync
-
-### Multi-Instance Deployments
-
-For large teams or multi-site operations, multiple Obsidian-Scout servers can sync:
-
-### Adding a Remote Server
-
-1. Go to **Admin** > **Server Management**
-2. Click **Add Server**
-3. Enter server details:
-   - Name (e.g., "Pit Computer")
-   - Host URL (e.g., "https://192.168.1.50:8080")
-   - API key for authentication
-4. Test connection
-5. Enable sync
-
-### Sync Modes
-
-**Full Sync:**
-- Entire database synchronized
-- Used for initial setup or major sync issues
-- Can take several minutes
-
-**Incremental Sync:**
-- Only changes since last sync
-- Runs every 1-5 minutes
-- Efficient for ongoing operations
-
-**Real-Time Forwarding:**
-- Changes pushed immediately to other servers
-- Sub-second latency
-- Requires persistent connection
-
-### File Synchronization
-
-Beyond database sync, files also sync:
-- Configuration files (game_config.json, pit_config.json)
-- Uploaded images (pit photos, team logos)
-- Custom page definitions
-- Strategy drawing backgrounds
-
-**Blocked from sync (safety):**
-- Database files (*.db, *.sqlite)
-- Log files
-- SSL certificates
-- Application code
-
-## Sync Monitoring
-
-### Sync Monitor Dashboard
-
-1. Navigate to **Admin** > **Sync Monitor**
-2. View live statistics:
-   - Active connections
-   - Queue sizes
-   - Sync worker status
-   - Recent operations
-   - Error rates
-3. Real-time updates via WebSocket
-
-### Key Metrics
-
-- **Queue Size**: Number of pending operations (should be near 0)
-- **Worker Running**: Status of background sync worker
-- **Last Sync**: Timestamp of most recent sync
-- **Error Count**: Failed operations (investigate if >0)
-- **Connected Devices**: Number of active WebSocket connections
-
-### Troubleshooting Sync Issues
-
-#### High Queue Size
+### High Queue Size
 - Indicates sync worker overloaded or stuck
 - Check server logs for errors
 - Restart sync worker (Admin > Restart Services)
 - Consider reducing sync frequency
 
-#### Sync Worker Not Running
+### Sync Worker Not Running
 - Worker may have crashed
 - Check application logs
 - Restart application
 - Verify no database corruption
 
-#### Frequent Disconnections
+### Frequent Disconnections
 - Check network stability
 - Verify firewall not blocking WebSocket
 - Inspect browser console for errors
@@ -335,7 +121,7 @@ Beyond database sync, files also sync:
 
 ## Need Help?
 
-- See `REALTIME_SYNC_README.md` for advanced real-time features
+- See the **Technical Details** section on this page for advanced synchronization details
 - Check `DUAL_API_README.md` for API integration details
 - Review `TROUBLESHOOTING.md` for common sync issues
 - Contact your team's admin or technical lead

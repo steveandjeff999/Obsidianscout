@@ -49,5 +49,4 @@ This page explains what data Obsidian-Scout collects, why we collect it, and how
 
 If you have questions about data collection, sharing, or deletion, contact your team admin or consult the Admin settings and audit logs. For issues with sensitive data, please raise the concern with your deployment administrator.
 
----
-*This privacy policy compiles relevant security and privacy information found in the server help files.*
+

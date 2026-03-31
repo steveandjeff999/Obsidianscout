@@ -1,5 +1,5 @@
 # Obsidian-Scout REST API Documentation
-**Version 1.0.2.0 | Last Updated: October 8, 2025**
+**Version 1.0.2.0 | Last Updated: See app/CHANGELOG.txt**
 
 Complete reference for the Obsidian-Scout REST API, WebSocket API, and Server-to-Server Sync API.
 
