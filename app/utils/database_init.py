@@ -12,6 +12,14 @@ from app.models import User, Role, Team, Event, Match
 def initialize_database():
     """Initialize database with all required tables and default data"""
     print("Initializing database...")
+    # Targeted startup self-heal: add prescout phaseout admin-setting columns
+    # if they are missing, without requiring broad/full migration behavior.
+    try:
+        from app.utils.database_migrations import ensure_prescout_phaseout_settings_columns
+        ensure_prescout_phaseout_settings_columns(db)
+    except Exception as e:
+        print(f"Warning: targeted prescout column self-heal failed: {e}")
+
     # Run schema migrations early so ORM queries don't fail on missing columns
     try:
         from app.utils.database_migrations import run_all_migrations

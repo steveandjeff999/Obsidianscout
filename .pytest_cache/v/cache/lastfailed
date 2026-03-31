@@ -9,5 +9,6 @@
   "tests/test_alliances_recommend_dedupe.py::test_recommendations_dedupes_teams": true,
   "tests/test_alliances_recommend_dedupe_by_team_number.py::test_recommendations_dedupes_by_team_number": true,
   "tests/test_simulation_run_team_selection.py::test_simulation_run_prefers_scoped_team": true,
-  "tests/test_simulations_dedupe.py::test_simulations_dedupe": true
+  "tests/test_simulations_dedupe.py::test_simulations_dedupe": true,
+  "tools/test_graph_data.py": true
 }

@@ -1,4 +1,7 @@
 [
+  "tests/test_db_migrations.py::test_add_column_postgres_type_mapping",
+  "tests/test_db_migrations.py::test_last_used_updated_on_requests",
+  "tests/test_db_migrations.py::test_run_all_migrations_creates_offset_column",
   "tests/test_statbotics_api_utils.py::test_apply_epa_gap_fill_no_data",
   "tests/test_statbotics_api_utils.py::test_apply_epa_gap_fill_with_data",
   "tests/test_statbotics_api_utils.py::test_apply_epa_graduated_blend_1_match",

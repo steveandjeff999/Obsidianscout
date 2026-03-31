@@ -1780,6 +1780,59 @@ def qual_endgame_status():
     enabled = team_settings.qual_show_endgame_climb if team_settings else False
     return jsonify({'enabled': bool(enabled)})
 
+@bp.route('/admin/prescout-phasing-settings', methods=['POST'])
+@admin_required
+def save_prescout_phasing_settings():
+    """Save prescout data phasing settings for the admin's team"""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.admin_settings'))
+    from app.models import ScoutingTeamSettings
+    
+    # Get or create team settings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    if not team_settings:
+        team_settings = ScoutingTeamSettings(scouting_team_number=current_user.scouting_team_number)
+        db.session.add(team_settings)
+    
+    try:
+        # Get form values
+        pp_matches = request.form.get('prescout_phaseout_matches', type=int)
+        pp_enabled = request.form.get('prescout_phaseout_enabled') is not None
+        
+        # Validate and set prescout phasing matches (1-5, default 3)
+        if pp_matches is not None and 1 <= pp_matches <= 5:
+            team_settings.prescout_phaseout_matches = pp_matches
+        else:
+            team_settings.prescout_phaseout_matches = 3
+        
+        team_settings.prescout_phaseout_enabled = bool(pp_enabled)
+        team_settings.updated_at = datetime.now(timezone.utc)
+        
+        db.session.commit()
+        
+        status = "enabled" if team_settings.prescout_phaseout_enabled else "disabled"
+        threshold = team_settings.prescout_phaseout_matches
+        flash(f'Prescout data phasing has been {status} (threshold: {threshold} matches) for your team.', 'success')
+    except Exception as e:
+        flash(f'Error saving prescout phasing settings: {str(e)}', 'danger')
+    
+    return redirect(url_for('auth.admin_settings'))
+
+@bp.route('/admin/prescout-phasing-status', methods=['GET'])
+def prescout_phasing_status():
+    """Return JSON with current prescout phasing settings for the user's team"""
+    if not current_user.is_authenticated:
+        return jsonify({'enabled': False, 'matches': 3})
+    
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    if team_settings:
+        return jsonify({
+            'enabled': bool(team_settings.prescout_phaseout_enabled),
+            'matches': int(team_settings.prescout_phaseout_matches or 3)
+        })
+    return jsonify({'enabled': False, 'matches': 3})
+
 @bp.route('/admin/toggle-account-lock', methods=['POST'])
 @admin_required
 def toggle_account_lock():

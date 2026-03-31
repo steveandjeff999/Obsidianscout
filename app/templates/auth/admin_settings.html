@@ -153,6 +153,39 @@
                 </div>
 
                 <div class="tab-pane fade" id="pane-integrations" role="tabpanel" aria-labelledby="tab-integrations">
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-chart-line"></i> Prescout Data Phasing {{ help.help_icon('Automatically phase out prescout data once the team has real match data. Configure how many matches teams need before prescout data is excluded from analytics.', 'Prescout phasing') }}</h5></div>
+                                <div class="card-body d-flex flex-column">
+                                    <p class="mb-3">Automatically exclude prescout data once teams accumulate real match data at an event.</p>
+                                    <form method="POST" action="{{ url_for('auth.save_prescout_phasing_settings') }}" class="mt-auto">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <div class="mb-2">
+                                            <label for="prescout_matches" class="form-label small mb-1">Matches before excluding prescout</label>
+                                            <select class="form-select form-select-sm" id="prescout_matches" name="prescout_phaseout_matches">
+                                                <option value="1">1 match</option>
+                                                <option value="2">2 matches</option>
+                                                <option value="3" selected>3 matches (recommended)</option>
+                                                <option value="4">4 matches</option>
+                                                <option value="5">5 matches</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="prescout_enabled" name="prescout_phaseout_enabled">
+                                            <label class="form-check-label" for="prescout_enabled" style="font-size: 0.9em;">
+                                                Enable prescout phasing
+                                            </label>
+                                        </div>
+                                        <button type="submit" class="btn btn-sm btn-primary w-100"><i class="fas fa-save me-1"></i>Save Settings</button>
+                                        <p id="prescoutStatus" class="mt-2 small text-muted">Loading...</p>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="pane-integrations" role="tabpanel" aria-labelledby="tab-integrations">
                     <div class="row">
                         <div class="col-lg-4 col-md-6 mb-3">
                             <div class="card h-100">
@@ -786,5 +819,39 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     } catch (e) { /* ignore */ }
 })();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const statusEl = document.getElementById('prescoutStatus');
+    const matchesSelect = document.getElementById('prescout_matches');
+    const enabledCheckbox = document.getElementById('prescout_enabled');
+    const form = enabledCheckbox.closest('form');
+
+    async function refreshPrescoutStatus() {
+        try {
+            const resp = await fetch("{{ url_for('auth.prescout_phasing_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
+            const data = await resp.json();
+            const enabled = !!data.enabled;
+            const matches = data.matches || 3;
+
+            if (enabled) {
+                statusEl.className = 'mt-2 small text-success';
+                statusEl.textContent = 'Prescout phasing ENABLED (threshold: ' + matches + ' matches)';
+            } else {
+                statusEl.className = 'mt-2 small text-muted';
+                statusEl.textContent = 'Prescout phasing is DISABLED';
+            }
+
+            enabledCheckbox.checked = enabled;
+            matchesSelect.value = matches;
+        } catch (e) {
+            statusEl.className = 'mt-2 small text-muted';
+            statusEl.textContent = 'Could not fetch server status';
+        }
+    }
+
+    refreshPrescoutStatus();
+    setInterval(refreshPrescoutStatus, 10000);
+});
 </script>
 {% endblock %}
