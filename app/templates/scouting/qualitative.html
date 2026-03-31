@@ -431,6 +431,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentMatchData = null;
     let currentIndivMatchData = null;
     let currentEntryId = null;
+    const initialEditEntryIdRaw = {{ request.args.get('edit_entry_id', '')|tojson }};
+    const initialEditEntryId = initialEditEntryIdRaw ? parseInt(initialEditEntryIdRaw, 10) : null;
     let matchesCache = {};
     let currentScoutMode = 'match'; // 'match' or 'team'
 
@@ -1161,9 +1163,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // restore selections and draft AFTER all listeners defined
     qualAutosaveSuppress = true;
-    restoreQualSelections();
-    // ensure fields inside form are filled
-    try { loadAutosaveDataQual(); } catch(e) {}
+    if (Number.isInteger(initialEditEntryId)) {
+        preloadEntryForEdit(initialEditEntryId);
+    } else {
+        restoreQualSelections();
+        // ensure fields inside form are filled
+        try { loadAutosaveDataQual(); } catch(e) {}
+    }
     qualAutosaveSuppress = false;
 
     
@@ -1441,6 +1447,79 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function preloadEntryForEdit(entryId) {
+        if (!Number.isInteger(entryId)) return;
+
+        fetch('{{ url_for("scouting.get_qualitative_entry", entry_id=0) }}'.replace('0', entryId))
+            .then(function(response) { return response.json(); })
+            .then(function(payload) {
+                if (!payload.success || !payload.entry || !payload.match) {
+                    throw new Error('Could not load entry for editing');
+                }
+
+                const entry = payload.entry;
+                const match = payload.match;
+                currentEntryId = entry.id;
+                saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Update Qualitative Scouting';
+
+                const isIndividualEntry = entry.alliance_scouted && String(entry.alliance_scouted).startsWith('team_');
+
+                if (isIndividualEntry) {
+                    const teamNum = String(entry.alliance_scouted).replace('team_', '');
+                    const modeTeamRadio = document.getElementById('mode-team');
+                    if (modeTeamRadio) {
+                        modeTeamRadio.checked = true;
+                        modeTeamRadio.dispatchEvent(new Event('change'));
+                    }
+
+                    if (indivMatchSelector && match.id) {
+                        indivMatchSelector.value = String(match.id);
+                        indivMatchSelector.dispatchEvent(new Event('change'));
+                    }
+
+                    setTimeout(function() {
+                        if (indivTeamSelector) {
+                            indivTeamSelector.value = String(teamNum);
+                            indivTeamSelector.dispatchEvent(new Event('change'));
+                        }
+
+                        setTimeout(function() {
+                            const teamKey = 'team_' + teamNum;
+                            const indivData = (entry.data && entry.data.individual && entry.data.individual[teamKey]) ? entry.data.individual[teamKey] : {};
+                            loadOneTeamData(teamNum, 'individual', indivData);
+                        }, 120);
+                    }, 120);
+                } else {
+                    const modeMatchRadio = document.getElementById('mode-match');
+                    if (modeMatchRadio) {
+                        modeMatchRadio.checked = true;
+                        modeMatchRadio.dispatchEvent(new Event('change'));
+                    }
+
+                    if (matchSelector && match.id) {
+                        matchSelector.value = String(match.id);
+                        matchSelector.dispatchEvent(new Event('change'));
+                    }
+
+                    setTimeout(function() {
+                        const allianceRadio = document.querySelector('input[name="alliance"][value="' + entry.alliance_scouted + '"]');
+                        if (allianceRadio) {
+                            allianceRadio.checked = true;
+                            allianceRadio.dispatchEvent(new Event('change'));
+                        }
+
+                        setTimeout(function() {
+                            loadExistingData(entry);
+                        }, 120);
+                    }, 120);
+                }
+            })
+            .catch(function(error) {
+                console.error('Error preloading qualitative entry for edit:', error);
+                alert('Could not load this qualitative entry for editing.');
+            });
+    }
+
     // Collect all fields for a single team card
     function collectOneTeamData(teamNum, alliance) {
         var roles = {};
@@ -1650,6 +1729,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (formData.match_summary) {
             savePayload.match_summary = formData.match_summary;
         }
+
+        if (currentEntryId) {
+            savePayload.edit_entry_id = currentEntryId;
+        }
         
         savePayload.prescout = isPrescout;
 
@@ -1856,8 +1939,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, 100);
     }
-    // final restore to ensure mode/match/alliance/team applied after ALL handlers attached
-    restoreQualSelections();
 });
 </script>
 {% endblock %}

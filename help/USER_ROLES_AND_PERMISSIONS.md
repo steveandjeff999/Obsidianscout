@@ -58,11 +58,10 @@ Admins can lock account creation for their team to prevent unauthorized signups:
 - Only existing admins can unlock
 
 ## Special Notes
+- Scout-only users are redirected to scouting pages after login.
+- Users with multiple roles effectively receive the highest access level granted by their assigned roles.
+- For route-level navigation examples, see `user-navigation.md`.
 
-### Must Change Password
-- New accounts created with default passwords have the `must_change_password` flag set
-- Users are forced to change password on first login
-- Enhances security for team accounts
 
 ### Role Combinations
 Users can have multiple roles simultaneously:

@@ -49,13 +49,11 @@ STATIC_ASSETS.push('/static/assets/obsidian.png');
 STATIC_ASSETS.push('/static/obsidian-192.png');// ensure the qualitative scouting page is available offline quickly
 STATIC_ASSETS.push('/scouting/qualitative');
 STATIC_ASSETS.push('/teams/');
-STATIC_ASSETS.push('/sponsors/');
 STATIC_ASSETS.push('/help/');
 STATIC_ASSETS.push('/pit_scouting/');
 // Also cache no-trailing-slash variants so navigation requests match regardless of
 // whether the browser or server redirects to or from a trailing slash form.
 STATIC_ASSETS.push('/teams');
-STATIC_ASSETS.push('/sponsors');
 STATIC_ASSETS.push('/help');
 STATIC_ASSETS.push('/pit_scouting');
 

@@ -1,323 +1,136 @@
-# Administrator Guide
+# Administrator Guide (Web Only)
 
-Comprehensive guide for administrators managing Obsidian-Scout scouting systems.
+This guide covers administrator actions available from the web interface only.
 
-## Admin Role Overview
+## Admin responsibilities
 
-As an administrator, you have full access to all system features and data. Your responsibilities include:
-- **User management** (creating, editing, disabling accounts)
-- **System configuration** (game config, API settings, features)
-- **Data management** (backup, export, import)
-- **Security** (permissions, API keys, account locks)
-- **Monitoring** (sync status, errors, performance)
-- **Support** (helping team members troubleshoot issues)
+- Manage users and roles
+- Configure scouting forms and system settings
+- Manage events and sync settings
+- Review data quality and exports
+- Monitor system health from admin pages
 
 ## User Management
 
-### Accessing User Management
+Open from your user menu: **User Management**.
 
-1. Click your **username** in the top-right navbar
-2. Select **User Management** from dropdown
-3. View all users in your scouting team
+### Create users
 
-### Creating New Users
+1. Click **Add New User**
+2. Enter username, team number, and temporary password
+3. Assign role(s): **Admin**, **Analytics**, **Scout**
+4. Enable **Must Change Password**
+5. Save
 
-1. Click **Add New User** button
-2. Fill in required fields:
-   - **Username** (unique, alphanumeric, no spaces)
-   - **Email** (optional, used for password recovery if configured)
-   - **Scouting Team Number** (should match your team)
-   - **Password** (temporary password)
-3. Select **Roles**:
-   - **Admin**: Full system access
-   - **Analytics**: Data analysis and graphs, no user management
-   - **Scout**: Data entry only, no dashboard access
-4. Check **Must Change Password** (recommended for new accounts)
-5. Click **Create User**
+### Edit or disable users
 
-### Editing Users
+1. Find user in the list
+2. Click **Edit**
+3. Update role, email, or active status
+4. Save
 
-1. Find user in list
-2. Click **Edit** button
-3. Modify:
-   - Email address
-   - Roles (add/remove)
-   - Active status (disable without deleting)
-   - Profile picture
-4. Click **Save Changes**
+Use **disable** instead of delete when you need account history preserved.
 
-### Resetting Passwords
+### Reset user passwords
 
-**For another user:**
-1. Edit user account
-2. Enter new temporary password
-3. Check **Must Change Password**
-4. User forced to change at next login
+1. Open user **Edit**
+2. Set temporary password
+3. Enable **Must Change Password**
+4. Save
 
-**For yourself:**
-- Use **Profile** page
-- Enter current password and new password
-- Or use password recovery if email configured
+### Lock account creation
 
-### Disabling Accounts
+In User Management, use the account creation lock toggle to prevent open signups during events.
 
-**Temporary suspension:**
-1. Edit user
-2. Uncheck **Is Active**
-3. Save
-4. User cannot log in but account data preserved
+## Configuration
 
-**Permanent removal:**
-1. Click **Delete** button on user row
-2. Confirm deletion
-3. **Warning**: Cannot be undone, removes user from database
-4. Consider disabling instead for audit trail
+Open: **Admin Settings -> Configuration**.
 
-### Account Creation Lock
+### Game configuration
 
-**Purpose:** Prevent unauthorized signups during competitions.
+Use the editor to manage:
 
-**To lock:**
-1. Go to User Management
-2. Click **Lock Account Creation** toggle
-3. Banner appears on signup page
-4. Only admins can create accounts
+- game/season basics
+- scouting periods (auto, teleop, endgame)
+- scoring elements and defaults
+- post-match ratings/notes
+- key metrics and calculations
 
-**To unlock:**
-1. Click **Unlock Account Creation**
-2. Public signups re-enabled (if previously allowed)
+Save changes and verify scouting forms update as expected.
 
-## System Configuration
+### Pit scouting configuration
 
-### Game Configuration
+Use the pit config editor to control pit form fields and sections.
 
-**Purpose:** Defines scoring elements, metrics, and form layout for match scouting.
+### API settings
 
-**Accessing:**
-1. Go to **Admin Settings** > **Configuration**
-2. Click **Edit Game Config** or **Simple Edit**
+From configuration, set:
 
-**Key Sections:**
+- primary API provider
+- fallback API provider
+- credentials
+- auto-sync toggle
 
-#### Basic Settings
-- **Game Name**: Display name (e.g., "2024 Crescendo")
-- **Season**: Year (e.g., 2024)
-- **Alliance Size**: Teams per alliance (typically 3)
-- **Scouting Stations**: Number of positions (typically 6)
-- **Match Types**: Practice, Qualification, Playoff
-- **Current Event Code**: Active event (e.g., "2024cala")
-
-#### Scoring Periods
-- **Auto Period**: Autonomous scoring elements and duration
-- **Teleop Period**: Teleoperated scoring elements and duration
-- **Endgame Period**: Endgame actions and duration
-
-**For each period, define:**
-- Element ID (unique identifier)
-- Element Name (display label)
-- Element Type (counter, boolean, dropdown, rating)
-- Default Value
-- Points (for auto-scoring)
-
-#### Post-Match Elements
-- **Rating Elements**: 1-5 star ratings (defense, driver skill, etc.)
-- **Text Elements**: Notes and comments
-
-#### Key Metrics
-- Calculated metrics for analytics
-- Aggregation methods (average, sum, max, min)
-- Display in predictions toggle
-- Formula-based calculations
-
-#### API Settings
-- **FIRST API**: Username and auth token
-- **The Blue Alliance API**: API key
-- **Preferred Source**: Which API to try first
-- **Auto-Sync Enabled**: Toggle automatic syncing
-
-**Saving:**
-1. Review all changes in preview
-2. Click **Save Configuration**
-3. Changes take effect immediately
-4. Backup created automatically
-
-### Pit Scouting Configuration
-
-**Similar structure to game config but for pit scouting forms.**
-
-**Location:** `config/pit_config.json`
-
-**Editing:**
-1. Go to **Admin Settings** > **Configuration** > **Pit Config**
-2. Define form sections and elements
-3. Save changes
-
-### Configuration Backups
-
-**Automatic Backups:**
-- Created before every save
-- Stored in `config/` folder with timestamps
-- Keep last 10 backups by default
-
-**Manual Backup:**
-1. Copy `config/game_config.json` to safe location
-2. Include date in filename (e.g., `game_config_2024-10-08.json`)
-
-**Restore from Backup:**
-1. Go to **Configuration** > **Reset to Default**
-2. Select backup file
-3. Confirm restoration
-4. Or manually copy backup file over current config
+Run API tests from the admin pages after saving.
 
 ## Event Management
 
-### Creating Events
+Open: **Events**.
 
-1. Go to **Events** page
-2. Click **Add Event**
-3. Fill in details:
-   - **Event Code** (e.g., "2024cala" - must match FIRST/TBA code)
-   - **Event Name** (e.g., "Chezy Champs 2024")
-   - **Location** (city, state)
-   - **Start/End Dates**
-4. Click **Create**
+### Create and maintain events
 
-### Syncing Event Data from API
+1. Click **Add Event**
+2. Enter code, name, location, and dates
+3. Save
 
-**Automatic Sync:**
-- If enabled in configuration, syncs every 3 minutes
-- Updates teams, matches, and scores
+### Set current event
 
-**Manual Sync:**
-1. Go to **Events** page
-2. Click **Sync from API** for specific event
-3. Or use **Teams** > **Sync Teams** and **Matches** > **Sync Matches**
+Select **Set as Current** on the event you are actively scouting.
 
-**Troubleshooting Sync:**
-- Verify API credentials in configuration
-- Check event code matches FIRST/TBA exactly
-- Use **Admin** > **API Testing** to diagnose
-- Review sync monitor for errors
+### Sync event data
 
-### Setting Current Event
+Use event/team/match sync actions in the web UI to pull updated schedules and team lists.
 
-1. Go to **Events** page
-2. Click **Set as Current** next to event
-3. Or edit configuration and set `current_event_code`
-4. Current event determines:
-   - Which teams show in forms
-   - Which matches appear in strategy tools
-   - Default filters for graphs/analytics
+## Data Management (Web)
 
-> **Year-Prefixed Event Codes:** Events are stored in the database with a year prefix (e.g., `2026OKTU` instead of `OKTU`). The `current_event_code` in your config should be the raw code (e.g., `OKTU`), and the `season` field determines the year prefix. This allows the same event to be tracked across multiple seasons. See `docs/YEAR_PREFIXED_EVENT_CODES.md` for details.
+### Export data
 
-## Data Management
+Open: **Data -> Export**.
 
-### Database Backups
+- Choose data type
+- Apply event/date filters
+- Export for analysis
 
-**Critical:** Backup before competitions and after major data entry!
+### Import data
 
-**Manual Backup:**
-```powershell
-# Windows PowerShell
-Copy-Item "instance\\scouting.db" "backups\\scouting_$(Get-Date -Format 'yyyy-MM-dd_HHmm').db"
+Open: **Data -> Import**.
 
-# Also backup users database
-Copy-Item "instance\\users.db" "backups\\users_$(Get-Date -Format 'yyyy-MM-dd_HHmm').db"
-```
+- Upload supported file format
+- Review preview
+- Confirm import
 
-**Automated Backups:**
-- Set up scheduled task (Windows) or cron job (Linux/Mac)
-- Run backup script daily
-- Store backups on separate drive/cloud storage
-- Test restores regularly
+You can also import scouting entries through the QR scanning pages.
 
-**Restore from Backup:**
-1. **Stop application**
-2. Replace `instance/scouting.db` with backup file
-3. Replace `instance/users.db` if needed
-4. **Restart application**
-5. Verify data integrity
+## Monitoring and support
 
-### Exporting Data
+### Sync and status
 
-**CSV Export:**
-1. Go to **Data** > **Export**
-2. Select data type (scouting data, pit data, teams, matches)
-3. Choose event or date range
-4. Click **Export to CSV**
-5. Open in Excel, Google Sheets, etc.
+Use admin monitoring pages to check:
 
-**API Export:**
-- Use API keys for programmatic access
-- See `API_DOCUMENTATION.md` for endpoints
-- JSON format for integration with other tools
+- connection health
+- sync queue/status
+- recent failures
 
-### Importing Data
+### Fast support flow
 
-**CSV Import:**
-1. Prepare CSV file in correct format (match column headers)
-2. Go to **Data** > **Import**
-3. Select file and data type
-4. Review preview
-5. Confirm import
-6. Check for errors/warnings
+When users report issues:
 
-**QR Code Import:**
-1. Generate QR codes from other systems/devices
-2. Go to **Scouting** > **QR Scan**
-3. Scan codes one by one
-4. Data automatically imports
+1. Verify role and account status
+2. Verify current event selection
+3. Check sync/connection health
+4. Re-test the action in browser
 
-## API Key Management
-
-### What are API Keys?
-
-API keys allow external applications and scripts to access your scouting data programmatically. Use cases:
-- Custom analysis scripts
-- Third-party integrations
-- Alliance partner data sharing
-- Mobile app development
-
-### Creating API Keys
-
-1. Go to **Admin** > **API Keys** > **Manage**
-2. Click **Create New Key**
-3. Fill in details:
-   - **Name**: Descriptive name (e.g., "Python Analysis Scripts")
-   - **Description**: Purpose and usage notes
-   - **Rate Limit**: Requests per hour (default 1000)
-   - **Permissions**:
-     - **Team Data Access**: Read teams/events
-     - **Scouting Data Read**: View scouting entries
-     - **Scouting Data Write**: Create/edit entries
-     - **Sync Operations**: Trigger syncs
-     - **Analytics Access**: Advanced metrics
-4. Click **Generate Key**
-5. **Copy key immediately** - won't be shown again!
-
-### Managing API Keys
-
-**View Usage:**
-1. Go to API Keys list
-2. Click on key name
-3. View statistics:
-   - Total requests
-   - Last used timestamp
-   - Daily usage graph
-   - Recent requests log
-
-**Revoking Keys:**
-1. Find key in list
-2. Click **Revoke** or **Delete**
-3. Confirm action
-4. Key immediately stops working
-
-**Testing Keys:**
-1. Go to **Admin** > **API Testing**
-2. Enter API key
-3. Run test requests
-4. Verify responses
+For common user-facing fixes, see `TROUBLESHOOTING.md`.
 
 ### API Key Security
 
@@ -445,65 +258,6 @@ See `TROUBLESHOOTING.md` for comprehensive troubleshooting, but quick admin-spec
 - Review error logs for specific issue
 - Try backup/restore approach
 
-## Pre-Competition Checklist
-
-**1 Week Before:**
-- [ ] Backup all databases
-- [ ] Update application to latest version
-- [ ] Test API sync with event code
-- [ ] Configure game config for current game
-- [ ] Train scouts on form layout
-- [ ] Create user accounts for event personnel
-- [ ] Test all devices (tablets, laptops, phones)
-
-**1 Day Before:**
-- [ ] Sync teams and matches from API
-- [ ] Verify network setup at venue
-- [ ] Test real-time sync between devices
-- [ ] Review roles and permissions
-- [ ] Prepare pit scouting assignments
-- [ ] Backup again
-
-**Event Day:**
-- [ ] Arrive early to set up network
-- [ ] Verify internet connectivity
-- [ ] Test all device logins
-- [ ] Sync latest match schedule
-- [ ] Monitor sync status throughout day
-- [ ] Backup database at lunch and end of day
-
-## Post-Competition Tasks
-
-- [ ] Final database backup
-- [ ] Export data to CSV for archival
-- [ ] Generate competition report/summary
-- [ ] Review logs for any recurring issues
-- [ ] Deactivate event-specific user accounts
-- [ ] Thank team members for their effort
-- [ ] Document lessons learned
-- [ ] Prepare data for off-season analysis
-
-## Advanced Administration
-
-### Custom Widget Development
-- See `CUSTOM_WIDGET_GUIDE.md` for creating custom dashboard widgets
-- Requires Python knowledge
-- Test in dev environment first
-
-### Server-to-Server Sync
-- See `CONNECTIONS_AND_SYNC.md` for multi-instance setup
-- Useful for large teams with multiple locations
-- Requires network configuration and API keys
-
-### Database Optimization
-```powershell
-# Run VACUUM to reclaim space
-sqlite3 instance/scouting.db
-```
-```sql
-VACUUM;
-.quit
-```
 
 ### Alliance Configuration
 - Set up scouting alliances before playoff matches
@@ -522,26 +276,4 @@ VACUUM;
 - **Troubleshooting Guide**: `TROUBLESHOOTING.md`
 - **GitHub Repository**: https://github.com/steveandjeff999/Obsidianscout
 
-### Support Channels
-- **GitHub Issues**: Report bugs and request features
-- **Team Tech Lead**: Escalate to team's technical leadership
-- **FRC Community**: Chief Delphi, Discord servers
-- **Documentation**: Continuously updated based on feedback
 
-### Contributing Back
-- Document team-specific configurations
-- Share lessons learned with community
-- Report bugs with detailed reproduction steps
-- Suggest feature improvements
-- Contribute code if comfortable with Python/Flask
-
-## Conclusion
-
-Admin responsibilities are critical to a successful scouting operation. Focus on:
-- **Preparation**: Test and configure before events
-- **Monitoring**: Watch for issues during competition
-- **Communication**: Keep team informed of any issues
-- **Documentation**: Record configurations and procedures
-- **Security**: Protect data and access carefully
-
-With proper administration, Obsidian-Scout provides a robust platform for competitive FRC scouting! 

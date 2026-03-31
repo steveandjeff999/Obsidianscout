@@ -1,71 +1,37 @@
-# Scout Role Access Restriction Update
+# Scout Access Behavior
 
-## Changes Made
+This page documents the current scout-role restrictions and expected behavior.
 
-1. **Updated Scout Role Permissions**
-   - Scouts can no longer access the main dashboard
-   - Removed `main.index` from the list of allowed routes for scouts
-   - Added automatic redirect to the scouting page after login
+## Scout-Only Access Rules
 
-2. **Modified Main Dashboard Route**
-   - Added access control check to redirect scouts away from the dashboard
-   - Shows a warning message when scouts try to access restricted pages
+- Scout-only users are redirected to the scouting page after login.
+- Scout-only users cannot access the main dashboard or admin/analytics-only pages.
+- Navigation is simplified so scouting actions are emphasized.
+- If a scout-only user visits a restricted URL directly, they are redirected back to scouting with an access warning.
 
-3. **Updated Navigation UI**
-   - Modified the application logo link to point to the scouting page for scout users
-   - Hidden the Dashboard navigation item for scout-only users
-   - Left all other navigation behavior intact
+## Dashboard Behavior
 
-4. **Added Test Scout User Script**
-   - Created `create_test_scout.py` to easily create a test scout account
-   - Default credentials: Username: "Scout User", Password: "scout123"
-   - Use this account to test scout-only access restrictions
+- On scouting-related pages, scout-only users may see limited-access sections with disabled controls where editing or admin actions are not allowed.
+- Users with `analytics` or `admin` roles continue to see full controls and full navigation.
 
-5. **UI/UX Improvements for Scout Role**
-   - Greyed out "Recent Scouting Data" and "Game Configuration" sections on the scouting dashboard for users with ONLY the scout role
-   - Users with both scout and analytics roles retain full access to these sections
-   - Changed card headers to a grey color to visually indicate limited access for scout-only users
-   - Added "Limited access" notes to restricted sections for scout-only users
-   - Disabled all edit, view, and configuration buttons in these sections for scout-only users
-   - Added access control checks in routes to prevent direct URL access to restricted pages for scout-only users
-   - Redirect scout-only users with appropriate warning messages if they try to access restricted pages
+## Testing with a Sample Scout User
 
-## Testing the Changes
+Use the provided helper script:
 
-1. Create a test scout user:
-   ```
-   python create_test_scout.py
-   ```
+```
+python other/create_test_scout.py
+```
 
-2. Log in with the scout user credentials:
-   - Username: Scout User
-   - Password: scout123
+Default test credentials created by the script:
+- Username: `Scout User`
+- Password: `scout123`
 
-3. Verify that:
-   - You're automatically taken to the scouting page after login
-   - The dashboard link is not visible in the navigation menu
-   - If you try to access the dashboard URL directly, you're redirected back to scouting
-   - Recent Scouting Data and Game Configuration sections are greyed out
-   - Buttons within these sections are disabled
-   - If you try to access list, view, or delete routes directly, you're redirected with a warning
+Verify the following after login:
+1. Redirect goes to scouting pages.
+2. Dashboard/admin-only links are hidden or blocked.
+3. Restricted direct URLs redirect with a warning.
 
-## User Experience for Different Roles
+## Related Documentation
 
-1. **Admin and Analytics Users**:
-   - Can access all pages as before
-   - No change in navigation or access
-   - See full functionality on the scouting dashboard
-
-2. **Scout-Only Users**:
-   - See a simplified interface focused on scouting
-   - Application logo redirects to scouting page
-   - Dashboard and advanced features are hidden
-   - Only see the scouting-related navigation items
-   - See greyed-out sections for restricted functionality with visual cues
-   - Cannot access detailed scouting data or configuration options
-
-3. **Users with Multiple Roles**:
-   - Users with both scout and analytics roles can access all data features
-   - No greying out of sections for users with both scout and analytics roles
-   - Buttons and links remain active for users with both scout and analytics roles
-   - Route access is granted based on the highest privilege role assigned to the user
+- See `USER_ROLES_AND_PERMISSIONS.md` for role definitions.
+- See `user-navigation.md` for route-level navigation examples.

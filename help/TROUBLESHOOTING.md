@@ -1,263 +1,65 @@
-# Troubleshooting Guide for 5454Scout Authentication System
+# Troubleshooting
 
-## Quick Troubleshooting
+Use this page for fast diagnosis before deep debugging.
 
-### Can't log in
-- Check your username and password.
-- Make sure your account is active.
+## 1) Login issues
 
-### Data not saving
-- Check your internet connection.
-- Try refreshing the page.
+- Confirm username/password and correct scouting team number
+- Ask admin to verify account is active and role is assigned
+- Log out, clear browser cache/cookies, and log in again
 
-### Still stuck?
-Contact your system administrator for further help.
+If needed:
 
-## Common Issues and Solutions
-
-```markdown
-# Obsidian-Scout Troubleshooting Guide
-
-Comprehensive troubleshooting guide for common issues and their solutions.
-
-## Quick Fixes
-
-### Can't Log In
-- **Check username and password** (case-sensitive)
-- Verify **account is active** (admins can check user management)
-- Clear browser **cookies and cache**
-- Try **incognito/private mode** to rule out extension conflicts
-- Ensure **scouting team number** is correct on login form
-
-### Data Not Saving
-- Check **internet connection** (look for connection indicator in navbar)
-- Try **refreshing the page** (Ctrl+R or Cmd+R)
-- Verify you're still **logged in** (session may have expired)
-- Check if you have **permission** to edit (Scout vs. Analytics vs. Admin)
-- Look for **error messages** in red banner at top of page
-
-### Page Not Loading / Errors
-- **Hard refresh**: Ctrl+Shift+R (Cmd+Shift+R on Mac)
-- **Clear browser cache**: Settings > Privacy > Clear Data
-- Try **different browser** (Chrome recommended)
-- Check **browser console** for JavaScript errors (F12)
-- Verify **server is running** (check URL/port)
-
-## Authentication Issues
-
-### 1. UNIQUE Constraint Failed on user.email
-
-**Error Message:**
-```
-sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) UNIQUE constraint failed: user.email
-```
-
-**Cause:** Multiple users with empty email addresses (NULL vs empty string inconsistency).
-
-**Solution:**
-```powershell
-python fix_emails.py
-```
-
-This converts empty strings to NULL, allowing multiple users without emails.
-
-### 2. Can't Login as Superadmin
-
-**Default Credentials:**
-- Username: `superadmin`
-- Password: `password` (must change on first login)
-- Auto-created by `run.py` on first run
-
-**If superadmin doesn't exist:**
-```powershell
-python run.py
-```
-First run creates superadmin automatically.
-
-**Reset superadmin password:**
 ```powershell
 python reset_superadmin.py
 ```
 
-### 3. Can't Login as Admin
+Alternative admin reset helper:
 
-**Reset admin account:**
 ```powershell
-python other/reset_admin.py
-```
-Creates/resets admin user with password: `password`
-
-**Manual reset via Python:**
-```python
-from app import create_app, db
-from app.models import User
-
-app = create_app()
-with app.app_context():
-    user = User.query.filter_by(username="admin").first()
-    if user:
-        user.set_password("password")
-        db.session.commit()
-        print("Password reset successfully")
+python other\reset_admin.py
 ```
 
-### 4. Account Creation Locked
+## 2) Data not saving
 
-**Symptom:** Can't create new accounts, get "Account creation locked" message.
+- Check connection status indicator in the app
+- Refresh and submit again
+- Confirm your session did not expire
+- Verify your role has permission for that action
 
-**Solution (Admin only):**
-1. Log in as admin
-2. Go to **User Management**
-3. Click **Unlock Account Creation** toggle
-4. New accounts can now be created
+## 3) App not loading correctly
 
-### 5. Role-Based Access Not Working
+- Hard refresh (`Ctrl+Shift+R`)
+- Try another browser
+- Confirm server is running (`python run.py`)
 
-**Symptoms:**
-- Can't access pages that should be available
-- Redirected unexpectedly
-- Features missing from navbar
+## 4) Database locked errors
 
-**Solutions:**
-1. **Check roles assigned**: User Management > Edit User > Verify roles
-2. **Log out and back in**: Roles cached in session
-3. **Clear cookies**: May have stale session data
-4. **Verify team isolation**: Users only see their scouting team's data
+- Stop all running app instances
+- Wait a few seconds, then start one instance only
+- Check for leftover lock/journal files in `instance/`
 
-**Role Permissions Reference:**
-- **Admin**: Full access
-- **Analytics**: All data/graphs, no user management
-- **Scout**: Scouting forms only, no dashboard
+## 5) Missing table or schema mismatch
 
-### 6. Must Change Password Loop
+- Restore from backup if available
+- Run migrations/upgrade steps for your deployment
+- Recreate only if this is a fresh setup
 
-**Symptom:** Forced to change password repeatedly after changing it.
+## 6) API sync problems
 
-**Cause:** `must_change_password` flag not clearing.
+- Verify credentials in API settings
+- Test with a known event code
+- Enable fallback API source if primary is failing
 
-**Solution (Admin):**
-```powershell
-python
-```
-```python
-from app import create_app, db
-from app.models import User
+## 7) When to escalate
 
-app = create_app()
-with app.app_context():
-    user = User.query.filter_by(username="problematic_user").first()
-    user.must_change_password = False
-    db.session.commit()
-```
+Escalate to admin/developer if:
 
-## Database Issues
+- errors persist after restart and relogin
+- multiple users report the same failure
+- database integrity/corruption is suspected
 
-### 7. Database is Locked
-
-**Error Message:**
-```
-sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) database is locked
-```
-
-**Causes:**
-- Multiple processes accessing database simultaneously
-- Previous crash left lock file
-- Antivirus scanning database file
-
-**Solutions:**
-
-**Immediate fix:**
-1. Stop all running instances of the application
-2. Wait 10 seconds for lock release
-3. Delete `instance/scouting.db-journal` if it exists
-4. Restart application
-
-**Persistent issues:**
-1. Check for multiple `run.py` processes: Task Manager (Windows) or Activity Monitor (Mac)
-2. Disable antivirus real-time scanning on `instance/` folder
-3. Move database to faster storage (not network drive)
-
-**Enable WAL mode (recommended):**
-Database uses WAL (Write-Ahead Logging) mode automatically. Verify:
-```powershell
-sqlite3 instance/scouting.db
-```
-```sql
-PRAGMA journal_mode;
-```
-Should return `wal`. If not:
-```sql
-PRAGMA journal_mode=WAL;
-.quit
-```
-
-### 8. No Such Table Errors
-
-**Error Message:**
-```
-sqlalchemy.exc.OperationalError: no such table: <table_name>
-```
-
-**Cause:** Database schema not created or outdated.
-
-**Solution:**
-
-**Re-initialize database:**
-```powershell
-# Backup existing data first!
-copy instance\\scouting.db instance\\scouting.db.backup
-
-# Recreate tables
-python
-```
-```python
-from app import create_app, db
-
-app = create_app()
-with app.app_context():
-    db.create_all()
-```
-
-**Use migrations (if available):**
-```powershell
-flask db upgrade
-```
-
-### 9. Database Corruption
-
-**Symptoms:**
-- Random errors during queries
-- Data disappearing
-- Application crashes
-- Integrity check failures
-
-**Diagnosis:**
-```powershell
-sqlite3 instance/scouting.db
-```
-```sql
-PRAGMA integrity_check;
-.quit
-```
-
-**Recovery steps:**
-1. **Stop application immediately**
-2. **Backup corrupted database**: `copy instance\\scouting.db instance\\scouting_corrupt.db`
-3. **Attempt recovery**:
-```powershell
-sqlite3 instance/scouting_corrupt.db
-```
-```sql
-.output instance/recovered.sql
-.dump
-.quit
-
-sqlite3 instance/scouting_new.db
-.read instance/recovered.sql
-.quit
-```
-4. **Replace database**: `copy instance\\scouting_new.db instance\\scouting.db`
-5. **Restart application**
+For sync-specific behavior, see `CONNECTIONS_AND_SYNC.md`.
 
 **If recovery fails:**
 - Restore from backup (should backup daily!)
@@ -289,8 +91,10 @@ dir config\\game_config.json
 # Backup current config
 copy config\\game_config.json config\\game_config_backup.json
 
-# Copy from defaults (choose your game)
-copy config\\defaults\\2024_crescendo_config.json config\\game_config.json
+# Copy one of the default game config templates for your season from config\defaults\
+# Example workflow:
+dir config\\defaults\\*config*.json
+# then copy the correct seasonal file to config\\game_config.json
 ```
 
 **Re-load config (without restart):**
@@ -814,7 +618,7 @@ sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: user
 **Solution:**
 The database schema hasn't been created. Run the initialization script:
 ```
-python init_auth.py
+python other/init_auth.py
 ```
 
 ### 4. Can't login as admin or superadmin
@@ -822,7 +626,7 @@ python init_auth.py
 **Solution:**
 There are two convenience accounts used during setup:
 
-- `superadmin` — auto-created by `run.py` on first run if no users exist. Default password is `password` and the account is created with `must_change_password=True` so you will be prompted to change it at first login.
+- `superadmin` — auto-created by `run.py` on first run if no users exist. Default password is `password` and the account is created with `must_change_password=False`.
 - `admin` — can be created or reset at any time using the helper script located at `other/reset_admin.py`:
 
 ```
@@ -854,7 +658,7 @@ If users can't access pages they should have permission for:
 If you make changes to the models.py file or database structure:
 1. Back up your existing database
 2. Delete the database file: `instance/scouting.db`
-3. Run `python init_auth.py` to recreate the database
+3. Run `python other/init_auth.py` to recreate the database
 
 ## Advanced Troubleshooting
 
@@ -891,5 +695,5 @@ sqlite3 instance/scouting.db
 DELETE FROM user;
 DELETE FROM user_roles;
 .quit
-python init_auth.py
+python other/init_auth.py
 ```

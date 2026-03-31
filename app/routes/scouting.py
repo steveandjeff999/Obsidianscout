@@ -2003,14 +2003,43 @@ def get_match_teams(match_id):
     })
 
 
+@bp.route('/qualitative/entry/<int:entry_id>')
+@login_required
+def get_qualitative_entry(entry_id):
+    """API endpoint to fetch a single qualitative entry for editing."""
+    entry = QualitativeScoutingData.query.filter_by(
+        id=entry_id,
+        scouting_team_number=current_user.scouting_team_number
+    ).first_or_404()
+
+    match = entry.match
+    return jsonify({
+        'success': True,
+        'entry': entry.to_dict(),
+        'match': {
+            'id': match.id if match else None,
+            'match_number': match.match_number if match else None,
+            'match_type': match.match_type if match else None,
+            'event_code': match.event.code if match and match.event else '',
+            'red_teams': match.red_teams if match else [],
+            'blue_teams': match.blue_teams if match else []
+        }
+    })
+
+
 @bp.route('/qualitative/save', methods=['POST'])
 @login_required
 def save_qualitative_scouting():
     """Save Qualitative scouting data"""
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         individual_team = data.get('individual_team', False)
         prescout_flag = str(data.get('prescout', '')).lower() in ('1', 'true', 'yes')
+        edit_entry_id = data.get('edit_entry_id', None)
+        try:
+            edit_entry_id = int(edit_entry_id) if edit_entry_id is not None else None
+        except (TypeError, ValueError):
+            edit_entry_id = None
 
         def _strip_legacy_ranking(entry):
             """Remove deprecated 1-3 ranking from newly saved qualitative entries."""
@@ -2030,6 +2059,17 @@ def save_qualitative_scouting():
             team_number = data.get('team_number')
             match_id = data.get('match_id')
             team_data = data.get('team_data', {})
+            existing_entry = None
+            if edit_entry_id:
+                existing_entry = QualitativeScoutingData.query.filter_by(
+                    id=edit_entry_id,
+                    scouting_team_number=current_user.scouting_team_number
+                ).first()
+                if not existing_entry:
+                    return jsonify({'success': False, 'message': 'Entry not found for editing'}), 404
+                if not match_id:
+                    match_id = existing_entry.match_id
+
             # match_summary follows below
             match_summary = data.get('match_summary') or {}
             # strip prediction if disabled
@@ -2096,16 +2136,24 @@ def save_qualitative_scouting():
             if match_summary:
                 store_obj['_match_summary'] = match_summary
 
-            # Individual team entries are always new (one per team per match)
-            qualitative_data = QualitativeScoutingData(
-                match_id=match_id,
-                scouting_team_number=current_user.scouting_team_number,
-                scout_name=current_user.username,
-                scout_id=current_user.id,
-                alliance_scouted=team_key,
-                data_json=json.dumps(store_obj)
-            )
-            db.session.add(qualitative_data)
+            if existing_entry:
+                existing_entry.match_id = match_id
+                existing_entry.alliance_scouted = team_key
+                existing_entry.data = store_obj
+                existing_entry.timestamp = datetime.now(timezone.utc)
+                existing_entry.scout_name = current_user.username
+                existing_entry.scout_id = current_user.id
+                qualitative_data = existing_entry
+            else:
+                qualitative_data = QualitativeScoutingData(
+                    match_id=match_id,
+                    scouting_team_number=current_user.scouting_team_number,
+                    scout_name=current_user.username,
+                    scout_id=current_user.id,
+                    alliance_scouted=team_key,
+                    data_json=json.dumps(store_obj)
+                )
+                db.session.add(qualitative_data)
             db.session.commit()
             
             # Auto-sync to alliance members if alliance mode is active
@@ -2161,10 +2209,18 @@ def save_qualitative_scouting():
                 team_data['_match_summary'] = match_summary
 
             # Check if entry already exists
-            existing = QualitativeScoutingData.query.filter_by(
-                match_id=match_id,
-                scouting_team_number=current_user.scouting_team_number
-            ).first()
+            if edit_entry_id:
+                existing = QualitativeScoutingData.query.filter_by(
+                    id=edit_entry_id,
+                    scouting_team_number=current_user.scouting_team_number
+                ).first()
+                if not existing:
+                    return jsonify({'success': False, 'message': 'Entry not found for editing'}), 404
+            else:
+                existing = QualitativeScoutingData.query.filter_by(
+                    match_id=match_id,
+                    scouting_team_number=current_user.scouting_team_number
+                ).first()
             
             if existing:
                 # Update existing entry

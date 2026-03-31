@@ -1,15 +1,33 @@
-Help index
-==========
+# Obsidian Scout Help
 
-This directory contains user-facing help documents used by Obsidian Scout.
+This folder contains the help topics shown on `/help`.
 
-Quick links:
-- ALLIANCE_CONSTRAINTS.md — Explains membership rules and the "one active alliance" constraint
-- CONNECTIONS_AND_SYNC.md — Details sync mechanisms (including Alliance Sync)
-- TROUBLESHOOTING.md — Common issues and remedies
-- ADMIN_GUIDE.md — Admin-specific processes and tips
+## Start Here
 
-Recent updates:
-- Inline help icons (small question-mark icons) were added to the Scouting Alliances UI to provide quick contextual guidance. These popovers can be disabled by toggling **Show inline help icons** in Settings.
+- `SETUP_INSTRUCTIONS.md` — first-time setup and first login
+- `SCOUTING_GUIDE.md` — match scouting workflow
+- `PIT_SCOUTING.md` — pit scouting workflow
+- `CONNECTIONS_AND_SYNC.md` — sync behavior and recovery
+- `TROUBLESHOOTING.md` — quick fixes for common problems
 
-If you want to add screenshots or GIFs showing how a popover looks on desktop vs mobile, add them to `help/media/` and update the relevant MD file with an image reference.
+## Admin + Security
+
+- `ADMIN_GUIDE.md`
+- `USER_ROLES_AND_PERMISSIONS.md`
+- `FILE_INTEGRITY_README.md`
+- `PRIVACY.md`
+
+## Data + Analysis
+
+- `DATA_MANAGEMENT.md`
+- `EXPORTING_AND_IMPORTING_DATA.md`
+- `GRAPHING_AND_ANALYSIS.md`
+
+## API + Advanced Topics
+
+- `DUAL_API_README.md`
+- `API_DOCUMENTATION.md`
+- `ALLIANCE_CONSTRAINTS.md`
+- `CONNECTIONS_AND_SYNC.md`
+
+If you are new to the system, read setup first, then scouting, then troubleshooting.

@@ -96,10 +96,3 @@ Notes:
 - To change which role you use when you first sign up, go to `/auth/select_role` after login (visible if you have no roles assigned).
 - Superadmins can create or reset admin accounts using scripts in `other/` (for example `other/reset_admin.py`).
 
----
-File: `help/user-navigation.md` added to the repository. Map of requirements:
-- Add help doc: Done (`help/user-navigation.md`).
-- Instructions for Admin, Analytics, Scout: Done.
-
-If you want, I can:
-- Make this available in the app UI under the Help menu (`app/routes/main.py` references `help/` already). I can add a link or a route to serve this file — tell me if you'd like that change and whether to use the existing `HELP_FOLDER` mechanism.
