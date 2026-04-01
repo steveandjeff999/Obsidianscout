@@ -138,12 +138,34 @@ def get_all_teams_at_event(event_id=None, event_code=None):
     if not event_id and not event_code:
         return []
     
+    # Normalize synthetic/non-integer IDs (e.g., "alliance_2026OKOK") into code lookups.
+    normalized_event_id = None
+    normalized_event_code = event_code.strip() if isinstance(event_code, str) else event_code
+
+    if event_id is not None:
+        if isinstance(event_id, str):
+            event_id_str = event_id.strip()
+            if event_id_str.startswith('alliance_'):
+                if not normalized_event_code:
+                    normalized_event_code = event_id_str[len('alliance_'):].strip()
+            elif event_id_str.isdigit():
+                normalized_event_id = int(event_id_str)
+            elif not normalized_event_code:
+                # Backward-compat fallback: treat non-numeric ID as a possible event code.
+                normalized_event_code = event_id_str
+        else:
+            normalized_event_id = event_id
+
     # Find the event
-    if event_id:
-        event = Event.query.get(event_id)
-    else:
-        # Find any event with this code (case-insensitive)
-        event = Event.query.filter(func.upper(Event.code) == event_code.upper()).first()
+    event = None
+    if normalized_event_id is not None:
+        event = Event.query.get(normalized_event_id)
+    elif normalized_event_code:
+        code_upper = normalized_event_code.upper()
+        event = Event.query.filter(func.upper(Event.code) == code_upper).first()
+        if not event and len(code_upper) >= 5 and code_upper[:4].isdigit():
+            # Some code paths may store alliance codes without year prefix.
+            event = Event.query.filter(func.upper(Event.code) == code_upper[4:]).first()
     
     if not event:
         return []

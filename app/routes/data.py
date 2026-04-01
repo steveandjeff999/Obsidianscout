@@ -39,6 +39,17 @@ from app import socketio
 # Simple in-memory job tracking for background imports
 import_jobs = {}
 
+ALLOWED_EXCEL_EXTENSIONS = {'.xlsx', '.xls'}
+ALLOWED_EXCEL_MIMETYPES = {
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+    'application/octet-stream',
+    'application/zip'
+}
+MAX_EXCEL_UPLOAD_BYTES = 25 * 1024 * 1024
+XLSX_MAGIC = b'PK\x03\x04'
+XLS_MAGIC = bytes.fromhex('D0CF11E0A1B11AE1')
+
 def get_theme_context():
     theme_manager = ThemeManager()
     return {
@@ -1432,10 +1443,33 @@ def import_excel():
             flash('No selected file', 'error')
             return redirect(request.url)
             
-        if file and file.filename.endswith(('.xlsx', '.xls')):
+        filename = secure_filename(file.filename or '')
+        if not filename:
+            flash('Invalid filename.', 'error')
+            return redirect(request.url)
+
+        ext = os.path.splitext(filename)[1].lower()
+        mimetype = (file.mimetype or '').lower()
+        if ext in ALLOWED_EXCEL_EXTENSIONS and (not mimetype or mimetype in ALLOWED_EXCEL_MIMETYPES):
+            file.stream.seek(0, os.SEEK_END)
+            upload_size = file.stream.tell()
+            file.stream.seek(0)
+            if upload_size <= 0 or upload_size > MAX_EXCEL_UPLOAD_BYTES:
+                flash('Excel file must be between 1 byte and 25MB.', 'error')
+                return redirect(request.url)
+
+            header = file.stream.read(8)
+            file.stream.seek(0)
+            if ext == '.xlsx' and not header.startswith(XLSX_MAGIC):
+                flash('Invalid .xlsx file signature.', 'error')
+                return redirect(request.url)
+            if ext == '.xls' and not header.startswith(XLS_MAGIC):
+                flash('Invalid .xls file signature.', 'error')
+                return redirect(request.url)
+
             # Save file temporarily
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+            os.makedirs(current_app.config['UPLOAD_FOLDER'], exist_ok=True)
+            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], f'excel_import_{uuid4().hex}{ext}')
             file.save(file_path)
             
             try:

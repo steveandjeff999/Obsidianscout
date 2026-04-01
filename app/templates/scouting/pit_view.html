@@ -63,12 +63,18 @@
 <!-- Status Banner -->
 <div class="row">
     <div class="col-md-12 mb-4">
-        <div class="alert {% if pit_data.is_uploaded %}alert-success{% else %}alert-warning{% endif %}" role="alert">
-            {% if pit_data.is_uploaded %}
+        <div class="alert {% if status_kind == 'local' %}alert-warning{% elif status_kind == 'shared' %}alert-info{% else %}alert-success{% endif %}" role="alert">
+            {% if status_kind == 'shared' %}
+                <i class="fas fa-share-alt me-2"></i>
+                <strong>Alliance Shared Data:</strong> This pit scouting entry was shared from another team.
+                {% if display_upload_timestamp %}
+                    <br><small>Shared on {{ display_upload_timestamp.strftime('%B %d, %Y at %I:%M %p') }}</small>
+                {% endif %}
+            {% elif display_is_uploaded %}
                 <i class="fas fa-check-circle me-2"></i>
                 <strong>Data Uploaded:</strong> This pit scouting data has been successfully uploaded to the server.
-                {% if pit_data.upload_timestamp %}
-                    <br><small>Uploaded on {{ pit_data.upload_timestamp.strftime('%B %d, %Y at %I:%M %p') }}</small>
+                {% if display_upload_timestamp %}
+                    <br><small>Uploaded on {{ display_upload_timestamp.strftime('%B %d, %Y at %I:%M %p') }}</small>
                 {% endif %}
             {% else %}
                 <i class="fas fa-exclamation-triangle me-2"></i>
@@ -90,7 +96,9 @@
                 <p class="mb-1"><strong>Scouted by</strong>: {{ pit_data.scout_name }}</p>
                 <p class="mb-1"><strong>Timestamp</strong>: {{ pit_data.timestamp.strftime('%B %d, %Y %I:%M %p') }}</p>
                 <p class="mb-1"><strong>Status</strong>:
-                    {% if pit_data.is_uploaded %}
+                    {% if status_kind == 'shared' %}
+                        <span class="badge bg-info text-dark">Shared</span>
+                    {% elif display_is_uploaded %}
                         <span class="badge bg-success">Uploaded</span>
                     {% else %}
                         <span class="badge bg-warning text-dark">Local</span>
@@ -98,6 +106,19 @@
                 </p>
             </div>
         </div>
+
+        {% if robot_image_url %}
+        <div class="card mb-3">
+            <div class="card-header bg-transparent">
+                <h5 class="mb-0">Robot Image</h5>
+            </div>
+            <div class="card-body">
+                <a href="{{ robot_image_url }}" target="_blank" rel="noopener">
+                    <img src="{{ robot_image_url }}" class="img-fluid rounded" alt="Team {{ pit_data.team.team_number }} robot image">
+                </a>
+            </div>
+        </div>
+        {% endif %}
 
         {% if photos and photos|length > 0 %}
         <div class="card mb-3">

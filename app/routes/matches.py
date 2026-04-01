@@ -16,7 +16,7 @@ from app import socketio
 import os
 from flask import send_from_directory
 from werkzeug.utils import secure_filename
-from PIL import Image
+from PIL import Image, ImageOps, UnidentifiedImageError
 import io
 from app.utils.alliance_data import get_active_alliance_id, get_all_scouting_data, get_all_matches_for_alliance
 from app.utils.team_isolation import (
@@ -2322,7 +2322,10 @@ def on_drawing_update(data):
         'last_updated': drawing.last_updated.isoformat() if drawing.last_updated else None
     }, room=room, include_self=False)
 
-ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
+ALLOWED_IMAGE_MIMETYPES = {'image/png', 'image/jpeg', 'image/webp'}
+MAX_STRATEGY_BG_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_STRATEGY_BG_IMAGE_PIXELS = 20_000_000
 STRATEGY_BG_UPLOAD_FOLDER = os.path.join('app', 'static', 'strategy_backgrounds')
 
 @bp.route('/api/strategy_background', methods=['POST'])
@@ -2334,27 +2337,52 @@ def upload_strategy_background():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
 
+    filename = secure_filename(file.filename or '')
+    if not filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+
+    ext = os.path.splitext(filename)[1].lower()
+    mimetype = (file.mimetype or '').lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS or (mimetype and mimetype not in ALLOWED_IMAGE_MIMETYPES):
+        return jsonify({'error': 'Only PNG, JPG, JPEG, and WEBP images are allowed'}), 400
+
+    file.stream.seek(0, os.SEEK_END)
+    upload_size = file.stream.tell()
+    file.stream.seek(0)
+    if upload_size <= 0 or upload_size > MAX_STRATEGY_BG_UPLOAD_BYTES:
+        return jsonify({'error': 'Image must be between 1 byte and 10MB'}), 400
+
     # Determine team-specific folder (fall back to global if no scouting team)
     team_number = getattr(current_user, 'scouting_team_number', None)
 
+    previous_max_pixels = Image.MAX_IMAGE_PIXELS
     try:
-        img = Image.open(file.stream)
+        Image.MAX_IMAGE_PIXELS = MAX_STRATEGY_BG_IMAGE_PIXELS
+        with Image.open(file.stream) as verify_img:
+            verify_img.verify()
+        file.stream.seek(0)
 
-        if team_number:
-            team_folder = os.path.join(STRATEGY_BG_UPLOAD_FOLDER, str(team_number))
-            os.makedirs(team_folder, exist_ok=True)
-            save_path = os.path.join(team_folder, 'default_bg.png')
-            img.convert('RGBA').save(save_path, format='PNG')
-            bg_url = url_for('matches.get_strategy_background', filename=f"{team_number}/default_bg.png")
-        else:
-            # global default
-            os.makedirs(STRATEGY_BG_UPLOAD_FOLDER, exist_ok=True)
-            save_path = os.path.join(STRATEGY_BG_UPLOAD_FOLDER, 'default_bg.png')
-            img.convert('RGBA').save(save_path, format='PNG')
-            bg_url = url_for('matches.get_strategy_background', filename='default_bg.png')
+        with Image.open(file.stream) as img:
+            normalized = ImageOps.exif_transpose(img).convert('RGBA')
+            normalized.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
 
-    except Exception as e:
+            if team_number:
+                team_folder = os.path.join(STRATEGY_BG_UPLOAD_FOLDER, str(team_number))
+                os.makedirs(team_folder, exist_ok=True)
+                save_path = os.path.join(team_folder, 'default_bg.png')
+                normalized.save(save_path, format='PNG', optimize=True)
+                bg_url = url_for('matches.get_strategy_background', filename=f"{team_number}/default_bg.png")
+            else:
+                # global default
+                os.makedirs(STRATEGY_BG_UPLOAD_FOLDER, exist_ok=True)
+                save_path = os.path.join(STRATEGY_BG_UPLOAD_FOLDER, 'default_bg.png')
+                normalized.save(save_path, format='PNG', optimize=True)
+                bg_url = url_for('matches.get_strategy_background', filename='default_bg.png')
+
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError) as e:
         return jsonify({'error': f'Image conversion failed: {str(e)}'}), 400
+    finally:
+        Image.MAX_IMAGE_PIXELS = previous_max_pixels
 
     # Notify via Socket.IO so clients can update their background image
     socketio.emit('background_image_update', {

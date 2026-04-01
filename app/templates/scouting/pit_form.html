@@ -34,7 +34,7 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="POST" id="pit-scouting-form">
+                <form method="POST" id="pit-scouting-form" enctype="multipart/form-data">
                     {% if is_prescout %}
                     <input type="hidden" name="prescout" value="1">
                     {% endif %}
@@ -61,6 +61,50 @@
                         </select>
                         {% endif %}
                     </div>
+
+                    {% if image_upload_enabled %}
+                    <div class="mb-4">
+                        <label for="robot_image" class="form-label fw-semibold">Robot Image</label>
+                        <input type="file"
+                               class="form-control"
+                               id="robot_image"
+                               name="robot_image"
+                               accept="image/jpeg,image/png,image/webp"
+                               tabindex="-1"
+                               aria-hidden="true"
+                               style="display: none;">
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="camera-start-btn">
+                                <i class="fas fa-camera me-1"></i>Use Camera
+                            </button>
+                            <button type="button" class="btn btn-outline-success btn-sm d-none" id="camera-capture-btn">
+                                <i class="fas fa-circle me-1"></i>Capture
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="camera-retake-btn">
+                                <i class="fas fa-redo me-1"></i>Retake
+                            </button>
+                            <button type="button" class="btn btn-outline-danger btn-sm d-none" id="camera-stop-btn">
+                                <i class="fas fa-times me-1"></i>Stop Camera
+                            </button>
+                        </div>
+                        <div id="camera-error" class="text-danger small mt-2 d-none"></div>
+                        <div id="camera-panel" class="camera-panel d-none mt-3">
+                            <video id="camera-video" class="camera-video" autoplay playsinline muted></video>
+                            <canvas id="camera-canvas" class="d-none"></canvas>
+                        </div>
+                        <div id="camera-preview-wrap" class="mt-2 d-none">
+                            <div class="small text-muted mb-1">Captured preview</div>
+                            <img id="camera-preview" class="img-thumbnail" style="max-width: 260px;" alt="Captured robot image preview">
+                        </div>
+                        <div class="form-text">Use camera to capture a robot photo. The server automatically compresses it before storing it in the pit image database.</div>
+                        {% if robot_image_url %}
+                        <div class="mt-2">
+                            <img src="{{ robot_image_url }}" alt="Current robot image" class="img-thumbnail" style="max-width: 220px;">
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
                     {% for section in pit_config.pit_scouting.sections %}
                     <div class="section-container mb-3">
                         <div class="card shadow-sm">
@@ -290,6 +334,146 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('pit-scouting-form');
     const teamNumberInput = document.getElementById('team_number');
+    const robotImageInput = document.getElementById('robot_image');
+    const cameraStartBtn = document.getElementById('camera-start-btn');
+    const cameraCaptureBtn = document.getElementById('camera-capture-btn');
+    const cameraRetakeBtn = document.getElementById('camera-retake-btn');
+    const cameraStopBtn = document.getElementById('camera-stop-btn');
+    const cameraPanel = document.getElementById('camera-panel');
+    const cameraVideo = document.getElementById('camera-video');
+    const cameraCanvas = document.getElementById('camera-canvas');
+    const cameraPreviewWrap = document.getElementById('camera-preview-wrap');
+    const cameraPreview = document.getElementById('camera-preview');
+    const cameraError = document.getElementById('camera-error');
+    let cameraStream = null;
+
+    function setCameraError(message) {
+        if (!cameraError) return;
+        if (!message) {
+            cameraError.textContent = '';
+            cameraError.classList.add('d-none');
+            return;
+        }
+        cameraError.textContent = message;
+        cameraError.classList.remove('d-none');
+    }
+
+    function stopCameraStream() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+        if (cameraVideo) {
+            cameraVideo.srcObject = null;
+        }
+        if (cameraPanel) cameraPanel.classList.add('d-none');
+        if (cameraCaptureBtn) cameraCaptureBtn.classList.add('d-none');
+        if (cameraStopBtn) cameraStopBtn.classList.add('d-none');
+        if (cameraStartBtn) cameraStartBtn.classList.remove('d-none');
+    }
+
+    async function startCameraStream() {
+        setCameraError('');
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setCameraError('Camera is not supported in this browser.');
+            return;
+        }
+        try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
+                audio: false
+            });
+            cameraVideo.srcObject = cameraStream;
+            cameraPanel.classList.remove('d-none');
+            cameraCaptureBtn.classList.remove('d-none');
+            cameraStopBtn.classList.remove('d-none');
+            cameraStartBtn.classList.add('d-none');
+            cameraRetakeBtn.classList.add('d-none');
+            cameraPreviewWrap.classList.add('d-none');
+            await cameraVideo.play();
+        } catch (err) {
+            console.error('Could not access camera:', err);
+            setCameraError('Could not access camera. Check browser permissions and use HTTPS.');
+            stopCameraStream();
+        }
+    }
+
+    function captureCameraFrame() {
+        if (!cameraVideo || !cameraCanvas || !robotImageInput) return;
+        if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) {
+            setCameraError('Camera is still loading. Try capture again.');
+            return;
+        }
+
+        setCameraError('');
+        const width = cameraVideo.videoWidth;
+        const height = cameraVideo.videoHeight;
+        cameraCanvas.width = width;
+        cameraCanvas.height = height;
+        const ctx = cameraCanvas.getContext('2d');
+        if (!ctx) {
+            setCameraError('Unable to capture image frame.');
+            return;
+        }
+        ctx.drawImage(cameraVideo, 0, 0, width, height);
+
+        cameraCanvas.toBlob(function(blob) {
+            if (!blob) {
+                setCameraError('Could not capture image from camera.');
+                return;
+            }
+
+            const capturedFile = new File([blob], 'robot-camera-capture.jpg', { type: 'image/jpeg' });
+            const dt = new DataTransfer();
+            dt.items.add(capturedFile);
+            robotImageInput.files = dt.files;
+
+            if (cameraPreview) {
+                cameraPreview.src = URL.createObjectURL(blob);
+            }
+            if (cameraPreviewWrap) {
+                cameraPreviewWrap.classList.remove('d-none');
+            }
+
+            if (cameraRetakeBtn) cameraRetakeBtn.classList.remove('d-none');
+            if (cameraCaptureBtn) cameraCaptureBtn.classList.add('d-none');
+            stopCameraStream();
+            if (cameraRetakeBtn) cameraRetakeBtn.classList.remove('d-none');
+        }, 'image/jpeg', 0.9);
+    }
+
+    if (cameraStartBtn) {
+        cameraStartBtn.addEventListener('click', startCameraStream);
+    }
+    if (cameraStopBtn) {
+        cameraStopBtn.addEventListener('click', function() {
+            stopCameraStream();
+        });
+    }
+    if (cameraCaptureBtn) {
+        cameraCaptureBtn.addEventListener('click', captureCameraFrame);
+    }
+    if (cameraRetakeBtn) {
+        cameraRetakeBtn.addEventListener('click', function() {
+            startCameraStream();
+        });
+    }
+
+    if (robotImageInput) {
+        robotImageInput.addEventListener('change', function() {
+            if (this.files && this.files.length > 0 && cameraPreview) {
+                cameraPreview.src = URL.createObjectURL(this.files[0]);
+                cameraPreviewWrap.classList.remove('d-none');
+                cameraRetakeBtn.classList.remove('d-none');
+            }
+        });
+    }
+
+    window.addEventListener('beforeunload', stopCameraStream);
     
     // Team number validation
     if (teamNumberInput) {
@@ -666,6 +850,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* Floating action bar */
 .floating-actions { position: sticky; bottom: 8px; z-index: 20; }
+
+.camera-panel {
+    max-width: 420px;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.camera-video {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 0.375rem;
+    background: #000;
+}
 
 /* Dark mode form tweaks */
 body.dark-mode .form-control, body.modern-layout.dark-mode .form-control {

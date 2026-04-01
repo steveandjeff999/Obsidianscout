@@ -379,6 +379,21 @@
 .dark-mode .overall-rating-btn.active {
     box-shadow: 0 0 0 3px rgba(255,193,7,0.7) !important;
 }
+
+/* Robot image hover effect */
+.robot-image-clickable {
+    cursor: pointer !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.robot-image-clickable:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+.dark-mode .robot-image-clickable:hover {
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2) !important;
+}
 </style>
 
 <!-- QR Code Modal -->
@@ -396,6 +411,23 @@
                     <div id="qualitative-qrcode"></div>
                     <!-- helper text removed per user request -->
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Robot Image Modal -->
+<div class="modal fade" id="robotImageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-image me-2"></i> Robot Image - Team <span id="robotImageModalTeam">--</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body d-flex justify-content-center align-items-center" style="min-height: 300px;">
+                <img id="robotImageModalImage" src="" alt="Robot image" style="max-width:100%;max-height:600px;object-fit:contain;border-radius:8px;">
             </div>
         </div>
     </div>
@@ -434,6 +466,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const initialEditEntryIdRaw = {{ request.args.get('edit_entry_id', '')|tojson }};
     const initialEditEntryId = initialEditEntryIdRaw ? parseInt(initialEditEntryIdRaw, 10) : null;
     let matchesCache = {};
+    const pitImageLookupCache = {};
     let currentScoutMode = 'match'; // 'match' or 'team'
 
     if (isPrescout) {
@@ -759,7 +792,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var DEFENSE_OPTS = [{v:1,l:'None'},{v:2,l:'Minor'},{v:3,l:'Moderate'},{v:4,l:'Effective'},{v:5,l:'Dominant'}];
     var SHOT_OPTS    = [{v:0,l:'No shots'},{v:1,l:'<25%'},{v:2,l:'25\u201350%'},{v:3,l:'50\u201375%'},{v:4,l:'75\u201390%'},{v:5,l:'>90%'}];
 
-    function buildTeamCardHTML(teamNum, alliance, isIndividual) {
+    function buildTeamCardHTML(teamNum, alliance, isIndividual, robotImageUrl) {
         var colorClass = alliance === 'red' ? 'danger' : (alliance === 'blue' ? 'primary' : 'success');
         var p = alliance;
         var egDisplay = showEndgameClimb ? '' : 'display:none;';
@@ -775,6 +808,12 @@ document.addEventListener('DOMContentLoaded', function() {
             '<label class="form-check-label small text-warning" for="' + p + '_beached_' + teamNum + '"><i class="fas fa-exclamation-triangle me-1"></i>Beached</label>' +
             '</div>' +
             '</div>';
+
+        if (robotImageUrl) {
+            html += '<div class="mb-2 text-center">' +
+                '<img src="' + robotImageUrl + '" alt="Team ' + teamNum + ' robot" class="robot-image-clickable" data-team="' + teamNum + '" style="max-width:100%;height:120px;object-fit:cover;border-radius:8px;border:1px solid #dee2e6;cursor:pointer;transition:transform 0.2s;" title="Click to enlarge">' +
+                '</div>';
+        }
 
         // ── ROLES ─────────────────────────────────────────────────────
         html += '<div class="mb-2">' +
@@ -884,6 +923,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 saveAutosaveDataQual();
             });
         });
+        // Handle robot image clicks to open modal
+        container.querySelectorAll('.robot-image-clickable').forEach(function(img) {
+            img.addEventListener('click', function() {
+                var teamNum = this.dataset.team;
+                var imageUrl = this.src;
+                var modalTeamSpan = document.getElementById('robotImageModalTeam');
+                var modalImage = document.getElementById('robotImageModalImage');
+                if (modalTeamSpan) modalTeamSpan.textContent = teamNum;
+                if (modalImage) {
+                    modalImage.src = imageUrl;
+                    modalImage.alt = 'Team ' + teamNum + ' robot image';
+                }
+                var imageModal = new bootstrap.Modal(document.getElementById('robotImageModal'));
+                imageModal.show();
+            });
+        });
     }
 
     // Handle scout mode change
@@ -988,7 +1043,10 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('{{ url_for("scouting.get_match_teams", match_id=0) }}'.replace('0', matchId))
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                if (data.success) currentIndivMatchData = data;
+                if (data.success) {
+                    currentIndivMatchData = data;
+                    prefetchPitImages(data.pit_images);
+                }
             })
             .catch(function() {
                 // Offline — build from option attributes
@@ -1092,9 +1150,80 @@ document.addEventListener('DOMContentLoaded', function() {
     function createIndividualTeamCard(teamNum) {
         individualTeamContainer.innerHTML = '';
         var div = document.createElement('div');
-        div.innerHTML = buildTeamCardHTML(teamNum, 'individual', true);
+        var teamKey = String(teamNum);
+        var matchId = (currentIndivMatchData && currentIndivMatchData.match && currentIndivMatchData.match.id) ? currentIndivMatchData.match.id : null;
+        var pitImageUrl = (currentIndivMatchData && currentIndivMatchData.pit_images) ? (currentIndivMatchData.pit_images[teamKey] || null) : null;
+        div.innerHTML = buildTeamCardHTML(teamNum, 'individual', true, pitImageUrl);
         individualTeamContainer.appendChild(div);
         attachCardListeners(div);
+        if (!pitImageUrl) {
+            hydrateTeamCardRobotImage(div, teamNum, matchId);
+        }
+    }
+
+    function prefetchPitImages(pitImages) {
+        if (!pitImages || typeof pitImages !== 'object') return;
+        Object.keys(pitImages).forEach(function(teamKey) {
+            var imageUrl = pitImages[teamKey];
+            if (!imageUrl) return;
+            fetch(imageUrl, { credentials: 'same-origin' }).catch(function() {
+                // Ignore prefetch errors; normal image requests still happen when cards render.
+            });
+        });
+    }
+
+    function getPitImageLookupKey(teamNum, matchId) {
+        return String(teamNum) + '::' + (matchId ? String(matchId) : 'none');
+    }
+
+    function fetchPitImageUrlLikeForm(teamNum, matchId) {
+        var lookupKey = getPitImageLookupKey(teamNum, matchId);
+        if (Object.prototype.hasOwnProperty.call(pitImageLookupCache, lookupKey)) {
+            return Promise.resolve(pitImageLookupCache[lookupKey]);
+        }
+
+        var params = new URLSearchParams();
+        params.set('team_number', String(teamNum));
+        if (matchId) {
+            params.set('match_id', String(matchId));
+        }
+
+        return fetch('{{ url_for("scouting.get_qualitative_team_robot_image") }}?' + params.toString())
+            .then(function(response) { return response.json(); })
+            .then(function(payload) {
+                var imageUrl = (payload && payload.success && payload.robot_image_url) ? payload.robot_image_url : null;
+                pitImageLookupCache[lookupKey] = imageUrl;
+                return imageUrl;
+            })
+            .catch(function() {
+                pitImageLookupCache[lookupKey] = null;
+                return null;
+            });
+    }
+
+    function injectRobotImageIntoCard(cardContainer, teamNum, imageUrl) {
+        if (!cardContainer || !imageUrl) return;
+        var teamCard = cardContainer.querySelector('.team-card');
+        if (!teamCard || teamCard.querySelector('.qual-team-robot-image')) return;
+
+        var header = teamCard.querySelector('.d-flex.justify-content-between.align-items-center.mb-2');
+        if (!header) return;
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'mb-2 text-center qual-team-robot-image';
+        wrapper.innerHTML = '<img src="' + imageUrl + '" alt="Team ' + teamNum + ' robot" class="robot-image-clickable" data-team="' + teamNum + '" style="max-width:100%;height:120px;object-fit:cover;border-radius:8px;border:1px solid #dee2e6;cursor:pointer;transition:transform 0.2s;" title="Click to enlarge">';
+        header.insertAdjacentElement('afterend', wrapper);
+        attachCardListeners(wrapper);
+    }
+
+    function hydrateTeamCardRobotImage(cardContainer, teamNum, matchId) {
+        fetchPitImageUrlLikeForm(teamNum, matchId).then(function(imageUrl) {
+            if (!imageUrl) return;
+            injectRobotImageIntoCard(cardContainer, teamNum, imageUrl);
+            fetch(imageUrl, { credentials: 'same-origin' }).catch(function() {
+                // Ignore prefetch failures.
+            });
+        });
     }
     
     // Cache all matches data for offline use
@@ -1200,6 +1329,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(function(data) {
                 if (data.success) {
                     currentMatchData = data;
+                    prefetchPitImages(data.pit_images);
                     updateAllianceDisplay();
                 }
                 // done building, allow autosaves again
@@ -1237,6 +1367,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(function(data) {
                 if (data.success) {
                     currentMatchData = data;
+                    prefetchPitImages(data.pit_images);
                     updateAllianceDisplay();
                 }
             })
@@ -1343,12 +1474,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function createTeamCards(teams, container, alliance) {
+        const pitImages = (currentMatchData && currentMatchData.pit_images) ? currentMatchData.pit_images : {};
+        const matchId = (currentMatchData && currentMatchData.match && currentMatchData.match.id) ? currentMatchData.match.id : null;
         teams.forEach(function(teamNum) {
             const col = document.createElement('div');
             col.className = 'col-md-4';
-            col.innerHTML = buildTeamCardHTML(teamNum, alliance, false);
+            const pitImageUrl = pitImages[String(teamNum)] || null;
+            col.innerHTML = buildTeamCardHTML(teamNum, alliance, false, pitImageUrl);
             container.appendChild(col);
             attachCardListeners(col);
+            if (!pitImageUrl) {
+                hydrateTeamCardRobotImage(col, teamNum, matchId);
+            }
         });
     }
 

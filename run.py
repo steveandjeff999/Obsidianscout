@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -52,7 +53,7 @@ from app import create_app, socketio, db
 print("core", end=" ", flush=True)
 from flask import redirect, url_for, request, flash
 from sqlalchemy.exc import IntegrityError, OperationalError
-from sqlalchemy import func
+from sqlalchemy import func, text
 print("flask", end=" ", flush=True)
 from app.models import User, Role
 print("models", end=" ", flush=True)
@@ -86,6 +87,11 @@ MOBILE_API_LOG_FILE = os.path.join(script_dir, 'instance', 'mobile_api_requests.
 MOBILE_API_LOG_MAX_BODY = 5000
 # Threading lock to ensure file writes are atomic
 MOBILE_API_LOG_LOCK = threading.Lock()
+
+# Server-wide toggle for pit robot image uploads.
+# This can be overridden by app_config.json key "PIT_IMAGE_UPLOAD_SERVER_ENABLED"
+# or environment variable PIT_IMAGE_UPLOAD_SERVER_ENABLED.
+PIT_IMAGE_UPLOAD_SERVER_ENABLED = True
 
 # ---------------------------------------------------------------------------
 # PostgreSQL auto-start (when USE_POSTGRES is True)
@@ -127,6 +133,91 @@ if USE_POSTGRES:
     print("==============================\n", flush=True)
 
 app = create_app(use_postgres=USE_POSTGRES)
+
+
+def _test_database_connectivity(app_obj):
+    """Verify default DB and all configured binds are reachable."""
+    try:
+        with app_obj.app_context():
+            # Test default bind
+            with db.engine.connect() as conn:
+                conn.execute(text('SELECT 1'))
+
+            # Test all configured binds to catch auth failures early.
+            for bind_key in (app_obj.config.get('SQLALCHEMY_BINDS') or {}).keys():
+                try:
+                    engine = db.get_engine(bind=bind_key)
+                except TypeError:
+                    engine = db.get_engine(app_obj, bind=bind_key)
+
+                with engine.connect() as conn:
+                    conn.execute(text('SELECT 1'))
+
+        return True, None
+    except Exception as conn_err:
+        return False, conn_err
+
+
+# If PostgreSQL credentials are invalid, fall back to SQLite before startup work begins.
+if USE_POSTGRES:
+    db_ok, db_err = _test_database_connectivity(app)
+    if not db_ok:
+        print(f"WARNING: PostgreSQL preflight failed: {db_err}")
+        print("Falling back to SQLite for this startup.")
+        USE_POSTGRES = False
+        app = create_app(use_postgres=False)
+
+
+def _truthy(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in ('1', 'true', 'yes', 'on')
+    return False
+
+
+def _apply_server_image_upload_setting():
+    """Load and apply the server-wide pit image upload toggle."""
+    enabled = PIT_IMAGE_UPLOAD_SERVER_ENABLED
+    max_upload_bytes = 20 * 1024 * 1024
+
+    # app_config.json override
+    try:
+        cfg_path = os.path.join(script_dir, 'app_config.json')
+        if os.path.exists(cfg_path):
+            with open(cfg_path, 'r', encoding='utf-8') as f:
+                cfg = json.load(f) or {}
+            if 'PIT_IMAGE_UPLOAD_SERVER_ENABLED' in cfg:
+                enabled = _truthy(cfg.get('PIT_IMAGE_UPLOAD_SERVER_ENABLED'))
+            if 'PIT_IMAGE_MAX_UPLOAD_BYTES' in cfg:
+                try:
+                    max_upload_bytes = max(1, int(cfg.get('PIT_IMAGE_MAX_UPLOAD_BYTES')))
+                except Exception:
+                    pass
+    except Exception as cfg_err:
+        print(f"Warning: Could not read PIT_IMAGE_UPLOAD_SERVER_ENABLED from app_config.json: {cfg_err}")
+
+    # Environment variable override (highest precedence)
+    env_value = os.environ.get('PIT_IMAGE_UPLOAD_SERVER_ENABLED')
+    if env_value is not None:
+        enabled = _truthy(env_value)
+
+    env_max = os.environ.get('PIT_IMAGE_MAX_UPLOAD_BYTES')
+    if env_max is not None:
+        try:
+            max_upload_bytes = max(1, int(env_max))
+        except Exception:
+            pass
+
+    app.config['PIT_IMAGE_UPLOAD_SERVER_ENABLED'] = bool(enabled)
+    app.config['PIT_IMAGE_MAX_UPLOAD_BYTES'] = int(max_upload_bytes)
+    state = 'ENABLED' if app.config['PIT_IMAGE_UPLOAD_SERVER_ENABLED'] else 'DISABLED'
+    print(f"Server-wide pit image upload is {state} (max bytes: {app.config['PIT_IMAGE_MAX_UPLOAD_BYTES']})")
+
+
+_apply_server_image_upload_setting()
 
 def mobile_api_file_log(prefix, message):
     """Helper to write mobile API request/response details to a file safely."""
@@ -261,13 +352,6 @@ if __name__ == '__main__':
     # Initialize database first
     print("Starting FRC Scouting Platform...")
     with app.app_context():
-        # Safe targeted startup migration for prescout admin settings columns.
-        try:
-            from app.utils.database_migrations import ensure_prescout_phaseout_settings_columns
-            ensure_prescout_phaseout_settings_columns(db)
-        except Exception as e:
-            print(f"Warning: targeted prescout startup migration failed: {e}")
-
         try:
             # Check if database needs initialization
             if not check_database_health():
@@ -287,6 +371,20 @@ if __name__ == '__main__':
             # Create all tables for main database
             db.create_all()
             print("Main database tables verified/created")
+
+            # Explicitly verify/create pit image storage table.
+            # Images are stored in the dedicated images bind database.
+            try:
+                from app.models import PitScoutingImage
+                db.create_all(bind_key='images')
+                try:
+                    image_engine = db.get_engine(bind='images')
+                except TypeError:
+                    image_engine = db.get_engine(app, bind='images')
+                PitScoutingImage.__table__.create(bind=image_engine, checkfirst=True)
+                print("Pit image storage table verified/created")
+            except Exception as image_table_error:
+                print(f"Warning: Could not verify pit image storage table: {image_table_error}")
             
             # Create tables for misc database (notifications)
             try:

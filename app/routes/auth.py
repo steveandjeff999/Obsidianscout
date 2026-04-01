@@ -25,6 +25,7 @@ from app.utils import token_utils as token_util
 import json
 import hmac
 import secrets
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 
 def validate_csrf_token():
@@ -67,6 +68,11 @@ def get_theme_context():
     }
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
+
+ALLOWED_PROFILE_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png'}
+ALLOWED_PROFILE_IMAGE_MIMETYPES = {'image/jpeg', 'image/png'}
+MAX_PROFILE_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_PROFILE_IMAGE_PIXELS = 16_000_000
 
 def role_required(*roles):
     """Decorator to require specific roles"""
@@ -413,24 +419,49 @@ def profile():
         # If a profile picture was uploaded, handle it first
         if 'profile_picture' in request.files and request.files['profile_picture'].filename:
             file = request.files['profile_picture']
-            filename = secure_filename(file.filename)
+            filename = secure_filename(file.filename or '')
+            if not filename:
+                flash('Invalid profile picture filename.', 'error')
+                return redirect(request.url)
+
             ext = os.path.splitext(filename)[1].lower()
-            if ext in ['.jpg', '.jpeg', '.png']:
-                if len(file.read()) > 10 * 1024 * 1024:
-                    flash('Profile picture must be less than 10MB.', 'error')
-                    return redirect(request.url)
-                file.seek(0)
-                avatar_dir = os.path.join(current_app.root_path, 'static', 'img', 'avatars')
-                if not os.path.exists(avatar_dir):
-                    os.makedirs(avatar_dir)
-                avatar_filename = f'user_{current_user.id}{ext}'
-                file_path = os.path.join(avatar_dir, avatar_filename)
-                file.save(file_path)
-                current_user.profile_picture = f'img/avatars/{avatar_filename}'
-                db.session.commit()
-                flash('Profile picture updated!', 'success')
-            else:
+            mimetype = (file.mimetype or '').lower()
+            if ext not in ALLOWED_PROFILE_IMAGE_EXTENSIONS or (mimetype and mimetype not in ALLOWED_PROFILE_IMAGE_MIMETYPES):
                 flash('Only JPG and PNG images are allowed.', 'error')
+                return redirect(request.url)
+
+            file.stream.seek(0, os.SEEK_END)
+            upload_size = file.stream.tell()
+            file.stream.seek(0)
+            if upload_size <= 0 or upload_size > MAX_PROFILE_IMAGE_UPLOAD_BYTES:
+                flash('Profile picture must be less than 10MB.', 'error')
+                return redirect(request.url)
+
+            avatar_dir = os.path.join(current_app.root_path, 'static', 'img', 'avatars')
+            os.makedirs(avatar_dir, exist_ok=True)
+            avatar_filename = f'user_{current_user.id}.jpg'
+            file_path = os.path.join(avatar_dir, avatar_filename)
+
+            previous_max_pixels = Image.MAX_IMAGE_PIXELS
+            try:
+                Image.MAX_IMAGE_PIXELS = MAX_PROFILE_IMAGE_PIXELS
+                with Image.open(file.stream) as img:
+                    img.verify()
+                file.stream.seek(0)
+
+                with Image.open(file.stream) as img:
+                    normalized = ImageOps.exif_transpose(img).convert('RGB')
+                    normalized.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                    normalized.save(file_path, format='JPEG', quality=85, optimize=True)
+            except (UnidentifiedImageError, Image.DecompressionBombError, OSError):
+                flash('Invalid or unsafe image file.', 'error')
+                return redirect(request.url)
+            finally:
+                Image.MAX_IMAGE_PIXELS = previous_max_pixels
+
+            current_user.profile_picture = f'img/avatars/{avatar_filename}'
+            db.session.commit()
+            flash('Profile picture updated!', 'success')
             return redirect(request.url)
 
         # Otherwise process username/email update from the form

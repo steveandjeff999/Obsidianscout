@@ -1397,6 +1397,14 @@ class PitScoutingData(db.Model):
             return User.query.get(self.scout_id) if self.scout_id else None
         except Exception:
             return None
+
+    @property
+    def robot_image(self):
+        """Fetch robot image from the dedicated images bind."""
+        try:
+            return PitScoutingImage.query.filter_by(pit_data_id=self.id).first()
+        except Exception:
+            return None
     
     def __repr__(self):
         return f"<PitScoutingData Team {self.team.team_number} by {self.scout_name}>"
@@ -1462,6 +1470,24 @@ class PitScoutingData(db.Model):
                 pit_data.upload_timestamp = data_dict['upload_timestamp']
         
         return pit_data
+
+
+class PitScoutingImage(db.Model):
+    """Stores compressed robot images captured during pit scouting."""
+    __bind_key__ = 'images'
+    id = db.Column(db.Integer, primary_key=True)
+    pit_data_id = db.Column(db.Integer, nullable=False, unique=True, index=True)
+    scouting_team_number = db.Column(db.Integer, nullable=True)
+    filename = db.Column(db.String(255), nullable=True)
+    mime_type = db.Column(db.String(50), nullable=False, default='image/jpeg')
+    image_data = db.Column(db.LargeBinary, nullable=False)
+    original_size = db.Column(db.Integer, nullable=True)
+    compressed_size = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    def __repr__(self):
+        return f"<PitScoutingImage pit_data_id={self.pit_data_id}>"
 
 class StrategyDrawing(db.Model):
     """Model to store strategy drawing data for each match"""
@@ -2316,6 +2342,9 @@ class TeamAllianceStatus(db.Model):
         temporarily unhappy.
         """
         try:
+            # Recover automatically if an earlier DB error left this session aborted.
+            if not db.session.is_active:
+                db.session.rollback()
             status = cls.query.filter_by(
                 team_number=team_number,
                 is_alliance_mode_active=True
@@ -2324,7 +2353,6 @@ class TeamAllianceStatus(db.Model):
         except Exception:
             # ensure the session is reset so later queries can proceed
             from flask import current_app
-            from app import db
             current_app.logger.exception("DB error in get_active_alliance_for_team")
             db.session.rollback()
             return None
@@ -2332,8 +2360,16 @@ class TeamAllianceStatus(db.Model):
     @classmethod
     def is_alliance_mode_active_for_team(cls, team_number):
         """Check if alliance mode is active for a team"""
-        status = cls.query.filter_by(team_number=team_number).first()
-        return status.is_alliance_mode_active if status else False
+        try:
+            if not db.session.is_active:
+                db.session.rollback()
+            status = cls.query.filter_by(team_number=team_number).first()
+            return status.is_alliance_mode_active if status else False
+        except Exception:
+            from flask import current_app
+            current_app.logger.exception("DB error in is_alliance_mode_active_for_team")
+            db.session.rollback()
+            return False
     
     @classmethod
     def activate_alliance_for_team(cls, team_number, alliance_id):
