@@ -38,6 +38,7 @@ _DEFAULTS = {
     "database_users": "obsidian_scout_users",
     "database_pages": "obsidian_scout_pages",
     "database_misc": "obsidian_scout_misc",
+    "database_images": "obsidian_scout_images",
 }
 
 # Prefer instance/postgres_config.json so per-install settings are writable
@@ -77,6 +78,7 @@ def _load_config() -> dict:
         "POSTGRES_USER": "user",
         "POSTGRES_PASSWORD": "password",
         "POSTGRES_DB": "database",
+        "POSTGRES_DB_IMAGES": "database_images",
     }
     for env_key, cfg_key in env_map.items():
         val = os.environ.get(env_key)
@@ -442,6 +444,7 @@ class PostgresManager:
             self.cfg["database_users"],
             self.cfg["database_pages"],
             self.cfg["database_misc"],
+            self.cfg["database_images"],
         ]
 
         print(f"[PostgresManager] Ensuring role '{user}' and databases exist...", flush=True)
@@ -646,6 +649,7 @@ class PostgresManager:
             "users": self._make_uri(self.cfg["database_users"]),
             "pages": self._make_uri(self.cfg["database_pages"]),
             "misc":  self._make_uri(self.cfg["database_misc"]),
+            "images": self._make_uri(self.cfg["database_images"]),
         }
 
     def get_engine_options(self) -> dict:
@@ -702,6 +706,7 @@ class PostgresManager:
             self.cfg["database_users"],
             self.cfg["database_pages"],
             self.cfg["database_misc"],
+            self.cfg["database_images"],
         ]
 
         try:

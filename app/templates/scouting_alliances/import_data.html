@@ -703,7 +703,12 @@ async function importSelected() {
         modal.hide();
         
         if (result.success) {
-            alert(`Successfully shared:\n- ${result.imported_scouting} match scouting entries\n- ${result.imported_pit} pit scouting entries\n- ${result.imported_qualitative || 0} qualitative entries\n- ${result.ignored_count} entries marked as ignored`);
+            let summary = result.message || 'Import completed.';
+            summary += `\n\nImported:\n- ${result.imported_scouting} match scouting entries\n- ${result.imported_pit} pit scouting entries\n- ${result.imported_qualitative || 0} qualitative entries\n- ${result.ignored_count} entries marked as ignored`;
+            if ((result.skipped_duplicate || 0) > 0 || (result.skipped_wrong_team || 0) > 0) {
+                summary += `\n\nSkipped:\n- ${result.skipped_duplicate || 0} duplicates\n- ${result.skipped_wrong_team || 0} not owned by your team`;
+            }
+            alert(summary);
             
             // Clear selections and re-scan
             selectedScouting.clear();

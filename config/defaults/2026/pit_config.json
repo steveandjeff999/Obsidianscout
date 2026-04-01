@@ -1,6 +1,7 @@
 {
   "pit_scouting": {
     "description": "Collect detailed information about teams and their robots for the 2026 REBUILT game.",
+    "image_upload": false,
     "sections": [
       {
         "elements": [

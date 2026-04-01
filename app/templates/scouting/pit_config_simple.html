@@ -60,6 +60,16 @@
                                     <input type="text" class="form-control" id="description" name="description" 
                                            value="{{ pit_config.pit_scouting.description }}">
                                 </div>
+                                <div class="form-check mt-3">
+                                    <input type="checkbox" class="form-check-input" id="image_upload" name="image_upload"
+                                           {% if pit_config.pit_scouting.image_upload %}checked{% endif %}>
+                                    <label class="form-check-label" for="image_upload">
+                                        Enable Robot Image Upload
+                                    </label>
+                                    <small class="form-text text-muted d-block">
+                                        When enabled, pit scouts can upload a robot photo. The image is compressed and stored in the pit image database.
+                                    </small>
+                                </div>
                             </div>
                         </div>
 
@@ -466,9 +476,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function buildSimplePitPayload() {
-        const payload = { pit_scouting: { title: '', description: '', sections: [] } };
+        const payload = { pit_scouting: { title: '', description: '', image_upload: false, sections: [] } };
         payload.pit_scouting.title = document.getElementById('title').value.trim();
         payload.pit_scouting.description = document.getElementById('description').value.trim();
+        payload.pit_scouting.image_upload = document.getElementById('image_upload').checked;
 
         const sections = document.querySelectorAll('.section-item');
         sections.forEach((section) => {

@@ -780,6 +780,7 @@ def create_app(test_config=None, use_postgres=False):
             'users': 'sqlite:///' + os.path.join(app.instance_path, 'users.db'),
             'pages': 'sqlite:///' + os.path.join(app.instance_path, 'pages.db'),
             'misc':  'sqlite:///' + os.path.join(app.instance_path, 'misc.db'),
+            'images': 'sqlite:///' + os.path.join(app.instance_path, 'images.db'),
         }
         _engine_opts = {
             'pool_pre_ping': True,
@@ -841,7 +842,8 @@ def create_app(test_config=None, use_postgres=False):
                 app.config['SQLALCHEMY_BINDS'] = {
                     'users': 'sqlite:///' + os.path.join(alt_instance, 'users.db'),
                     'pages': 'sqlite:///' + os.path.join(alt_instance, 'pages.db'),
-                    'misc': 'sqlite:///' + os.path.join(alt_instance, 'misc.db')
+                    'misc': 'sqlite:///' + os.path.join(alt_instance, 'misc.db'),
+                    'images': 'sqlite:///' + os.path.join(alt_instance, 'images.db')
                 }
             app.config['UPLOAD_FOLDER'] = os.path.join(alt_instance, 'uploads')
             os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -1450,6 +1452,21 @@ def create_app(test_config=None, use_postgres=False):
                 except Exception as e:
                     app.logger.info('Could not create misc bind tables: %s', e)
 
+            # If a separate images bind is configured, create pit image tables explicitly.
+            if 'SQLALCHEMY_BINDS' in app.config and 'images' in app.config['SQLALCHEMY_BINDS']:
+                try:
+                    try:
+                        images_engine = db.get_engine(bind='images')
+                    except TypeError:
+                        images_engine = db.get_engine(app, bind='images')
+                    try:
+                        from app.models import PitScoutingImage
+                        PitScoutingImage.__table__.create(images_engine, checkfirst=True)
+                    except Exception as e:
+                        app.logger.info('Could not create images bind tables via explicit create; continuing: %s', e)
+                except Exception as e:
+                    app.logger.info('Could not create images bind tables: %s', e)
+
             # Finally create all remaining tables on the default bind.
             # Skip tables that belong to other binds – they were already
             # created on their own engines above.
@@ -1465,7 +1482,7 @@ def create_app(test_config=None, use_postgres=False):
                 except TypeError:
                     default_engine = db.get_engine(app)
                 # Bind keys that have their own engines (already handled above)
-                _non_default_binds = {'users', 'pages', 'misc'}
+                _non_default_binds = {'users', 'pages', 'misc', 'images'}
 
                 for table in db.metadata.sorted_tables:
                     # Skip tables that belong to a non-default bind

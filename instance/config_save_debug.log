@@ -75379,3 +75379,103 @@ Parsed endgame scoring_elements:
   }
 ]
 
+Parsed auto_period scoring_elements (alliance 1):
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "points": 1.0,
+    "step": 1,
+    "alt_step_enabled": true,
+    "alt_step": 10
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "points": 15.0
+  }
+]
+---
+Parsed teleop_period scoring_elements (alliance 1):
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "points": 1.0,
+    "step": 1,
+    "alt_step_enabled": true,
+    "alt_step": 10
+  }
+]
+---
+Parsed endgame_period scoring_elements (alliance 1):
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "",
+    "points": 0.0
+  }
+]
+---
+Parsed auto_period scoring_elements (alliance 1):
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "points": 1.0,
+    "step": 1,
+    "alt_step_enabled": true,
+    "alt_step": 10
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "points": 15.0
+  }
+]
+---
+Parsed teleop_period scoring_elements (alliance 1):
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "points": 1.0,
+    "step": 1,
+    "alt_step_enabled": true,
+    "alt_step": 10
+  }
+]
+---
+Parsed endgame_period scoring_elements (alliance 1):
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "",
+    "points": 0.0
+  }
+]
+---

@@ -173,6 +173,23 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
             <span class="value">{{ team.team_number }}</span>
             <span class="label">{{ team.team_name }}</span>
         </span>
+        {% if robot_image_url %}
+        <span class="meta-pill">
+            <span class="label">Robot</span>
+            <a href="{{ robot_image_url }}" target="_blank" rel="noopener noreferrer" class="text-decoration-none">
+                <img src="{{ robot_image_url }}" alt="Team {{ team.team_number }} robot" style="width:44px;height:44px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,255,255,0.25);">
+            </a>
+        </span>
+        <script>
+            (function() {
+                var imageUrl = '{{ robot_image_url }}';
+                if (!imageUrl) return;
+                fetch(imageUrl, { credentials: 'same-origin' }).catch(function() {
+                    // Ignore prefetch failures; the image element itself still attempts to load.
+                });
+            })();
+        </script>
+        {% endif %}
         <span class="meta-pill">
             <span class="label">Match</span>
             <span class="value">{{ match.match_type }} {{ match.match_number }}</span>

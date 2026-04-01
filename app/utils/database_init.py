@@ -49,10 +49,21 @@ def initialize_database():
         for table in db.metadata.sorted_tables:
             if table.name in users_table_names:
                 continue
+            if table.info.get('bind_key') in {'users', 'pages', 'misc', 'images'}:
+                continue
             try:
                 table.create(default_engine, checkfirst=True)
             except Exception as e:
                 print(f"Warning: could not create table {table.name}: {e}")
+
+        # Create images bind tables explicitly when configured.
+        if 'SQLALCHEMY_BINDS' in app.config and 'images' in app.config['SQLALCHEMY_BINDS']:
+            try:
+                images_engine = db.get_engine(app, bind='images')
+                from app.models import PitScoutingImage
+                PitScoutingImage.__table__.create(images_engine, checkfirst=True)
+            except Exception as e:
+                print(f"Could not create images bind tables explicitly: {e}")
         # Ensure any missing tables (or binds) get created as a safety net
         try:
             db.create_all()
@@ -302,6 +313,7 @@ def create_default_pit_config(config_path):
         "pit_scouting": {
             "title": "Pit Scouting",
             "description": "Collect detailed information about teams and their robots",
+            "image_upload": False,
             "sections": [
                 {
                     "id": "team_info",

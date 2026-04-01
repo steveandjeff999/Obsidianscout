@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
-from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingData, AllianceSharedQualitativeData, QualitativeScoutingData, ScoutingTeamSettings
+from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingData, AllianceSharedQualitativeData, QualitativeScoutingData, ScoutingTeamSettings, PitScoutingData
 from app import db, socketio
 import json
 from datetime import datetime, timezone
@@ -38,6 +38,54 @@ def get_theme_context():
         'themes': theme_manager.get_available_themes(),
         'current_theme_id': theme_manager.current_theme
     }
+
+
+def _get_team_pit_image_url(team_obj=None, team_number=None, event_id=None):
+    """Return latest pit robot image URL for a team, preferring the current event."""
+    team = team_obj
+    if team is None and team_number is not None:
+        try:
+            team = filter_teams_by_scouting_team().filter_by(team_number=int(team_number)).order_by(Team.id.desc()).first()
+        except Exception:
+            team = None
+
+    if not team:
+        return None
+
+    base_query = PitScoutingData.query.filter_by(
+        team_id=team.id,
+        scouting_team_number=getattr(current_user, 'scouting_team_number', None)
+    )
+
+    if event_id is not None:
+        event_entry = base_query.filter_by(event_id=event_id).order_by(PitScoutingData.timestamp.desc()).first()
+        if event_entry and getattr(event_entry, 'robot_image', None):
+            return url_for('pit_scouting.get_robot_image', image_id=event_entry.robot_image.id)
+
+    latest_entry = base_query.order_by(PitScoutingData.timestamp.desc()).first()
+    if latest_entry and getattr(latest_entry, 'robot_image', None):
+        return url_for('pit_scouting.get_robot_image', image_id=latest_entry.robot_image.id)
+
+    return None
+
+
+def _build_match_pit_image_map(match):
+    """Build team-number keyed pit image URL map for a match's teams."""
+    image_map = {}
+    if not match:
+        return image_map
+
+    seen = set()
+    for team_num in (list(getattr(match, 'red_teams', []) or []) + list(getattr(match, 'blue_teams', []) or [])):
+        key = str(team_num).strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        image_url = _get_team_pit_image_url(team_number=key, event_id=getattr(match, 'event_id', None))
+        if image_url:
+            image_map[key] = image_url
+
+    return image_map
 
 
 def get_prescout_event_code():
@@ -797,6 +845,8 @@ def scouting_form():
             theme_context = {}
             
         try:
+            robot_image_url = _get_team_pit_image_url(team_obj=team, event_id=getattr(match, 'event_id', None))
+
             html = render_template('scouting/partials/form_content.html', 
                                 team=team, 
                                 match=match,
@@ -804,6 +854,7 @@ def scouting_form():
                                 game_config=game_config,
                                 alliance=alliance,
                                 existing_data=existing_data,
+                                robot_image_url=robot_image_url,
                                 form_action_url=url_for(form_endpoint),
                                 is_prescout=is_prescout,
                                 **theme_context)
@@ -1033,6 +1084,7 @@ def scouting_form():
                               form_data=form_data,
                               alliance=alliance,
                               existing_data=existing_data,
+                              robot_image_url=_get_team_pit_image_url(team_obj=team, event_id=getattr(match, 'event_id', None)),
                               form_action_url=url_for(form_endpoint),
                               is_prescout=is_prescout,
                               **get_theme_context())
@@ -1981,7 +2033,15 @@ def qualitative_prescout():
 @login_required
 def get_match_teams(match_id):
     """API endpoint to get teams for a specific match"""
-    match = filter_matches_by_scouting_team().filter_by(id=match_id).first_or_404()
+    match = filter_matches_by_scouting_team().filter_by(id=match_id).first()
+    if not match:
+        # Return empty response for missing/stale match (e.g., from autosave)
+        return jsonify({
+            'success': True,
+            'match': None,
+            'pit_images': {},
+            'existing_data': None
+        })
     
     # Get existing data for this match if any
     existing = QualitativeScoutingData.query.filter_by(
@@ -1999,6 +2059,7 @@ def get_match_teams(match_id):
             'red_teams': match.red_teams,
             'blue_teams': match.blue_teams
         },
+        'pit_images': _build_match_pit_image_map(match),
         'existing_data': existing.to_dict() if existing else None
     })
 
@@ -2023,7 +2084,46 @@ def get_qualitative_entry(entry_id):
             'event_code': match.event.code if match and match.event else '',
             'red_teams': match.red_teams if match else [],
             'blue_teams': match.blue_teams if match else []
-        }
+        },
+        'pit_images': _build_match_pit_image_map(match) if match else {}
+    })
+
+
+@bp.route('/qualitative/team-robot-image')
+@login_required
+def get_qualitative_team_robot_image():
+    """Return pit robot image URL for a team using the same lookup logic as /scouting/form."""
+    team_number = request.args.get('team_number', type=int)
+    if not team_number:
+        return jsonify({'success': False, 'message': 'team_number is required'}), 400
+
+    match_id = request.args.get('match_id', type=int)
+    event_id = None
+    if match_id:
+        match = filter_matches_by_scouting_team().filter_by(id=match_id).first()
+        if match:
+            event_id = getattr(match, 'event_id', None)
+
+    try:
+        # Keep this query ORDER BY free because alliance-mode team isolation may use DISTINCT ON.
+        team = filter_teams_by_scouting_team().filter_by(team_number=team_number).first()
+        if not team:
+            # Defensive fallback for edge cases where isolation filtering returns no row.
+            team = Team.query.filter_by(team_number=team_number, scouting_team_number=current_user.scouting_team_number).order_by(Team.id.desc()).first()
+        robot_image_url = _get_team_pit_image_url(team_obj=team, team_number=team_number, event_id=event_id)
+    except Exception as e:
+        current_app.logger.exception('Failed qualitative robot image lookup for team %s match %s: %s', team_number, match_id, e)
+        return jsonify({
+            'success': False,
+            'team_number': team_number,
+            'robot_image_url': None,
+            'message': 'Unable to load robot image right now'
+        }), 200
+
+    return jsonify({
+        'success': True,
+        'team_number': team_number,
+        'robot_image_url': robot_image_url
     })
 
 

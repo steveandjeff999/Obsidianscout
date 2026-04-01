@@ -1,8 +1,9 @@
 // Service Worker for ObsidianScout - Simplified version without offline analytics
 
 // Increment the CACHE_VERSION to force clients to update caches when you change assets
-const CACHE_VERSION = 13;
+const CACHE_VERSION = 14;
 const CACHE_NAME = `scout-app-cache-v${CACHE_VERSION}`;
+const ROBOT_IMAGE_PATHS = ['/pit_scouting/image/', '/pit-scouting/image/'];
 
 // Core site shell files to pre-cache. Add any top-level routes or critical files here.
 const STATIC_ASSETS = [
@@ -103,6 +104,12 @@ self.addEventListener('fetch', event => {
   // Only handle GET requests
   if (req.method !== 'GET') return;
 
+  // Cache robot photos served from DB endpoints so scouting forms can render them offline.
+  if (isRobotImageRequest(req, url)) {
+    event.respondWith(robotImageHandler(req));
+    return;
+  }
+
   // Let analytics and admin API calls go to network (don't cache sensitive endpoints)
   if (url.pathname.includes('/analytics') || url.pathname.includes('/api/analytics') || url.pathname.includes('/admin')) {
     return; // allow default network handling
@@ -123,6 +130,36 @@ self.addEventListener('fetch', event => {
   // Fallback to network-first for others (API calls etc.)
   event.respondWith(networkFirst(req));
 });
+
+function isRobotImageRequest(req, url) {
+  if (url.origin !== self.location.origin) return false;
+  if (req.destination === 'image') {
+    return ROBOT_IMAGE_PATHS.some(path => url.pathname.includes(path));
+  }
+  return ROBOT_IMAGE_PATHS.some(path => url.pathname.includes(path));
+}
+
+// Network-first for robot images, with cache fallback while offline.
+async function robotImageHandler(req) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const fresh = await fetch(req);
+    if (fresh && fresh.ok) {
+      cache.put(req, fresh.clone());
+    }
+    return fresh;
+  } catch (error) {
+    console.warn('Robot image network fetch failed, trying cache:', error);
+    const cached = await cache.match(req, { ignoreSearch: true });
+    if (cached) return cached;
+
+    // Return a lightweight transparent placeholder image so layout remains stable.
+    return new Response(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"></svg>',
+      { headers: { 'Content-Type': 'image/svg+xml' } }
+    );
+  }
+}
 
 // Cache-first strategy for static assets
 async function cacheFirst(req) {

@@ -1,7 +1,7 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, send_file, abort
 from flask_login import login_required, current_user
 from flask_socketio import emit, join_room, leave_room
-from app.models import Team, Event, PitScoutingData, AllianceSharedPitData
+from app.models import Team, Event, PitScoutingData, PitScoutingImage, AllianceSharedPitData
 from app import db, socketio
 import json
 import uuid
@@ -11,6 +11,11 @@ from app.utils.timezone_utils import utc_now_iso
 from app.utils.config_manager import get_id_to_perm_id_mapping, get_effective_game_config
 from app.utils.sync_manager import SyncManager
 import os
+import io
+from PIL import Image, ImageOps
+from PIL import UnidentifiedImageError
+from PIL.Image import DecompressionBombError
+from werkzeug.utils import secure_filename
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_current_pit_config, save_pit_config, get_effective_pit_config, is_alliance_mode_active, load_pit_config
 from app.utils.team_isolation import (
@@ -88,6 +93,155 @@ def get_or_create_prescout_event():
             code=event_code,
             scouting_team_number=scouting_team_number
         ).first()
+
+
+def _truthy(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in ('1', 'true', 'yes', 'on')
+    return False
+
+
+def _pit_prescout_sql_filter():
+    """Match pit entries that are pre-scout by event code or persisted flag."""
+    return db.or_(
+        Event.code.ilike('%PRE-SCOUT%'),
+        Event.code.ilike('%PRE_SCOUT%'),
+        Event.code.ilike('%PREESCOUT'),
+        Event.code.ilike('%PRESCOUT'),
+        PitScoutingData.data_json.ilike('%"is_prescout": true%'),
+        PitScoutingData.data_json.ilike('%"is_prescout":true%'),
+        PitScoutingData.data_json.ilike('%"is_prescout":"true"%'),
+        PitScoutingData.data_json.ilike('%"prescout": true%'),
+        PitScoutingData.data_json.ilike('%"prescout":true%'),
+        PitScoutingData.data_json.ilike('%"prescout":"true"%')
+    )
+
+
+def _is_image_upload_enabled(pit_config):
+    try:
+        # Server-wide setting in run.py can force-disable image uploads.
+        if not _truthy(current_app.config.get('PIT_IMAGE_UPLOAD_SERVER_ENABLED', True)):
+            return False
+        pit_settings = (pit_config or {}).get('pit_scouting', {})
+        return _truthy(pit_settings.get('image_upload', False))
+    except Exception:
+        return False
+
+
+def _collect_pit_form_data(pit_config, req):
+    """Collect configured form fields from request payload."""
+    form_data = {}
+    for section in pit_config.get('pit_scouting', {}).get('sections', []):
+        for element in section.get('elements', []):
+            element_id = element.get('id')
+            element_type = element.get('type')
+            if not element_id:
+                continue
+
+            if element_type == 'multiselect':
+                form_data[element_id] = req.form.getlist(element_id)
+            elif element_type == 'boolean':
+                form_data[element_id] = element_id in req.form
+            elif element_type == 'number':
+                value = req.form.get(element_id)
+                if value:
+                    try:
+                        form_data[element_id] = float(value)
+                    except ValueError:
+                        form_data[element_id] = 0
+                else:
+                    form_data[element_id] = 0
+            else:
+                form_data[element_id] = req.form.get(element_id, '')
+    return form_data
+
+
+def _save_compressed_robot_image(pit_data, upload_file):
+    """Compress and store a pit robot image in the database."""
+    if not upload_file or not upload_file.filename:
+        return
+
+    # Enforce server-wide image upload policy.
+    if not _truthy(current_app.config.get('PIT_IMAGE_UPLOAD_SERVER_ENABLED', True)):
+        raise ValueError('Robot image uploads are disabled by server configuration.')
+
+    original_filename = upload_file.filename or ''
+    safe_filename = secure_filename(original_filename)
+    lower_name = safe_filename.lower()
+    allowed_exts = ('.jpg', '.jpeg', '.png', '.webp')
+    if not lower_name.endswith(allowed_exts):
+        raise ValueError('Please upload a JPG, PNG, or WEBP image.')
+
+    allowed_mime_types = {'image/jpeg', 'image/png', 'image/webp'}
+    detected_mime = (upload_file.mimetype or '').lower().strip()
+    if detected_mime and detected_mime not in allowed_mime_types:
+        raise ValueError('Unsupported image MIME type.')
+
+    max_upload_bytes = int(current_app.config.get('PIT_IMAGE_MAX_UPLOAD_BYTES', 20 * 1024 * 1024))
+    content_length = request.content_length or 0
+    if content_length and content_length > max_upload_bytes:
+        raise ValueError('Image is too large. Maximum upload size is 20 MB.')
+
+    raw_bytes = upload_file.read() or b''
+    if not raw_bytes:
+        raise ValueError('Uploaded image file is empty.')
+    if len(raw_bytes) > max_upload_bytes:
+        raise ValueError('Image is too large. Maximum upload size is 20 MB.')
+
+    try:
+        # Constrain oversized/decompression-bomb images before decode.
+        Image.MAX_IMAGE_PIXELS = 40_000_000
+        image = Image.open(io.BytesIO(raw_bytes))
+        image.verify()
+        image = Image.open(io.BytesIO(raw_bytes))
+        image = ImageOps.exif_transpose(image)
+        image = image.convert('RGB')
+        image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+    except (UnidentifiedImageError, DecompressionBombError) as exc:
+        raise ValueError(f'Invalid or unsafe image upload: {exc}')
+    except Exception as exc:
+        raise ValueError(f'Could not process uploaded image: {exc}')
+
+    compressed_io = io.BytesIO()
+    image.save(compressed_io, format='JPEG', quality=72, optimize=True)
+    compressed_bytes = compressed_io.getvalue()
+    if not compressed_bytes:
+        raise ValueError('Image compression failed.')
+
+    stored_name = safe_filename.rsplit('.', 1)[0] if '.' in safe_filename else safe_filename
+    if not stored_name:
+        stored_name = f'robot_{pit_data.id}'
+    stored_name = f'{stored_name[:120]}.jpg'
+
+    # Ensure table exists on deployments where automatic schema upgrade is delayed.
+    try:
+        image_engine = db.get_engine(bind='images')
+    except TypeError:
+        image_engine = db.get_engine(current_app, bind='images')
+    PitScoutingImage.__table__.create(bind=image_engine, checkfirst=True)
+
+    existing_image = PitScoutingImage.query.filter_by(pit_data_id=pit_data.id).first()
+    if existing_image:
+        existing_image.filename = stored_name
+        existing_image.mime_type = 'image/jpeg'
+        existing_image.image_data = compressed_bytes
+        existing_image.original_size = len(raw_bytes)
+        existing_image.compressed_size = len(compressed_bytes)
+        existing_image.scouting_team_number = getattr(current_user, 'scouting_team_number', None)
+    else:
+        db.session.add(PitScoutingImage(
+            pit_data_id=pit_data.id,
+            scouting_team_number=getattr(current_user, 'scouting_team_number', None),
+            filename=stored_name,
+            mime_type='image/jpeg',
+            image_data=compressed_bytes,
+            original_size=len(raw_bytes),
+            compressed_size=len(compressed_bytes),
+        ))
 
 def auto_sync_alliance_pit_data(pit_data_entry):
     """Automatically sync new pit scouting data to alliance members if alliance mode is active"""
@@ -200,9 +354,13 @@ def prescout_index():
     pit_config = get_effective_pit_config()
     prescout_event = get_or_create_prescout_event()
 
-    prescout_data = PitScoutingData.query.filter_by(
-        event_id=prescout_event.id,
-        scouting_team_number=getattr(current_user, 'scouting_team_number', None)
+    scouting_team_number = getattr(current_user, 'scouting_team_number', None)
+    prescout_data = PitScoutingData.query.outerjoin(Event, PitScoutingData.event_id == Event.id).filter(
+        db.or_(
+            PitScoutingData.scouting_team_number == scouting_team_number,
+            PitScoutingData.scouting_team_number == None
+        ),
+        _pit_prescout_sql_filter()
     ).order_by(PitScoutingData.timestamp.desc()).all()
 
     team_ids = set()
@@ -374,7 +532,9 @@ def form():
                 scout_id=current_user.id
             )
             if is_prescout and prescout_event:
-                pit_query = pit_query.filter_by(event_id=prescout_event.id)
+                pit_query = pit_query.outerjoin(Event, PitScoutingData.event_id == Event.id).filter(
+                    _pit_prescout_sql_filter()
+                )
             pit_data = pit_query.order_by(PitScoutingData.timestamp.desc()).first()
     # track whether the form is being used to edit an existing entry
     edit_mode = True if pit_data else False
@@ -392,6 +552,7 @@ def form():
     # Always load the current user's scouting team pit config
     # (ignore team parameter for form - form should always use current user's config)
     pit_config = get_current_pit_config()
+    image_upload_enabled = _is_image_upload_enabled(pit_config)
     
     # Get current event based on team-scoped/alliance-aware game configuration
     current_event = prescout_event if is_prescout else None
@@ -459,7 +620,9 @@ def form():
     if team_ids:
         form_entries_query = PitScoutingData.query.filter(PitScoutingData.team_id.in_(team_ids))
         if is_prescout and prescout_event:
-            form_entries_query = form_entries_query.filter(PitScoutingData.event_id == prescout_event.id)
+            form_entries_query = form_entries_query.outerjoin(Event, PitScoutingData.event_id == Event.id).filter(
+                _pit_prescout_sql_filter()
+            )
         form_all_pit_entries = form_entries_query.all()
     else:
         form_all_pit_entries = []
@@ -505,34 +668,15 @@ def form():
                 scout_id=current_user.id
             )
             if is_prescout and prescout_event:
-                existing_query = existing_query.filter_by(event_id=prescout_event.id)
+                existing_query = existing_query.outerjoin(Event, PitScoutingData.event_id == Event.id).filter(
+                    _pit_prescout_sql_filter()
+                )
             existing_data = existing_query.first()
             # If data exists for this scout/team, overwrite it with the new submission
             if existing_data:
                 try:
                     # Collect form data based on pit config (same logic as for new entries)
-                    form_data = {}
-                    for section in pit_config['pit_scouting']['sections']:
-                        for element in section['elements']:
-                            element_id = element['id']
-                            element_type = element['type']
-
-                            if element_type == 'multiselect':
-                                values = request.form.getlist(element_id)
-                                form_data[element_id] = values
-                            elif element_type == 'boolean':
-                                form_data[element_id] = element_id in request.form
-                            elif element_type == 'number':
-                                value = request.form.get(element_id)
-                                if value:
-                                    try:
-                                        form_data[element_id] = float(value)
-                                    except ValueError:
-                                        form_data[element_id] = 0
-                                else:
-                                    form_data[element_id] = 0
-                            else:
-                                form_data[element_id] = request.form.get(element_id, '')
+                    form_data = _collect_pit_form_data(pit_config, request)
 
                     # Update existing record
                     existing_data.data_json = json.dumps(form_data)
@@ -540,6 +684,11 @@ def form():
                     existing_data.upload_timestamp = datetime.now(timezone.utc)
                     existing_data.device_id = request.headers.get('User-Agent', 'Unknown')[:100]
                     existing_data.timestamp = datetime.now(timezone.utc)
+
+                    if image_upload_enabled and 'robot_image' in request.files:
+                        upload_file = request.files.get('robot_image')
+                        if upload_file and upload_file.filename:
+                            _save_compressed_robot_image(existing_data, upload_file)
                     db.session.commit()
 
                     # Auto-sync and emit update
@@ -558,32 +707,7 @@ def form():
                     return redirect(url_for(form_endpoint))
             
             # Collect form data based on pit config
-            form_data = {}
-            for section in pit_config['pit_scouting']['sections']:
-                for element in section['elements']:
-                    element_id = element['id']
-                    element_type = element['type']
-                    
-                    if element_type == 'multiselect':
-                        # Handle multiselect fields
-                        values = request.form.getlist(element_id)
-                        form_data[element_id] = values
-                    elif element_type == 'boolean':
-                        # Handle boolean fields (checkboxes)
-                        form_data[element_id] = element_id in request.form
-                    elif element_type == 'number':
-                        # Handle number fields
-                        value = request.form.get(element_id)
-                        if value:
-                            try:
-                                form_data[element_id] = float(value)
-                            except ValueError:
-                                form_data[element_id] = 0
-                        else:
-                            form_data[element_id] = 0
-                    else:
-                        # Handle text, textarea, select fields
-                        form_data[element_id] = request.form.get(element_id, '')
+            form_data = _collect_pit_form_data(pit_config, request)
             
             target_event = prescout_event if is_prescout else current_event
 
@@ -603,6 +727,12 @@ def form():
             
             db.session.add(pit_data)
             db.session.commit()
+
+            if image_upload_enabled and 'robot_image' in request.files:
+                upload_file = request.files.get('robot_image')
+                if upload_file and upload_file.filename:
+                    _save_compressed_robot_image(pit_data, upload_file)
+                    db.session.commit()
             
             # Automatically sync to alliance members if alliance mode is active
             auto_sync_alliance_pit_data(pit_data)
@@ -638,6 +768,8 @@ def form():
     return render_template('scouting/pit_form.html', 
                           teams=teams, 
                           pit_config=pit_config,
+                          image_upload_enabled=image_upload_enabled,
+                          robot_image_url=(url_for('pit_scouting.get_robot_image', image_id=pit_data.robot_image.id) if (pit_data and getattr(pit_data, 'robot_image', None)) else None),
                           current_event=current_event,
                           all_pit_data=form_all_pit_entries,
                           scouted_local_ids=list(scouted_local_ids),
@@ -833,26 +965,107 @@ def view(id):
     if ungrouped:
         view_sections.append({'name': 'Additional Data', 'fields': [(k, v, None) for k, v in ungrouped]})
 
+    robot_image_url = None
+    try:
+        # Regular pit entries expose robot_image directly.
+        image_obj = getattr(pit_data, 'robot_image', None)
+
+        # Alliance-shared entries are a copied record, so resolve via source/original ID.
+        if image_obj is None and isinstance(pit_data, AllianceSharedPitData):
+            source_pit_id = getattr(pit_data, 'original_pit_data_id', None)
+            if source_pit_id:
+                image_obj = PitScoutingImage.query.filter_by(pit_data_id=source_pit_id).first()
+
+            # Fallback for cases where original reference was removed but team/event still match.
+            if image_obj is None:
+                image_obj = (
+                    PitScoutingImage.query
+                    .join(PitScoutingData, PitScoutingData.id == PitScoutingImage.pit_data_id)
+                    .filter(PitScoutingData.team_id == pit_data.team_id)
+                    .order_by(PitScoutingData.timestamp.desc())
+                    .first()
+                )
+
+        if image_obj:
+            robot_image_url = url_for('pit_scouting.get_robot_image', image_id=image_obj.id)
+    except Exception:
+        robot_image_url = None
+
     # Check delete permission
     can_delete = can_delete_pit_entry(pit_data, is_alliance_mode, alliance_id)
     user_is_alliance_admin = is_alliance_admin(alliance_id) if is_alliance_mode else False
+
+    # Compute explicit status values for the template.
+    # Alliance-shared entries do not have is_uploaded fields and should not display as local.
+    is_shared_entry = isinstance(pit_data, AllianceSharedPitData)
+    display_is_uploaded = bool(getattr(pit_data, 'is_uploaded', False))
+    display_upload_timestamp = getattr(pit_data, 'upload_timestamp', None)
+    if is_shared_entry:
+        display_is_uploaded = True
+        display_upload_timestamp = getattr(pit_data, 'shared_at', None) or getattr(pit_data, 'timestamp', None)
+
+    if is_shared_entry:
+        status_kind = 'shared'
+    elif display_is_uploaded:
+        status_kind = 'uploaded'
+    else:
+        status_kind = 'local'
     
     return render_template('scouting/pit_view.html', 
                           pit_data=pit_data,
                           pit_config=pit_config,
+                          robot_image_url=robot_image_url,
                           view_sections=view_sections,
                           element_lookup=element_lookup,
                           is_alliance_mode=is_alliance_mode,
                           alliance_id=alliance_id,
                           can_delete=can_delete,
                           user_is_alliance_admin=user_is_alliance_admin,
+                          status_kind=status_kind,
+                          display_is_uploaded=display_is_uploaded,
+                          display_upload_timestamp=display_upload_timestamp,
+                          is_shared_entry=is_shared_entry,
                           **get_theme_context())
+
+
+@bp.route('/image/<int:image_id>')
+@login_required
+def get_robot_image(image_id):
+    """Serve a compressed pit robot image from the database."""
+    image = PitScoutingImage.query.get_or_404(image_id)
+
+    # Ensure users can only fetch images for pit entries they can access.
+    if not current_user.has_role('admin'):
+        from app.utils.team_isolation import filter_pit_scouting_data_by_scouting_team
+        visible_entry = filter_pit_scouting_data_by_scouting_team().filter(PitScoutingData.id == image.pit_data_id).first()
+        if not visible_entry:
+            # Allow access when this image belongs to a pit entry shared into
+            # the user's currently active alliance.
+            alliance_id = get_active_alliance_id()
+            if not alliance_id:
+                abort(403)
+
+            shared_visible = AllianceSharedPitData.query.filter_by(
+                alliance_id=alliance_id,
+                original_pit_data_id=image.pit_data_id,
+                is_active=True
+            ).first()
+            if not shared_visible:
+                abort(403)
+
+    return send_file(
+        io.BytesIO(image.image_data),
+        mimetype=image.mime_type or 'image/jpeg',
+        as_attachment=False,
+        download_name=(image.filename or f'robot_{image.id}.jpg')
+    )
 
 @bp.route('/edit/<int:id>', methods=['GET', 'POST'])
 @login_required
 def edit(id):
     """Edit existing pit scouting data"""
     pit_config = get_effective_pit_config()
+    image_upload_enabled = _is_image_upload_enabled(pit_config)
     pit_data = PitScoutingData.query.get_or_404(id)
     
     # Check if user can edit this data
@@ -887,33 +1100,17 @@ def edit(id):
                         pit_data.event_id = current_event.id
 
             # Collect form data based on pit config
-            form_data = {}
-            for section in pit_config['pit_scouting']['sections']:
-                for element in section['elements']:
-                    element_id = element['id']
-                    element_type = element['type']
-                    
-                    if element_type == 'multiselect':
-                        values = request.form.getlist(element_id)
-                        form_data[element_id] = values
-                    elif element_type == 'boolean':
-                        form_data[element_id] = element_id in request.form
-                    elif element_type == 'number':
-                        value = request.form.get(element_id)
-                        if value:
-                            try:
-                                form_data[element_id] = float(value)
-                            except ValueError:
-                                form_data[element_id] = 0
-                        else:
-                            form_data[element_id] = 0
-                    else:
-                        form_data[element_id] = request.form.get(element_id, '')
+            form_data = _collect_pit_form_data(pit_config, request)
             
             # Update pit scouting data
             pit_data.data_json = json.dumps(form_data)
             pit_data.is_uploaded = True  # Data is saved directly to server
             pit_data.upload_timestamp = datetime.now(timezone.utc)
+
+            if image_upload_enabled and 'robot_image' in request.files:
+                upload_file = request.files.get('robot_image')
+                if upload_file and upload_file.filename:
+                    _save_compressed_robot_image(pit_data, upload_file)
             
             db.session.commit()
             
@@ -1030,6 +1227,8 @@ def edit(id):
     return render_template('scouting/pit_form.html', 
                           pit_data=pit_data,
                           pit_config=pit_config,
+                          image_upload_enabled=image_upload_enabled,
+                          robot_image_url=(url_for('pit_scouting.get_robot_image', image_id=pit_data.robot_image.id) if getattr(pit_data, 'robot_image', None) else None),
                           edit_mode=True,
                           teams=teams,
                           current_event=current_event,
@@ -1240,6 +1439,12 @@ def delete(id):
             team_number = pit_data.team.team_number
             event_id = pit_data.event_id
             pit_data_dict = pit_data.to_dict()  # Get data before deletion
+
+            # Images live in a dedicated bind/database and are not cascade-deleted by FK.
+            PitScoutingImage.query.filter_by(pit_data_id=pit_data.id).delete(synchronize_session=False)
+
+            # Images live in a dedicated bind/database and are not cascade-deleted by FK.
+            PitScoutingImage.query.filter_by(pit_data_id=pit_data.id).delete(synchronize_session=False)
             
             db.session.delete(pit_data)
             db.session.commit()
@@ -1492,6 +1697,7 @@ def config_simple_save():
                 "pit_scouting": {
                     "title": request.form.get('title', 'Pit Scouting'),
                     "description": request.form.get('description', ''),
+                    "image_upload": bool(request.form.get('image_upload')),
                     "sections": []
                 }
             }

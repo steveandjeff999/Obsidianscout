@@ -26,6 +26,73 @@ import os
 
 bp = Blueprint('scouting_alliances', __name__, url_prefix='/alliances/scouting')
 
+
+def _is_owned_by_current_team(entry_team_number, current_team):
+    """Treat NULL team ownership as legacy local data for backwards compatibility."""
+    return entry_team_number == current_team or entry_team_number is None
+
+
+def _is_prescout_event(event):
+    """Identify pre-scout events by code suffix (supports common spellings)."""
+    if not event or not event.code:
+        return False
+    code = str(event.code).upper()
+    return code.endswith('PREESCOUT') or code.endswith('PRESCOUT')
+
+
+def _prescout_event_code_filter():
+    """SQL filter for pre-scout event code variants."""
+    return db.or_(
+        Event.code.ilike('%PRE-SCOUT%'),
+        Event.code.ilike('%PRE_SCOUT%'),
+        Event.code.ilike('%PREESCOUT'),
+        Event.code.ilike('%PRESCOUT')
+    )
+
+
+def _prescout_match_type_filter():
+    """SQL filter for pre-scout match-type variants/casing."""
+    return db.or_(
+        Match.match_type.ilike('prescout'),
+        Match.match_type.ilike('pre-scout'),
+        Match.match_type.ilike('pre_scout'),
+        Match.match_type.ilike('%prescout%')
+    )
+
+
+def _pit_prescout_data_filter():
+    """SQL filter for pit rows explicitly tagged as pre-scout in stored JSON."""
+    return db.or_(
+        PitScoutingData.data_json.ilike('%"is_prescout": true%'),
+        PitScoutingData.data_json.ilike('%"is_prescout":true%'),
+        PitScoutingData.data_json.ilike('%"is_prescout":"true"%'),
+        PitScoutingData.data_json.ilike('%"prescout": true%'),
+        PitScoutingData.data_json.ilike('%"prescout":true%'),
+        PitScoutingData.data_json.ilike('%"prescout":"true"%')
+    )
+
+
+def _is_prescout_pit_entry(entry):
+    """Runtime check that mirrors SQL prescout detection for pit entries."""
+    if _is_prescout_event(getattr(entry, 'event', None)):
+        return True
+    try:
+        data = entry.data if hasattr(entry, 'data') else json.loads(entry.data_json or '{}')
+    except Exception:
+        return False
+
+    if not isinstance(data, dict):
+        return False
+
+    val = data.get('is_prescout', data.get('prescout'))
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        return val != 0
+    if isinstance(val, str):
+        return val.strip().lower() in ('1', 'true', 'yes', 'on')
+    return False
+
 def get_theme_context():
     """Get theme context with alliance status"""
     from app.utils.config_manager import is_alliance_mode_active, get_active_alliance_info
@@ -2415,6 +2482,7 @@ def save_pit_config(alliance_id):
                     'pit_scouting': {
                         'title': request.form.get('pit_title', 'Pit Scouting'),
                         'description': request.form.get('pit_description', 'Robot and team assessment in the pits'),
+                        'image_upload': bool(request.form.get('pit_image_upload')),
                         'sections': []
                     }
                 }
@@ -5585,10 +5653,16 @@ def scan_my_team_data(alliance_id):
         # Get events for these codes
         events = []
         event_ids = []
+        prescout_event_ids = []
         if alliance_events:
             events = Event.query.filter(Event.code.in_(alliance_events)).all()
             event_ids = [e.id for e in events]
             current_app.logger.info(f"[ImportScan] Found event IDs: {event_ids}")
+
+        # Always include current team's pre-scout events, even when outside alliance events.
+        prescout_events = Event.query.filter(_prescout_event_code_filter()).all()
+        prescout_event_ids = [e.id for e in prescout_events]
+        current_app.logger.info(f"[ImportScan] Prescout event IDs for team {current_team}: {prescout_event_ids}")
         
         # Get ALL existing shared data in alliance to check for duplicates
         # A duplicate is defined by match_id + team_id + alliance (for scouting)
@@ -5643,7 +5717,10 @@ def scan_my_team_data(alliance_id):
             # Get all scouting data from current team
             # EXCLUDE entries that were received from alliance (have [Alliance- prefix)
             scouting_query = ScoutingData.query.filter(
-                ScoutingData.scouting_team_number == current_team
+                db.or_(
+                    ScoutingData.scouting_team_number == current_team,
+                    ScoutingData.scouting_team_number == None
+                )
             )
             
             # Exclude alliance-received data
@@ -5656,14 +5733,50 @@ def scan_my_team_data(alliance_id):
             
             # If we have alliance events, filter by them
             if event_ids:
-                scouting_query = scouting_query.join(Match).filter(
-                    Match.event_id.in_(event_ids)
+                scouting_query = scouting_query.join(Match).outerjoin(Event, Match.event_id == Event.id).filter(
+                    db.or_(
+                        Match.event_id.in_(event_ids),
+                        Match.event_id.in_(prescout_event_ids),
+                        _prescout_match_type_filter(),
+                        _prescout_event_code_filter()
+                    )
                 )
             
             scouting_entries = scouting_query.all()
+
+            # Hard fallback: include pre-scout scouting rows that are importable by the current team.
+            fallback_prescout_scouting = ScoutingData.query.join(Match).outerjoin(Event, Match.event_id == Event.id).filter(
+                db.or_(
+                    ScoutingData.scouting_team_number == current_team,
+                    ScoutingData.scouting_team_number == None
+                )
+            ).filter(
+                db.or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
+            ).filter(
+                db.or_(
+                    _prescout_match_type_filter(),
+                    _prescout_event_code_filter()
+                )
+            ).all()
+            scouting_by_id = {entry.id: entry for entry in scouting_entries}
+            for entry in fallback_prescout_scouting:
+                scouting_by_id[entry.id] = entry
+            scouting_entries = list(scouting_by_id.values())
+
             current_app.logger.info(f"[ImportScan] Found {len(scouting_entries)} scouting entries for team {current_team}")
             
             for entry in scouting_entries:
+                normalized_match_type = (entry.match.match_type or '').strip().lower().replace('-', '').replace('_', '') if entry.match else ''
+                is_prescout_entry = bool(
+                    entry.match and (
+                        'prescout' in normalized_match_type
+                        or _is_prescout_event(entry.match.event)
+                    )
+                )
+
                 # Check if already exists in alliance (from ANY source)
                 key = (entry.match_id, entry.team_id, entry.alliance)
                 if key in existing_scouting_keys:
@@ -5708,12 +5821,93 @@ def scan_my_team_data(alliance_id):
                     PitScoutingData.scouting_team_number == None
                 )
             )
+            # Exclude alliance-received data
+            pit_query = pit_query.filter(
+                db.or_(
+                    PitScoutingData.scout_name == None,
+                    ~PitScoutingData.scout_name.like('[Alliance-%')
+                )
+            )
+
+            # If alliance events are configured, include those plus prescout entries.
+            # Keep legacy rows with NULL event_id for backwards compatibility.
+            if event_ids:
+                pit_query = pit_query.outerjoin(Event, PitScoutingData.event_id == Event.id).filter(
+                    db.or_(
+                        PitScoutingData.event_id.in_(event_ids),
+                        PitScoutingData.event_id.in_(prescout_event_ids),
+                        PitScoutingData.event_id == None,
+                        _prescout_event_code_filter(),
+                        _pit_prescout_data_filter()
+                    )
+                )
+
+            pit_entries = pit_query.all()
+
+            # Hard fallback: include pre-scout pit rows that are importable by the current team.
+            fallback_prescout_pit = PitScoutingData.query.outerjoin(Event, PitScoutingData.event_id == Event.id).filter(
+                db.or_(
+                    PitScoutingData.scouting_team_number == current_team,
+                    PitScoutingData.scouting_team_number == None
+                )
+            ).filter(
+                db.or_(
+                    PitScoutingData.scout_name == None,
+                    ~PitScoutingData.scout_name.like('[Alliance-%')
+                )
+            ).filter(
+                db.or_(
+                    _prescout_event_code_filter(),
+                    _pit_prescout_data_filter()
+                )
+            ).all()
+            pit_by_id = {entry.id: entry for entry in pit_entries}
+            for entry in fallback_prescout_pit:
+                pit_by_id[entry.id] = entry
+            pit_entries = list(pit_by_id.values())
+
+            current_app.logger.info(f"[ImportScan] Found {len(pit_entries)} pit entries for team {current_team}")
+
+            for entry in pit_entries:
+                is_prescout_entry = _is_prescout_pit_entry(entry)
+
+                # Check if already exists in alliance (from ANY source)
+                if entry.team_id in existing_pit_team_ids:
+                    current_app.logger.debug(f"[ImportScan] Skipping duplicate pit entry for team_id: {entry.team_id}")
+                    continue
+
+                # Check if this was previously ignored/deleted
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='pit',
+                    match_id=None,
+                    team_id=entry.team_id,
+                    alliance_color=None,
+                    source_team=current_team
+                ):
+                    continue
+
+                # Add to results
+                results['pit_data'].append({
+                    'id': entry.id,
+                    'team_number': entry.team.team_number if entry.team else 'Unknown',
+                    'team_name': entry.team.team_name if entry.team else 'Unknown',
+                    'scout_name': entry.scout_name,
+                    'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
+                    'event_code': entry.event.code if entry.event else 'Unknown',
+                    'event_name': entry.event.name if entry.event else 'Unknown',
+                    'is_prescout': _is_prescout_pit_entry(entry),
+                    'data_preview': _get_data_preview(entry.data)
+                })
         
         # Scan qualitative data from CURRENT TEAM ONLY
         if data_type in ['all', 'qualitative']:
             # Get all qualitative data from current team
             qual_query = QualitativeScoutingData.query.filter(
-                QualitativeScoutingData.scouting_team_number == current_team
+                db.or_(
+                    QualitativeScoutingData.scouting_team_number == current_team,
+                    QualitativeScoutingData.scouting_team_number == None
+                )
             )
             # Exclude alliance-received entries
             qual_query = qual_query.filter(
@@ -5724,13 +5918,49 @@ def scan_my_team_data(alliance_id):
             )
             # filter by events if needed
             if event_ids:
-                qual_query = qual_query.join(Match).filter(
-                    Match.event_id.in_(event_ids)
+                qual_query = qual_query.join(Match).outerjoin(Event, Match.event_id == Event.id).filter(
+                    db.or_(
+                        Match.event_id.in_(event_ids),
+                        Match.event_id.in_(prescout_event_ids),
+                        _prescout_match_type_filter(),
+                        _prescout_event_code_filter()
+                    )
                 )
             qual_entries = qual_query.all()
+
+            # Hard fallback: include pre-scout qualitative rows that are importable by the current team.
+            fallback_prescout_qual = QualitativeScoutingData.query.join(Match).outerjoin(Event, Match.event_id == Event.id).filter(
+                db.or_(
+                    QualitativeScoutingData.scouting_team_number == current_team,
+                    QualitativeScoutingData.scouting_team_number == None
+                )
+            ).filter(
+                db.or_(
+                    QualitativeScoutingData.scout_name == None,
+                    ~QualitativeScoutingData.scout_name.like('[Alliance-%')
+                )
+            ).filter(
+                db.or_(
+                    _prescout_match_type_filter(),
+                    _prescout_event_code_filter()
+                )
+            ).all()
+            qual_by_id = {entry.id: entry for entry in qual_entries}
+            for entry in fallback_prescout_qual:
+                qual_by_id[entry.id] = entry
+            qual_entries = list(qual_by_id.values())
+
             current_app.logger.info(f"[ImportScan] Found {len(qual_entries)} qualitative entries for team {current_team}")
             
             for entry in qual_entries:
+                normalized_match_type = (entry.match.match_type or '').strip().lower().replace('-', '').replace('_', '') if entry.match else ''
+                is_prescout_entry = bool(
+                    entry.match and (
+                        'prescout' in normalized_match_type
+                        or _is_prescout_event(entry.match.event)
+                    )
+                )
+
                 key = (entry.match_id, entry.alliance_scouted)
                 if key in existing_qualitative_keys:
                     current_app.logger.debug(f"[ImportScan] Skipping duplicate qualitative entry: {key}")
@@ -5756,44 +5986,7 @@ def scan_my_team_data(alliance_id):
                     'alliance': entry.alliance_scouted,
                     'scout_name': entry.scout_name,
                     'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
-                    'data_preview': _get_data_preview(entry.data)
-                })
-            
-            # Exclude alliance-received data
-            pit_query = pit_query.filter(
-                db.or_(
-                    PitScoutingData.scout_name == None,
-                    ~PitScoutingData.scout_name.like('[Alliance-%')
-                )
-            )
-            
-            pit_entries = pit_query.all()
-            current_app.logger.info(f"[ImportScan] Found {len(pit_entries)} pit entries for team {current_team}")
-            
-            for entry in pit_entries:
-                # Check if already exists in alliance (from ANY source)
-                if entry.team_id in existing_pit_team_ids:
-                    current_app.logger.debug(f"[ImportScan] Skipping duplicate pit entry for team_id: {entry.team_id}")
-                    continue
-                
-                # Check if this was previously ignored/deleted
-                if AllianceDeletedData.is_deleted(
-                    alliance_id=alliance_id,
-                    data_type='pit',
-                    match_id=None,
-                    team_id=entry.team_id,
-                    alliance_color=None,
-                    source_team=current_team
-                ):
-                    continue
-                
-                # Add to results
-                results['pit_data'].append({
-                    'id': entry.id,
-                    'team_number': entry.team.team_number if entry.team else 'Unknown',
-                    'team_name': entry.team.team_name if entry.team else 'Unknown',
-                    'scout_name': entry.scout_name,
-                    'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
+                    'is_prescout': _is_prescout_event(entry.match.event if entry.match else None),
                     'data_preview': _get_data_preview(entry.data)
                 })
         
@@ -5884,14 +6077,15 @@ def import_selected_data(alliance_id):
                 continue
                 
             # Only allow importing data owned by current team
-            if entry.scouting_team_number != current_team:
+            if not _is_owned_by_current_team(entry.scouting_team_number, current_team):
                 skipped_wrong_team += 1
                 continue
             
             # Check if already exists from this source
             existing = AllianceSharedScoutingData.query.filter_by(
                 alliance_id=alliance_id,
-                original_scouting_data_id=entry.id
+                original_scouting_data_id=entry.id,
+                is_active=True
             ).first()
             
             if existing:
@@ -5925,14 +6119,15 @@ def import_selected_data(alliance_id):
                 continue
                 
             # Only allow importing data owned by current team
-            if entry.scouting_team_number != current_team:
+            if not _is_owned_by_current_team(entry.scouting_team_number, current_team):
                 skipped_wrong_team += 1
                 continue
             
             # Check if already exists from this source
             existing = AllianceSharedPitData.query.filter_by(
                 alliance_id=alliance_id,
-                original_pit_data_id=entry.id
+                original_pit_data_id=entry.id,
+                is_active=True
             ).first()
             
             if existing:
@@ -5962,13 +6157,14 @@ def import_selected_data(alliance_id):
             entry = QualitativeScoutingData.query.get(qual_id)
             if not entry:
                 continue
-            if entry.scouting_team_number != current_team:
+            if not _is_owned_by_current_team(entry.scouting_team_number, current_team):
                 skipped_wrong_team += 1
                 continue
             # check existing from this source
             existing = AllianceSharedQualitativeData.query.filter_by(
                 alliance_id=alliance_id,
-                original_qualitative_data_id=entry.id
+                original_qualitative_data_id=entry.id,
+                is_active=True
             ).first()
             if existing:
                 skipped_duplicate += 1
@@ -5996,7 +6192,7 @@ def import_selected_data(alliance_id):
             
             if ignore_type == 'scouting':
                 entry = ScoutingData.query.get(ignore_id)
-                if entry and entry.scouting_team_number == current_team:
+                if entry and _is_owned_by_current_team(entry.scouting_team_number, current_team):
                     # Mark as deleted (ignored)
                     deleted_record = AllianceDeletedData(
                         alliance_id=alliance_id,
@@ -6012,7 +6208,7 @@ def import_selected_data(alliance_id):
             
             elif ignore_type == 'pit':
                 entry = PitScoutingData.query.get(ignore_id)
-                if entry and entry.scouting_team_number == current_team:
+                if entry and _is_owned_by_current_team(entry.scouting_team_number, current_team):
                     # Mark as deleted (ignored)
                     deleted_record = AllianceDeletedData(
                         alliance_id=alliance_id,
@@ -6027,7 +6223,7 @@ def import_selected_data(alliance_id):
                     ignored_count += 1
             elif ignore_type == 'qualitative':
                 entry = QualitativeScoutingData.query.get(ignore_id)
-                if entry and entry.scouting_team_number == current_team:
+                if entry and _is_owned_by_current_team(entry.scouting_team_number, current_team):
                     deleted_record = AllianceDeletedData(
                         alliance_id=alliance_id,
                         data_type='qualitative',
@@ -6054,13 +6250,27 @@ def import_selected_data(alliance_id):
         
         current_app.logger.info(f"[Import] Team {current_team} imported {imported_scouting} scouting, {imported_pit} pit. Skipped: {skipped_duplicate} duplicates, {skipped_wrong_team} wrong team")
         
+        total_requested = len(scouting_ids) + len(pit_ids) + len(qualitative_ids)
+        total_imported = imported_scouting + imported_pit + imported_qualitative
+        outcome_message = (
+            f'Imported {imported_scouting} scouting entries, {imported_pit} pit entries, '
+            f'and {imported_qualitative} qualitative entries. {ignored_count} entries marked as ignored.'
+        )
+        if total_requested > 0 and total_imported == 0:
+            outcome_message = (
+                'No selected entries were imported. '
+                f'Skipped {skipped_duplicate} duplicates and {skipped_wrong_team} entries not owned by your team.'
+            )
+
         return jsonify({
             'success': True,
             'imported_scouting': imported_scouting,
             'imported_pit': imported_pit,
             'imported_qualitative': imported_qualitative,
             'ignored_count': ignored_count,
-            'message': f'Imported {imported_scouting} scouting entries, {imported_pit} pit entries, and {imported_qualitative} qualitative entries. {ignored_count} entries marked as ignored.'
+            'skipped_duplicate': skipped_duplicate,
+            'skipped_wrong_team': skipped_wrong_team,
+            'message': outcome_message
         })
         
     except Exception as e:

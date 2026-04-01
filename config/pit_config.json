@@ -2,6 +2,7 @@
   "pit_scouting": {
     "title": "REEFSCAPE 2025 Pit Scouting",
     "description": "Collect detailed information about teams and their robots for REEFSCAPE 2025",
+    "image_upload": false,
     "sections": [
       {
         "id": "team_info",
