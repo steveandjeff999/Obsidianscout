@@ -931,9 +931,15 @@ def manage_users():
     if current_user.has_role('superadmin'):
         total_users = User.query.count()
         active_users = User.query.filter_by(is_active=True).count()
+        scouting_teams_with_accounts = (
+            db.session.query(func.count(func.distinct(User.scouting_team_number)))
+            .filter(User.scouting_team_number.isnot(None))
+            .scalar()
+        ) or 0
     else:
         total_users = User.query.filter_by(scouting_team_number=current_user.scouting_team_number).count()
         active_users = User.query.filter_by(scouting_team_number=current_user.scouting_team_number, is_active=True).count()
+        scouting_teams_with_accounts = None
 
     # --- Sorting support ---
     sort = request.args.get('sort', 'username')
@@ -977,6 +983,7 @@ def manage_users():
     ctx['no_chrome'] = False
     return render_template('auth/manage_users.html', users=users, all_roles=all_roles, search=search,
                            total_users=total_users, active_users=active_users,
+                           scouting_teams_with_accounts=scouting_teams_with_accounts,
                            pagination=pagination, user_start=user_start, user_end=user_end,
                            sort=sort, order=order,
                            **ctx)

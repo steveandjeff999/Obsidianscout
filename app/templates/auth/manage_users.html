@@ -22,6 +22,9 @@
                     <small class="text-light">
                         {% if total_users is defined and active_users is defined %}
                             Total: {{ total_users }} &nbsp;|&nbsp; Active: {{ active_users }}
+                            {% if current_user.has_role('superadmin') and scouting_teams_with_accounts is defined %}
+                                &nbsp;|&nbsp; Teams: {{ scouting_teams_with_accounts }}
+                            {% endif %}
                         {% endif %}
                     </small>
                 </div>

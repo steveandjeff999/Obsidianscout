@@ -48,7 +48,79 @@
 					<button type="submit" class="btn btn-primary">Save Changes</button>
 				</div>
 			</form>
+
+			<hr class="my-4">
+
+			<div class="alert alert-danger mb-0" role="alert">
+				<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+					<div>
+						<strong>Delete this event</strong>
+						<div class="small">This removes the event and its related matches and scouting data. Any problems during deletion will be shown here.</div>
+					</div>
+					<form class="d-inline delete-confirm-form" method="POST" action="{{ url_for('events.delete', event_id=event.id) }}" style="margin:0;">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+						<button type="button" class="btn btn-danger delete-confirm-btn" title="Click to confirm delete">
+							<i class="fas fa-trash"></i> Delete Event
+						</button>
+					</form>
+				</div>
+			</div>
 		</div>
 	</div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+	(function(){
+		const CONFIRM_TIMEOUT = 5000;
+
+		document.querySelectorAll('.delete-confirm-form').forEach(form => {
+			const btn = form.querySelector('.delete-confirm-btn');
+			if (!btn) return;
+
+			let confirming = false;
+			let timer = null;
+
+			function enterConfirmState() {
+				confirming = true;
+				btn.classList.remove('btn-danger');
+				btn.classList.add('btn-outline-danger');
+				btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Click again to confirm';
+				btn.setAttribute('aria-pressed', 'true');
+
+				timer = setTimeout(() => {
+					exitConfirmState();
+				}, CONFIRM_TIMEOUT);
+			}
+
+			function exitConfirmState() {
+				confirming = false;
+				btn.classList.remove('btn-outline-danger');
+				btn.classList.add('btn-danger');
+				btn.innerHTML = '<i class="fas fa-trash"></i> Delete Event';
+				btn.removeAttribute('aria-pressed');
+				if (timer) { clearTimeout(timer); timer = null; }
+			}
+
+			btn.addEventListener('click', function(e){
+				e.preventDefault();
+				if (!confirming) {
+					enterConfirmState();
+					try {
+						if (window.toasts && typeof window.toasts.info === 'function') {
+							window.toasts.info('Click the button again to confirm delete');
+						}
+					} catch(e) {}
+					return;
+				}
+
+				btn.disabled = true;
+				form.submit();
+			});
+
+			form.addEventListener('mouseleave', function(){ if (confirming) exitConfirmState(); });
+		});
+	})();
+</script>
 {% endblock %}
