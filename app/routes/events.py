@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import current_user  # needed for deletion scoping
 from app.models import Event, Match, ScoutingData, Team, ScoutingAllianceEvent, StrategyShare, StrategyDrawing, AllianceSharedScoutingData, AllianceSelection
+import sqlalchemy as sa
 from sqlalchemy import func
 from app import db
 from datetime import datetime, date
@@ -273,6 +274,75 @@ def delete(event_id):
     event_name = event.name  # Store name before deletion
     event_code = getattr(event, 'code', None)
     scouting_team = getattr(current_user, 'scouting_team_number', None) if current_user else None
+
+    def cleanup_event_graph(event_ids_to_delete):
+        """Delete event children in FK-safe order for the provided event ids."""
+        if not event_ids_to_delete:
+            return
+
+        all_matches = Match.query.filter(Match.event_id.in_(event_ids_to_delete)).all()
+        match_ids = [m.id for m in all_matches]
+
+        if match_ids:
+            ScoutingData.query.filter(ScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
+
+            from app.models import QualitativeScoutingData
+            QualitativeScoutingData.query.filter(QualitativeScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
+
+            StrategyShare.query.filter(StrategyShare.match_id.in_(match_ids)).delete(synchronize_session=False)
+            StrategyDrawing.query.filter(StrategyDrawing.match_id.in_(match_ids)).delete(synchronize_session=False)
+            AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
+
+            # Catch any match-scoped tables that are not explicitly modeled here.
+            # This makes event deletion resilient to tables like auto_path_drawing.
+            inspector = sa.inspect(db.engine)
+            for table_name in inspector.get_table_names():
+                if table_name == 'match':
+                    continue
+
+                try:
+                    columns = {column['name'] for column in inspector.get_columns(table_name)}
+                except Exception:
+                    continue
+
+                reference_columns = []
+                if 'match_id' in columns:
+                    reference_columns.append('match_id')
+
+                if not reference_columns:
+                    for fk in inspector.get_foreign_keys(table_name):
+                        if fk.get('referred_table') == 'match':
+                            constrained_columns = fk.get('constrained_columns') or []
+                            if len(constrained_columns) == 1:
+                                reference_columns.append(constrained_columns[0])
+
+                if not reference_columns:
+                    continue
+
+                for reference_column in dict.fromkeys(reference_columns):
+                    try:
+                        db.session.execute(
+                            sa.text(f'DELETE FROM "{table_name}" WHERE {reference_column} IN :match_ids').bindparams(
+                                sa.bindparam('match_ids', expanding=True)
+                            ),
+                            {'match_ids': match_ids},
+                        )
+                    except Exception:
+                        continue
+
+        for target_event in Event.query.filter(Event.id.in_(event_ids_to_delete)).all():
+            for team in list(target_event.teams):
+                target_event.teams.remove(team)
+
+            AllianceSelection.query.filter_by(event_id=target_event.id, scouting_team_number=scouting_team).delete(synchronize_session=False)
+
+            from app.models import TeamListEntry
+            TeamListEntry.query.filter_by(event_id=target_event.id).delete(synchronize_session=False)
+
+        if match_ids:
+            Match.query.filter(Match.id.in_(match_ids)).delete(synchronize_session=False)
+
+        Event.query.filter(Event.id.in_(event_ids_to_delete)).delete(synchronize_session=False)
     
     try:
         # Import the DisableReplication context manager
@@ -289,49 +359,16 @@ def delete(event_id):
         
         # Temporarily disable replication during bulk delete to prevent queue issues
         with DisableReplication():
-            # Collect ALL match IDs across all duplicate events
-            all_matches = Match.query.filter(Match.event_id.in_(all_event_ids)).all()
-            match_ids = [m.id for m in all_matches]
-            if match_ids:
-                ScoutingData.query.filter(ScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
-                # qualitative scouting observations
-                from app.models import QualitativeScoutingData
-                QualitativeScoutingData.query.filter(QualitativeScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
-                # Strategy shares for these matches
-                StrategyShare.query.filter(StrategyShare.match_id.in_(match_ids)).delete(synchronize_session=False)
-                # Strategy drawings for these matches
-                StrategyDrawing.query.filter(StrategyDrawing.match_id.in_(match_ids)).delete(synchronize_session=False)
-                # Alliance-shared copies for these matches
-                AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
-            
-            # Process all duplicate events
-            for dup_event in Event.query.filter(Event.id.in_(all_event_ids)).all():
-                # Remove event associations from teams
-                for team in list(dup_event.teams):
-                    dup_event.teams.remove(team)
-                
-                # Delete alliance selections
-                AllianceSelection.query.filter_by(event_id=dup_event.id, scouting_team_number=scouting_team).delete()
-
-                # Remove team list entries
-                from app.models import TeamListEntry
-                TeamListEntry.query.filter_by(event_id=dup_event.id).delete(synchronize_session=False)
-            
-            # Delete ALL matches across all duplicate events
-            Match.query.filter(Match.event_id.in_(all_event_ids)).delete(synchronize_session=False)
-            
-            # Delete all duplicate events
-            Event.query.filter(Event.id.in_(all_event_ids)).delete(synchronize_session=False)
+            cleanup_event_graph(all_event_ids)
             
             db.session.commit()
+        flash(f'Event "{event_name}" deleted successfully!', 'success')
+        return redirect(url_for('events.index'))
     except IntegrityError as fk_err:
         # some leftover foreign-key references still exist; attempt to clean automatically and retry
         db.session.rollback()
         try:
-            from app.models import TeamListEntry
-            TeamListEntry.query.filter_by(event_id=event_id).delete(synchronize_session=False)
-            filter_matches_by_scouting_team().filter_by(event_id=event_id).delete()
-            db.session.delete(event)
+            cleanup_event_graph(all_event_ids)
             db.session.commit()
             from app.utils.real_time_replication import real_time_replicator
             real_time_replicator.replicate_operation(
@@ -341,13 +378,16 @@ def delete(event_id):
                 str(event_id)
             )
             flash(f'Event "{event_name}" and all associated data deleted successfully (fixed FK issue)!', 'success')
+            return redirect(url_for('events.index'))
         except Exception as e2:
             db.session.rollback()
             flash(f'Error deleting event after attempting FK cleanup: {str(e2)}', 'danger')
+            return redirect(url_for('events.edit', event_id=event_id))
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting event: {str(e)}', 'danger')
-    
+        return redirect(url_for('events.edit', event_id=event_id))
+
     return redirect(url_for('events.index'))
 
 @bp.route('/sync', methods=['POST'])

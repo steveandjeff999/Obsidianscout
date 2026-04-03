@@ -96,21 +96,6 @@
 
                         <div class="col-lg-4 col-md-6 mb-3">
                             <div class="card h-100">
-                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-palette"></i> Appearance {{ help.help_icon('Manage site appearance settings and visual features that apply to all users on this installation.', 'Appearance') }}</h5></div>
-                                <div class="card-body d-flex flex-column">
-                                    <p class="mb-3">Toggle a modern 'liquid glass' frosted button appearance across the UI for your team's users.</p>
-                                    <div class="mt-auto">
-                                        <form method="POST" action="{{ url_for('auth.toggle_liquid_glass_buttons') }}" class="d-inline">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                            <button id="liquidGlassBtn" type="submit" class="btn btn-secondary"><i id="liquidGlassIcon" class="fas fa-spinner fa-spin"></i> <span id="liquidGlassText">Loading...</span></button>
-                                            <p id="liquidGlassStatus" class="mt-2 small text-muted">Checking server...</p>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-4 col-md-6 mb-3">
-                            <div class="card h-100">
                                 <div class="card-header"><h5 class="mb-0"><i class="fas fa-chart-pie"></i> Prediction Settings {{ help.help_icon('Control form predictions and leaderboard accuracy for your team.', 'Prediction settings') }}</h5></div>
                                 <div class="card-body d-flex flex-column">
                                     <p class="mb-3">Show a prediction selector on the scouting form and optionally display accuracy on the scout leaderboard.</p>
@@ -511,41 +496,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const statusEl = document.getElementById('liquidGlassStatus');
-    const btn = document.getElementById('liquidGlassBtn');
-    const icon = document.getElementById('liquidGlassIcon');
-    const text = document.getElementById('liquidGlassText');
-
-    async function refreshGlassStatus() {
-        try {
-            const resp = await fetch("{{ url_for('auth.liquid_glass_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
-            const data = await resp.json();
-            const enabled = !!data.enabled;
-            if (enabled) {
-                btn.className = 'btn btn-success';
-                icon.className = 'fas fa-toggle-on';
-                text.textContent = 'Disable Liquid Glass Buttons';
-                statusEl.className = 'mt-2 small text-success';
-                statusEl.textContent = 'Liquid glass buttons are ENABLED for your team';
-            } else {
-                btn.className = 'btn btn-secondary';
-                icon.className = 'fas fa-toggle-off';
-                text.textContent = 'Enable Liquid Glass Buttons';
-                statusEl.className = 'mt-2 small text-muted';
-                statusEl.textContent = 'Liquid glass buttons are DISABLED for your team';
-            }
-        } catch (e) {
-            statusEl.className = 'mt-2 small text-muted';
-            statusEl.textContent = 'Could not fetch server status';
-            btn.className = 'btn btn-secondary';
-            icon.className = 'fas fa-exclamation-triangle';
-            text.textContent = 'Retry';
-        }
-    }
-
-    refreshGlassStatus();
-    setInterval(refreshGlassStatus, 10000);
-
     // Poll and refresh spinning-counter UI
     async function refreshSpinningCounterStatus() {
         try {
