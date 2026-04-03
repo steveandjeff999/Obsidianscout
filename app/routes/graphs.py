@@ -20,7 +20,7 @@ from app.utils.config_manager import get_effective_game_config
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
     filter_events_by_scouting_team, get_event_by_code, get_combined_dropdown_events,
-    get_all_teams_at_event
+    get_all_teams_at_event, resolve_event_from_param, resolve_event_id_from_param
 )
 from app.utils.alliance_data import (
     get_active_alliance_id, get_scouting_data_for_teams,
@@ -493,7 +493,10 @@ def index():
     
     # Get selected teams from query parameters if any
     selected_team_numbers = request.args.getlist('teams', type=int)
-    selected_event_id = request.args.get('event_id', type=int)
+    selected_event_param = request.args.get('event_id')
+    selected_event_obj = resolve_event_from_param(selected_event_param, events=all_events) if selected_event_param else None
+    selected_event_id = resolve_event_id_from_param(selected_event_param, events=all_events) if selected_event_param else None
+    selected_event_value = getattr(selected_event_obj, 'id', None) if selected_event_obj else selected_event_id
     selected_metric = request.args.get('metric', '')
     selected_graph_types = request.args.getlist('graph_types')
     selected_data_view = request.args.get('data_view', 'averages')
@@ -514,7 +517,7 @@ def index():
         selected_graph_types = ['bar', 'line', 'scatter']
     
     print(f"Selected teams: {selected_team_numbers}")
-    print(f"Selected event ID: {selected_event_id}")
+    print(f"Selected event ID: {selected_event_value}")
     print(f"Selected metric: {selected_metric}")
     print(f"Selected graph types: {selected_graph_types}")
     print(f"Selected data view: {selected_data_view}")
@@ -527,7 +530,10 @@ def index():
         # Get teams for selected team_numbers - use alliance data if in alliance mode
         if is_alliance_mode:
             # In alliance mode, get teams from alliance data
-            all_alliance_teams, _ = get_all_teams_for_alliance(event_id=selected_event_id)
+            all_alliance_teams, _ = get_all_teams_for_alliance(
+                event_id=selected_event_id,
+                event_code=getattr(selected_event_obj, 'code', None)
+            )
             teams = [t for t in all_alliance_teams if t.team_number in selected_team_numbers]
         else:
             teams = filter_teams_by_scouting_team().filter(Team.team_number.in_(selected_team_numbers)).all()
@@ -639,7 +645,7 @@ def index():
                           all_teams_json=all_teams_json,
                           all_events=all_events,
                           selected_team_numbers=selected_team_numbers,
-                          selected_event_id=selected_event_id,
+                          selected_event_id=selected_event_value,
                           selected_metric=selected_metric,
                           selected_graph_types=selected_graph_types,
                           selected_data_view=selected_data_view,
@@ -1049,7 +1055,8 @@ def graphs_data():
     
     # Get selected parameters
     selected_team_numbers = request.args.getlist('teams', type=int)
-    selected_event_id = request.args.get('event_id', type=int)
+    selected_event_param = request.args.get('event_id')
+    selected_event_id = resolve_event_id_from_param(selected_event_param) if selected_event_param else None
     selected_metric = request.args.get('metric', 'points')
     selected_graph_types = request.args.getlist('graph_types') or ['bar', 'line']
     selected_data_view = request.args.get('data_view', 'averages')
@@ -1722,7 +1729,7 @@ def view_shared(share_id):
 
     # Selected values for the UI controls: prefer query params, fall back to share settings
     selected_team_numbers = team_numbers
-    selected_event_id = request.args.get('event_id', type=int) or shared_graph.event_id
+    selected_event_id = request.args.get('event_id') or shared_graph.event_id
     selected_metric = request.args.get('metric') or (shared_graph.metric or 'points')
     selected_data_view = request.args.get('data_view') or (shared_graph.data_view or 'averages')
     selected_sort = request.args.get('sort', 'points_desc')

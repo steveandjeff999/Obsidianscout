@@ -125,7 +125,7 @@
                         <tbody>
                             {% for match in matches %}
                             <tr>
-                                <td class="fw-bold">{{ match.match_number }}</td>
+                                <td class="fw-bold">{{ match.display_match_number or match.match_number }}</td>
                                 <td>
                                     <span class="badge {% if match.match_type == 'Qualification' %}bg-primary{% elif match.match_type == 'Playoff' %}bg-danger{% elif match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">
                                         {{ match.match_type }}

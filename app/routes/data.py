@@ -25,7 +25,7 @@ from app.utils.config_manager import get_effective_game_config
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
     filter_events_by_scouting_team, filter_scouting_data_by_scouting_team, filter_pit_scouting_data_by_scouting_team,
-    get_event_by_code, get_all_teams_at_event
+    get_event_by_code, get_all_teams_at_event, resolve_event_from_param
 )
 from app.utils.team_isolation import get_combined_dropdown_events
 from app.utils.alliance_data import get_active_alliance_id, get_all_teams_for_alliance, get_all_matches_for_alliance
@@ -3912,10 +3912,13 @@ def validate_data():
     from app.utils.analysis import calculate_team_metrics
     game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
-    event_id = request.args.get('event_id', type=int)
+    raw_event_param = request.args.get('event_id')
     events = get_combined_dropdown_events()
-    if event_id:
-        event = filter_events_by_scouting_team().filter(Event.id == event_id).first_or_404()
+    if raw_event_param:
+        event = resolve_event_from_param(raw_event_param, events=events)
+        if not event:
+            flash('Selected event not found.', 'danger')
+            return redirect(url_for('data.index'))
     elif current_event_code:
         event = get_event_by_code(current_event_code)
     else:

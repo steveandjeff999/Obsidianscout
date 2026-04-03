@@ -80,6 +80,15 @@
                             .team-card strong { display:block; font-size:1.05rem; }
                             .team-card small { color: var(--bs-secondary); }
 
+                            .pit-scouted-check {
+                                color: #198754;
+                                font-weight: 600;
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 0.25rem;
+                                margin-top: 0.2rem;
+                            }
+
                             /* Ensure readable badges in dark mode */
                             .badge.bg-warning { color: #222 !important; }
                             body.dark-mode .badge.bg-warning { color: #222 !important; }
@@ -245,15 +254,16 @@
             <div class="card-body">
                 <div class="row">
                     {% for team in teams %}
+                    {% set has_pit_data = (team.id in scouted_team_ids) or (team.team_number in scouted_team_numbers) %}
                     <div class="col-md-2 col-sm-3 col-4 mb-2">
                         <div class="team-card p-2 border rounded text-center">
                             <strong>{{ team.team_number }}</strong>
                             {% if team.team_name %}
                                 <br><small class="text-muted">{{ team.team_name[:20] }}{% if team.team_name|length > 20 %}...{% endif %}</small>
                             {% endif %}
-                            {# Prefer the full set `all_pit_data` if provided, fallback to pit_data #}
-                            {# Use precomputed lookup lists for faster and more reliable checks #}
-                            {# Scouted indicator intentionally removed #}
+                            {% if has_pit_data %}
+                                <br><small class="pit-scouted-check"><i class="fas fa-check-circle"></i> Scouted</small>
+                            {% endif %}
                         </div>
                     </div>
                     {% endfor %}

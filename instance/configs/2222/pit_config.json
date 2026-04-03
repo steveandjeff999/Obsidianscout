@@ -1,0 +1,21 @@
+{
+  "pit_scouting": {
+    "title": "Team Pit Title",
+    "description": "Team-only mode config",
+    "image_upload": true,
+    "sections": [
+      {
+        "id": "team_section",
+        "name": "Team Section",
+        "elements": [
+          {
+            "id": "team_field",
+            "perm_id": "team_field",
+            "name": "Team Field",
+            "type": "text"
+          }
+        ]
+      }
+    ]
+  }
+}
