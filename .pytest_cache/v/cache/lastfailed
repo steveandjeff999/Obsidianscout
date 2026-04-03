@@ -9,5 +9,9 @@
   "tests/test_alliances_recommend_dedupe_by_team_number.py::test_recommendations_dedupes_by_team_number": true,
   "tests/test_simulation_run_team_selection.py::test_simulation_run_prefers_scoped_team": true,
   "tests/test_simulations_dedupe.py::test_simulations_dedupe": true,
-  "tools/test_graph_data.py": true
+  "tools/test_graph_data.py": true,
+  "tests/test_pit_form.py::test_form_prefills_when_team_selected": true,
+  "tests/test_pit_form.py::test_ajax_endpoint_returns_empty_for_unscouted_team": true,
+  "tests/test_pit_form.py::test_scouting_form_team_selector_optout": true,
+  "tests/test_pit_form.py::test_pit_form_alliance_gt_image_upload_honors_shared_flag": true
 }

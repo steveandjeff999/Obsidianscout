@@ -11,7 +11,8 @@ from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_current_game_config, get_effective_game_config
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_events_by_scouting_team, 
-    assign_scouting_team_to_model, get_event_by_code, filter_scouting_data_by_scouting_team
+    assign_scouting_team_to_model, get_event_by_code, filter_scouting_data_by_scouting_team,
+    resolve_event_from_param
 )
 from app.utils.team_isolation import get_combined_dropdown_events
 from app.utils.alliance_data import get_active_alliance_id, get_all_teams_for_alliance
@@ -37,7 +38,7 @@ def index():
     
     # Get the current event
     event = None
-    event_id = request.args.get('event_id', type=int)
+    raw_event_param = request.args.get('event_id')
     
     # Get all events for the dropdown (combined/deduped like /events)
     events = get_combined_dropdown_events()
@@ -53,26 +54,8 @@ def index():
     except Exception:
         pass
 
-    # Also respect raw event_id param that may contain synthetic ids or codes
-    try:
-        raw_event_param = request.args.get('event_id')
-        if raw_event_param and events:
-            if isinstance(raw_event_param, str):
-                if raw_event_param.startswith('alliance_'):
-                    evt = next((e for e in events if str(getattr(e, 'id', '')) == raw_event_param), None)
-                    if evt:
-                        event = evt
-                else:
-                    code_up = raw_event_param.upper()
-                    evt = next((e for e in events if (getattr(e, 'code', '') or '').upper() == code_up), None)
-                    if evt:
-                        event = evt
-    except Exception:
-        pass
-
-    if event_id:
-        # If a specific event ID is requested, use that (filtered by scouting team)
-        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+    if raw_event_param:
+        event = resolve_event_from_param(raw_event_param, events=events)
         if not event:
             flash("Event not found or not accessible.", "error")
             return redirect(url_for('teams.index'))

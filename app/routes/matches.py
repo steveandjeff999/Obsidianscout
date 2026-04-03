@@ -22,7 +22,7 @@ from app.utils.alliance_data import get_active_alliance_id, get_all_scouting_dat
 from app.utils.team_isolation import (
     filter_matches_by_scouting_team, filter_events_by_scouting_team,
     filter_teams_by_scouting_team, assign_scouting_team_to_model, get_event_by_code,
-    get_all_teams_at_event
+    get_all_teams_at_event, resolve_event_from_param, resolve_event_id_from_param
 )
 from app.utils.team_isolation import get_combined_dropdown_events
 from sqlalchemy import or_
@@ -51,39 +51,19 @@ def index():
     
     # Get the current event
     event = None
-    event_id = request.args.get('event_id', type=int)
+    force_selected_event = False
+    raw_event_param = request.args.get('event_id')
+    # Get all events for the dropdown (combined/deduped like /events)
+    events = get_combined_dropdown_events()
     
-    if event_id:
-        # If a specific event ID is requested, use that (filtered by scouting team)
-        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+    if raw_event_param:
+        event = resolve_event_from_param(raw_event_param, events=events)
         if not event:
             flash("Event not found or not accessible.", "error")
             return redirect(url_for('matches.index'))
     elif current_event_code:
         # Otherwise use the current event from config (filtered by scouting team)
         event = get_event_by_code(current_event_code)
-    
-    # Get all events for the dropdown (combined/deduped like /events)
-    events = get_combined_dropdown_events()
-
-    # Handle raw event_id URL params that may use synthetic ids (like 'alliance_CODE') or event codes
-    force_selected_event = False
-    try:
-        raw_event_param = request.args.get('event_id')
-        if raw_event_param and events:
-            if isinstance(raw_event_param, str):
-                if raw_event_param.startswith('alliance_'):
-                    evt = next((e for e in events if str(getattr(e, 'id', '')) == raw_event_param), None)
-                    if evt:
-                        event = evt
-                else:
-                    # If a code string was passed, match by code
-                    code_up = raw_event_param.upper()
-                    evt = next((e for e in events if (getattr(e, 'code', '') or '').upper() == code_up), None)
-                    if evt:
-                        event = evt
-    except Exception:
-        pass
 
     # Prefer synthetic alliance entry for current_event_code when present (override local copy when alliance active)
     try:
@@ -165,7 +145,7 @@ def index():
         
         if alliance_id:
             # Alliance mode - get matches from alliance scouting data for this event
-            matches, _ = get_all_matches_for_alliance(event_id=event.id)
+            matches, _ = get_all_matches_for_alliance(event_id=getattr(event, 'id', None), event_code=getattr(event, 'code', None))
             # Keep the list of matches provided by the helper (it may have times populated in-memory)
         else:
             # Build base query for this event (filtered by scouting team)
@@ -1302,11 +1282,12 @@ def strategy_live():
     # Use the effective game config helper so defaults from config files are respected
     game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
-    event_id = request.args.get('event_id', type=int)
+    raw_event_param = request.args.get('event_id')
     event = None
-    if event_id:
+    if raw_event_param:
         try:
-            event = Event.query.get(event_id)
+            events = get_combined_dropdown_events()
+            event = resolve_event_from_param(raw_event_param, events=events)
         except Exception as exc:  # catch missing-column errors, etc.
             from sqlalchemy.exc import ProgrammingError
             if isinstance(exc, ProgrammingError):
@@ -1317,7 +1298,8 @@ def strategy_live():
                 from app import db
                 run_all_migrations(db)
                 try:
-                    event = Event.query.get(event_id)
+                    events = get_combined_dropdown_events()
+                    event = resolve_event_from_param(raw_event_param, events=events)
                 except Exception:
                     event = None
             else:
@@ -1358,7 +1340,7 @@ def strategy_live_current_match():
     The server determines the correct match using server time, eliminating client clock issues.
     """
     try:
-        event_id = request.args.get('event_id', type=int)
+        raw_event_param = request.args.get('event_id')
         team_number = request.args.get('team_number', type=str)
         skip_ids_raw = request.args.get('skip_ids', '', type=str)
         skip_ids = set()
@@ -1368,14 +1350,20 @@ def strategy_live_current_match():
                 if s.isdigit():
                     skip_ids.add(int(s))
 
-        if not event_id or not team_number:
+        if not raw_event_param or not team_number:
             return jsonify({'success': False, 'error': 'event_id and team_number are required'}), 400
 
         team_number = team_number.strip()
 
-        # Determine event (respect scouting team isolation)
-        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+        # Determine event from numeric ID, synthetic alliance ID, or event code.
+        event = resolve_event_from_param(raw_event_param)
         if not event:
+            return jsonify({'success': False, 'error': 'Event not found'}), 404
+
+        resolved_event_id = resolve_event_id_from_param(raw_event_param)
+        event_code = getattr(event, 'code', None)
+
+        if resolved_event_id is None and not event_code:
             return jsonify({'success': False, 'error': 'Event not found'}), 404
 
         # Fetch all matches for the event (use event.id to avoid cross-event duplicates)
@@ -1384,16 +1372,20 @@ def strategy_live_current_match():
         scouting_team = get_current_scouting_team_number()
 
         # Gather IDs of all events with the same code + team (handles unmerged duplicates)
-        event_code = getattr(event, 'code', None)
         if event_code and scouting_team is not None:
             same_code_ids = [r[0] for r in db.session.query(Event.id).filter(
                 _func.upper(Event.code) == event_code.upper(),
                 Event.scouting_team_number == scouting_team
             ).all()]
         else:
-            same_code_ids = [event.id]
+            same_code_ids = [resolved_event_id] if resolved_event_id is not None else []
 
-        matches_q = Match.query.filter(Match.event_id.in_(same_code_ids))
+        if same_code_ids:
+            matches_q = Match.query.filter(Match.event_id.in_(same_code_ids))
+        elif event_code:
+            matches_q = Match.query.join(Event, Match.event_id == Event.id).filter(_func.upper(Event.code) == event_code.upper())
+        else:
+            return jsonify({'success': False, 'error': 'Event not found'}), 404
         if scouting_team is not None:
             matches_q = matches_q.filter(Match.scouting_team_number == scouting_team)
         else:
@@ -2180,11 +2172,14 @@ def strategy_draw():
     events = get_combined_dropdown_events()
     game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
-    event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
+    raw_event_param = request.args.get('event_id') or request.form.get('event_id')
     event = None
     matches = []
-    if event_id:
-        event = Event.query.get_or_404(event_id)
+    if raw_event_param:
+        event = resolve_event_from_param(raw_event_param, events=events)
+        if not event:
+            flash('Event not found or not accessible.', 'error')
+            return redirect(url_for('matches.strategy_draw'))
     elif current_event_code:
         # Prefer an alliance synthetic entry when alliance mode is active
         try:
@@ -2403,7 +2398,7 @@ def matches_data():
     """AJAX endpoint for matches data - used for real-time config updates"""
     try:
         # Allow optional event_id to request matches for a specific event (useful for strategy/live)
-        event_id_param = request.args.get('event_id', type=int)
+        raw_event_param = request.args.get('event_id')
         # Get event code from config (alliance-aware)
         game_config = get_effective_game_config()
         current_event_code = game_config.get('current_event_code')
@@ -2419,15 +2414,14 @@ def matches_data():
         
         # Determine which event to return: prefer explicit event_id param if provided
         current_event = None
-        if event_id_param:
-            # Respect scouting-team filtering
-            current_event = filter_events_by_scouting_team().filter(Event.id == event_id_param).first()
+        if raw_event_param:
+            current_event = resolve_event_from_param(raw_event_param)
             if not current_event:
                 return jsonify({
                     'success': True,
                     'matches': [],
                     'current_event': None,
-                    'message': f'Event id {event_id_param} not found or not accessible',
+                    'message': f'Event {raw_event_param} not found or not accessible',
                     'timestamp': utc_now_iso()
                 })
         else:

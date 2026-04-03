@@ -549,9 +549,10 @@ def form():
             'is_prescout': is_prescout
         })
 
-    # Always load the current user's scouting team pit config
-    # (ignore team parameter for form - form should always use current user's config)
-    pit_config = get_current_pit_config()
+    # Determine mode and load pit config accordingly.
+    is_alliance_mode = is_alliance_mode_active()
+    # Always use effective config so alliance state and defaults are applied consistently.
+    pit_config = get_effective_pit_config()
     image_upload_enabled = _is_image_upload_enabled(pit_config)
     
     # Get current event based on team-scoped/alliance-aware game configuration
@@ -563,7 +564,6 @@ def form():
             current_event = get_event_by_code(current_event_code)
     
     # Get teams - use alliance teams if alliance mode is active
-    is_alliance_mode = is_alliance_mode_active()
     if is_prescout:
         teams = filter_teams_by_scouting_team().all()
         if not teams:

@@ -224,6 +224,97 @@ def get_all_teams_at_event(event_id=None, event_code=None):
     return sorted(teams_by_number.values(), key=lambda t: t.team_number)
 
 
+def resolve_event_from_param(raw_event_param, events=None):
+    """Resolve an event selector param into an Event-like object.
+
+    Supports:
+    - numeric DB ids ("123")
+    - synthetic alliance ids ("alliance_2026OKOK")
+    - event codes ("2026OKOK" or "OKOK")
+    """
+    if raw_event_param is None:
+        return None
+
+    try:
+        param = str(raw_event_param).strip()
+    except Exception:
+        return None
+
+    if not param:
+        return None
+
+    # Prefer matching the caller-provided dropdown list first so selection remains consistent.
+    if events is None:
+        try:
+            events = get_combined_dropdown_events()
+        except Exception:
+            events = []
+
+    try:
+        for evt in events or []:
+            if str(getattr(evt, 'id', '')).strip() == param:
+                return evt
+    except Exception:
+        pass
+
+    if param.isdigit():
+        event_id = int(param)
+        try:
+            evt = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+            if evt:
+                return evt
+        except Exception:
+            pass
+        try:
+            return Event.query.get(event_id)
+        except Exception:
+            return None
+
+    # Non-numeric values are treated as event codes (including alliance_ prefixes).
+    code = param[len('alliance_'):].strip() if param.startswith('alliance_') else param
+    evt = get_event_by_code(code)
+    if evt:
+        return evt
+
+    try:
+        code_up = code.upper()
+        for candidate in events or []:
+            if (getattr(candidate, 'code', '') or '').upper() == code_up:
+                return candidate
+    except Exception:
+        pass
+
+    return None
+
+
+def resolve_event_id_from_param(raw_event_param, events=None):
+    """Resolve an event selector param to a concrete integer Event.id when possible."""
+    evt = resolve_event_from_param(raw_event_param, events=events)
+    if not evt:
+        return None
+
+    evt_id = getattr(evt, 'id', None)
+    if isinstance(evt_id, int):
+        return evt_id
+
+    code = (getattr(evt, 'code', None) or '').strip()
+    if not code:
+        return None
+
+    try:
+        scoped = filter_events_by_scouting_team().filter(func.upper(Event.code) == code.upper()).first()
+        if scoped:
+            return scoped.id
+    except Exception:
+        pass
+
+    try:
+        any_evt = Event.query.filter(func.upper(Event.code) == code.upper()).first()
+        return any_evt.id if any_evt else None
+    except Exception:
+        return None
+
+
 def filter_events_by_scouting_team(query=None):
     """Filter events by current user's scouting team number.
     If alliance mode is active, filters by alliance shared event codes AND alliance team numbers.
@@ -881,8 +972,18 @@ def get_combined_dropdown_events():
             else:
                 team_events_by_code[code] = e
 
-    # Combine both lists - team events first, then alliance events
-    deduped_events = list(team_events_by_code.values()) + list(alliance_events_by_code.values())
+    # In alliance mode, if both a team and alliance copy of the same event code exist,
+    # keep only the alliance entry for dropdown consistency across pages.
+    if alliance:
+        deduped_events = []
+        all_codes = set(team_events_by_code.keys()) | set(alliance_events_by_code.keys())
+        for code in all_codes:
+            if code in alliance_events_by_code:
+                deduped_events.append(alliance_events_by_code[code])
+            elif code in team_events_by_code:
+                deduped_events.append(team_events_by_code[code])
+    else:
+        deduped_events = list(team_events_by_code.values()) + list(alliance_events_by_code.values())
     
     # Sort by year desc, then name
     try:

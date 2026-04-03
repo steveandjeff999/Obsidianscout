@@ -402,10 +402,17 @@ def get_effective_pit_config():
 
 
 def merge_pit_configs(base_config, override_config):
-    """Return a merged pit config where missing fields in override_config are filled from base_config.
+    """Return an effective pit config where override_config takes precedence.
 
-    Specifically ensures that select/multiselect elements retain option lists from the base when the
-    team-specific config omitted them (common when instance files were edited incorrectly).
+    Existing behavior sometimes merged defaults and team/alliance configs too broadly
+    (including sections and fields not present in the override), which can expose
+    unwanted UI fields and cause image upload flags to be ignored.
+
+    This function now:
+    - preserves override sections and keys,
+    - inherits missing attributes (title/description/image_upload) from base when absent,
+    - merges element option lists from base when override omits them,
+    - does not add base sections that the override intentionally omits.
     """
     if not base_config:
         return override_config or {}
@@ -413,74 +420,68 @@ def merge_pit_configs(base_config, override_config):
         return base_config
 
     result = copy.deepcopy(base_config)
-
-    # Top-level pit_scouting keys (title/description) - override if provided
-    base_ps = result.get('pit_scouting', {})
+    base_ps = base_config.get('pit_scouting', {})
     over_ps = override_config.get('pit_scouting', {})
 
-    if 'title' in over_ps:
-        base_ps['title'] = over_ps['title']
-    if 'description' in over_ps:
-        base_ps['description'] = over_ps['description']
+    # Set pit_scouting in result if not present
+    result_ps = result.setdefault('pit_scouting', {})
 
-    # Build lookup of base sections by id
+    # Carry forward overridden top-level fields (title/description/image_upload)
+    for field in ['title', 'description', 'image_upload']:
+        if field in over_ps:
+            result_ps[field] = over_ps[field]
+        elif field not in result_ps and field in base_ps:
+            result_ps[field] = base_ps[field]
+
+    # Build base section lookup by id
     base_sections = {s.get('id'): s for s in base_ps.get('sections', [])}
 
     merged_sections = []
-
-    # Iterate through override sections; merge with base where possible
     for o_sec in over_ps.get('sections', []):
         sec_id = o_sec.get('id')
         b_sec = base_sections.get(sec_id)
+
         if not b_sec:
-            # Section doesn't exist in base; add as-is
             merged_sections.append(copy.deepcopy(o_sec))
             continue
 
-        # Start from base section and overlay override fields
         merged_sec = copy.deepcopy(b_sec)
-        if 'name' in o_sec:
-            merged_sec['name'] = o_sec['name']
+        # Overlay override-section metadata
+        for key, value in o_sec.items():
+            if key != 'elements':
+                merged_sec[key] = value
 
-        # Build element lookup from base by perm_id or id
+        # Build base element lookup by perm_id or id
         base_elements = {e.get('perm_id') or e.get('id'): e for e in merged_sec.get('elements', [])}
 
         merged_elements = []
         for o_elem in o_sec.get('elements', []):
             key = o_elem.get('perm_id') or o_elem.get('id')
             b_elem = base_elements.get(key)
+
             if not b_elem:
-                merged_elements.append(copy.deepcopy(o_elem))
-                continue
+                merged_elem = copy.deepcopy(o_elem)
+            else:
+                merged_elem = copy.deepcopy(b_elem)
+                for k, v in o_elem.items():
+                    merged_elem[k] = v
 
-            # Start from base element and overlay override properties
-            merged_elem = copy.deepcopy(b_elem)
-            for k, v in o_elem.items():
-                # If override explicitly provides a value, set it
-                merged_elem[k] = v
-
-            # If override omitted options but base had them, keep base.options
-            if 'options' not in o_elem and 'options' in b_elem:
-                merged_elem['options'] = copy.deepcopy(b_elem['options'])
+                if 'options' not in o_elem and 'options' in b_elem:
+                    merged_elem['options'] = copy.deepcopy(b_elem['options'])
 
             merged_elements.append(merged_elem)
-
-        # Also include any base elements that were not present in override
-        override_keys = set([e.get('perm_id') or e.get('id') for e in o_sec.get('elements', [])])
-        for b_key, b_elem in base_elements.items():
-            if b_key not in override_keys:
-                merged_elements.append(copy.deepcopy(b_elem))
 
         merged_sec['elements'] = merged_elements
         merged_sections.append(merged_sec)
 
-    # Include any base sections not present in override
-    override_sec_ids = set([s.get('id') for s in over_ps.get('sections', [])])
-    for b_id, b_sec in base_sections.items():
-        if b_id not in override_sec_ids:
-            merged_sections.append(copy.deepcopy(b_sec))
+    # Do not pull in base sections that override doesn't include
+    result_ps['sections'] = merged_sections
 
-    result['pit_scouting']['sections'] = merged_sections
+    # If override contained any extra top-level keys outside pit_scouting, carry them over.
+    for key, value in override_config.items():
+        if key != 'pit_scouting':
+            result[key] = copy.deepcopy(value)
+
     return result
 
 def is_alliance_mode_active():
