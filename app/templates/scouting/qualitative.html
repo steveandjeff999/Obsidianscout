@@ -183,10 +183,10 @@
                         </div>
 
                         <div class="text-center mt-4">
-                            <button type="submit" class="btn btn-success btn-lg" id="save-btn" disabled>
+                            <button type="submit" class="btn btn-success btn-lg" id="save-btn" data-native-touch-click="true">
                                 <i class="fas fa-save me-2"></i>Save Qualitative Scouting
                             </button>
-                            <button type="button" class="btn btn-primary btn-lg" id="qr-btn" disabled>
+                            <button type="button" class="btn btn-primary btn-lg" id="qr-btn" data-native-touch-click="true">
                                 <i class="fas fa-qrcode me-2"></i>Generate QR Code
                             </button>
                         </div>
@@ -467,7 +467,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const initialEditEntryId = initialEditEntryIdRaw ? parseInt(initialEditEntryIdRaw, 10) : null;
     let matchesCache = {};
     const pitImageLookupCache = {};
+    let activeMatchFetchToken = 0;
     let currentScoutMode = 'match'; // 'match' or 'team'
+    let isSaveInProgress = false;
 
     if (isPrescout) {
         setTimeout(function() {
@@ -965,17 +967,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 blueSection.style.display = 'none';
                 
                 // Show team card if already selected
-                if (isPrescout && prescoutTeamNumberInput && prescoutMatchNumberInput) {
-                    saveBtn.disabled = true;
-                    qrBtn.disabled = true;
-                } else if (indivTeamSelector.value) {
+                if (!isPrescout && indivTeamSelector.value) {
                     createIndividualTeamCard(indivTeamSelector.value);
                     individualTeamSection.style.display = 'block';
-                    saveBtn.disabled = false;
-                    qrBtn.disabled = false;
-                } else {
-                    saveBtn.disabled = true;
-                    qrBtn.disabled = true;
                 }
             }
         });
@@ -989,8 +983,6 @@ document.addEventListener('DOMContentLoaded', function() {
         indivTeamSelector.disabled = true;
         individualTeamSection.style.display = 'none';
         individualTeamContainer.innerHTML = '';
-        saveBtn.disabled = true;
-        qrBtn.disabled = true;
         
         // remember selection and autosave
         try { localStorage.setItem('last_qual_match_id', matchId); } catch(e) {}
@@ -1043,9 +1035,23 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('{{ url_for("scouting.get_match_teams", match_id=0) }}'.replace('0', matchId))
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                if (data.success) {
+                if (data.success && data.match) {
                     currentIndivMatchData = data;
                     prefetchPitImages(data.pit_images);
+                } else {
+                    var optionEl = indivMatchSelector.options[indivMatchSelector.selectedIndex];
+                    currentIndivMatchData = {
+                        success: true,
+                        match: {
+                            id: parseInt(matchId),
+                            match_number: extractMatchNumber(optionEl ? optionEl.textContent : ''),
+                            match_type: extractMatchType(optionEl ? optionEl.textContent : ''),
+                            event_code: extractEventCode(optionEl ? optionEl.textContent : ''),
+                            red_teams: redTeams,
+                            blue_teams: blueTeams
+                        },
+                        pit_images: (data && data.pit_images) ? data.pit_images : {}
+                    };
                 }
             })
             .catch(function() {
@@ -1076,14 +1082,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (teamNum) {
             createIndividualTeamCard(teamNum);
             individualTeamSection.style.display = 'block';
-            saveBtn.disabled = false;
-            qrBtn.disabled = false;
             try { loadAutosaveDataQual(); } catch(e) {}
         } else {
             individualTeamSection.style.display = 'none';
             individualTeamContainer.innerHTML = '';
-            saveBtn.disabled = true;
-            qrBtn.disabled = true;
             try { loadAutosaveDataQual(); } catch(e) {}
         }
         // after card creation/restoration, persist current state
@@ -1116,8 +1118,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         createIndividualTeamCard(teamNum);
         individualTeamSection.style.display = 'block';
-        saveBtn.disabled = false;
-        qrBtn.disabled = false;
         try {
             localStorage.setItem('last_qual_team_id', String(teamNum));
             localStorage.setItem('last_qual_match_id', String(matchNumber));
@@ -1305,6 +1305,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle match selection
     matchSelector.addEventListener('change', function() {
         const matchId = this.value;
+        const fetchToken = ++activeMatchFetchToken;
         try { localStorage.setItem('last_qual_match_id', matchId); } catch(e) {}
         // suppress any autosave while we rebuild the UI (including async fetch)
         qualAutosaveSuppress = true;
@@ -1312,8 +1313,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!matchId) {
             redSection.style.display = 'none';
             blueSection.style.display = 'none';
-            saveBtn.disabled = true;
-            qrBtn.disabled = true;
             // clear form cards when no match
             loadAutosaveDataQual(); // ensure blank
             qualAutosaveSuppress = false;
@@ -1327,6 +1326,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 return response.json();
             })
             .then(function(data) {
+                if (fetchToken !== activeMatchFetchToken || matchSelector.value !== matchId) {
+                    return;
+                }
                 if (data.success) {
                     currentMatchData = data;
                     prefetchPitImages(data.pit_images);
@@ -1337,6 +1339,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 saveAutosaveDataQual();
             })
             .catch(function(error) {
+                if (fetchToken !== activeMatchFetchToken || matchSelector.value !== matchId) {
+                    return;
+                }
                 console.warn('Online fetch failed, using cached data:', error);
                 
                 // Fallback to cached data
@@ -1357,43 +1362,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 qualAutosaveSuppress = false;
                 saveAutosaveDataQual();
-            });
-        
-        // Try online fetch first, fallback to cache if offline
-        fetch('{{ url_for("scouting.get_match_teams", match_id=0) }}'.replace('0', matchId))
-            .then(function(response) {
-                return response.json();
-            })
-            .then(function(data) {
-                if (data.success) {
-                    currentMatchData = data;
-                    prefetchPitImages(data.pit_images);
-                    updateAllianceDisplay();
-                }
-            })
-            .catch(function(error) {
-                console.warn('Online fetch failed, using cached data:', error);
-                
-                // Fallback to cached data
-                if (matchesCache[matchId]) {
-                    const cachedMatch = matchesCache[matchId];
-                    currentMatchData = {
-                        success: true,
-                        match: {
-                            id: cachedMatch.id,
-                            match_number: extractMatchNumber(cachedMatch.text),
-                            match_type: extractMatchType(cachedMatch.text),
-                            event_code: extractEventCode(cachedMatch.text),
-                            red_teams: cachedMatch.red_teams,
-                            blue_teams: cachedMatch.blue_teams
-                        },
-                        existing_data: null
-                    };
-                    console.log('Using cached match data:', currentMatchData);
-                    updateAllianceDisplay();
-                } else {
-                    alert('Cannot load match data: offline and no cached data available');
-                }
             });
     });
     
@@ -1465,10 +1433,6 @@ document.addEventListener('DOMContentLoaded', function() {
             loadExistingData(currentMatchData.existing_data);
             currentEntryId = currentMatchData.existing_data.id;
         }
-
-        // Enable buttons when alliance is selected
-        saveBtn.disabled = false;
-        qrBtn.disabled = false;
 
         qualAutosaveSuppress = prevSuppress;            // restore previous flag
     }
@@ -1716,6 +1680,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const indivMatchId = isPrescout ? (currentIndivMatchData && currentIndivMatchData.match ? currentIndivMatchData.match.id : null) : indivMatchSelector.value;
             const teamNum = isPrescout ? (prescoutTeamNumberInput ? prescoutTeamNumberInput.value : '') : indivTeamSelector.value;
             const manualMatchNumber = isPrescout ? (prescoutMatchNumberInput ? parseInt(prescoutMatchNumberInput.value, 10) : null) : null;
+            const indivMatch = (currentIndivMatchData && currentIndivMatchData.match) ? currentIndivMatchData.match : null;
 
             if ((isPrescout && (!teamNum || !manualMatchNumber)) || (!isPrescout && (!indivMatchId || !teamNum))) { return null; }
 
@@ -1724,6 +1689,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (!teamData['team_' + teamNum].overall_rating) {
                 alert('Please select an overall rating (1-5) for the individual team before saving.');
+                return null;
+            }
+            if (showAutoClimb && !teamData['team_' + teamNum].auto_climb_result) {
+                alert('Please set Auto climb result for the individual team before saving.');
+                return null;
+            }
+            if (showEndgameClimb && !teamData['team_' + teamNum].endgame_climb_result) {
+                alert('Please set Endgame climb result for the individual team before saving.');
                 return null;
             }
 
@@ -1749,9 +1722,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 qualitative: true,
                 individual_team: true,
                 match_id: indivMatchId ? parseInt(indivMatchId) : null,
-                match_number: isPrescout ? manualMatchNumber : (currentIndivMatchData ? currentIndivMatchData.match.match_number : extractMatchNumber(indivMatchText)),
-                match_type: currentIndivMatchData ? currentIndivMatchData.match.match_type : extractMatchType(indivMatchText),
-                event_code: currentIndivMatchData ? (currentIndivMatchData.match.event_code || '') : extractEventCode(indivMatchText),
+                match_number: isPrescout ? manualMatchNumber : (indivMatch ? indivMatch.match_number : extractMatchNumber(indivMatchText)),
+                match_type: indivMatch ? indivMatch.match_type : extractMatchType(indivMatchText),
+                event_code: indivMatch ? (indivMatch.event_code || '') : extractEventCode(indivMatchText),
                 team_number: parseInt(teamNum),
                 team_data: { individual: teamData },
                 show_auto_climb: showAutoClimb,
@@ -1778,6 +1751,15 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('textarea.team-notes[data-alliance="blue"]').forEach(function(ta) {
                 teamData.blue['team_' + ta.dataset.team] = collectOneTeamData(ta.dataset.team, 'blue');
             });
+
+            if ((allianceScouted === 'red' || allianceScouted === 'both') && Object.keys(teamData.red).length === 0) {
+                alert('Could not load Red alliance teams for this match. Please reselect the match and try again.');
+                return null;
+            }
+            if ((allianceScouted === 'blue' || allianceScouted === 'both') && Object.keys(teamData.blue).length === 0) {
+                alert('Could not load Blue alliance teams for this match. Please reselect the match and try again.');
+                return null;
+            }
 
             // Validate overall rating
             const missingRanks = [];
@@ -1829,6 +1811,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle form submission (save to database or offline storage)
     form.addEventListener('submit', function(e) {
         e.preventDefault();
+
+        if (isSaveInProgress) {
+            return;
+        }
         
         const formData = collectFormData();
         if (!formData) {
@@ -1837,7 +1823,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Save data
-        saveBtn.disabled = true;
+        isSaveInProgress = true;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
         
         let savePayload;
@@ -1901,7 +1887,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }, 1500);
             } else {
                 alert('Error: ' + data.message);
-                saveBtn.disabled = false;
+                isSaveInProgress = false;
                 saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Qualitative Scouting';
             }
         })
@@ -1922,21 +1908,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 alert('Saved offline! Data will sync when connection is restored. You can also generate a QR code to transfer this data.');
                 
-                saveBtn.disabled = false;
+                isSaveInProgress = false;
                 saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Qualitative Scouting';
                 
                 console.log('Saved qualitative entry offline:', formData);
             } catch (storageError) {
                 console.error('Error saving offline:', storageError);
                 alert('Error saving data offline: ' + storageError.message);
-                saveBtn.disabled = false;
+                isSaveInProgress = false;
                 saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Qualitative Scouting';
             }
         });
     });
+
+    // Keep native button behavior first, add touch fallback only if click never arrives.
+    function installTouchClickFallback(button) {
+        if (!button) return;
+        var lastClickTs = 0;
+
+        button.addEventListener('click', function() {
+            lastClickTs = Date.now();
+        });
+
+        button.addEventListener('touchend', function() {
+            var touchTs = Date.now();
+            setTimeout(function() {
+                // Older mobile browsers can drop click after touch; synthesize only when missing.
+                if (lastClickTs < touchTs) {
+                    button.click();
+                }
+            }, 380);
+        }, { passive: true });
+    }
+
+    installTouchClickFallback(saveBtn);
     
     // Handle QR code button click - generates QR from form data
-    qrBtn.addEventListener('click', function() {
+    function handleQrTap() {
+        if (isSaveInProgress) {
+            alert('Save in progress. Please wait a moment and try again.');
+            return;
+        }
         const formData = collectFormData();
         if (!formData) {
             alert('Please select a match and alliance before generating QR code');
@@ -1950,7 +1962,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Generate QR code
         generateQualitativeQRCode(formData);
-    });
+    }
+
+    qrBtn.addEventListener('click', handleQrTap);
+    installTouchClickFallback(qrBtn);
     
     // Function to generate QR code from qualitative form data
     function generateQualitativeQRCode(formData) {
