@@ -375,6 +375,12 @@
                             return;
                         }
 
+                        // Allow specific controls to keep native touch->click behavior.
+                        if (interactive.closest('[data-native-touch-click="true"]')) {
+                            lastTouchTime = now;
+                            return;
+                        }
+
                         // If second tap within 300ms, prevent double-tap zoom and trigger click
                         if (now - lastTouchTime <= 300) {
                             e.preventDefault(); // requires passive: false on listener

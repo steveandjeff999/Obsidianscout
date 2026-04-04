@@ -1375,7 +1375,7 @@ class PitScoutingData(db.Model):
     """Model to store pit scouting data with local storage and upload capability"""
     id = db.Column(db.Integer, primary_key=True)
     team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
-    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id', ondelete='CASCADE'), nullable=True)
     scouting_team_number = db.Column(db.Integer, nullable=True)
     scout_name = db.Column(db.String(50), nullable=False)
     scout_id = db.Column(db.Integer, nullable=True)
@@ -1390,7 +1390,7 @@ class PitScoutingData(db.Model):
     
     # Relationships
     team = db.relationship('Team', backref=db.backref('pit_scouting_data', lazy=True))
-    event = db.relationship('Event', backref=db.backref('pit_scouting_data', lazy=True))
+    event = db.relationship('Event', backref=db.backref('pit_scouting_data', lazy=True, passive_deletes=True))
     @property
     def scout(self):
         try:

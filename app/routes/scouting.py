@@ -2034,6 +2034,22 @@ def qualitative_prescout():
 def get_match_teams(match_id):
     """API endpoint to get teams for a specific match"""
     match = filter_matches_by_scouting_team().filter_by(id=match_id).first()
+
+    # In alliance mode, dropdown lists can contain a dedup-preferred record id
+    # while filter_matches_by_scouting_team() keeps a different equivalent id.
+    # If that happens, resolve by logical key so the form can still load teams.
+    if not match:
+        requested_match = Match.query.get(match_id)
+        if requested_match and requested_match.event:
+            from sqlalchemy import func as sqlfunc
+            match = filter_matches_by_scouting_team().join(
+                Event, Match.event_id == Event.id
+            ).filter(
+                sqlfunc.upper(Event.code) == requested_match.event.code.upper(),
+                Match.match_type == requested_match.match_type,
+                Match.match_number == requested_match.match_number
+            ).first()
+
     if not match:
         # Return empty response for missing/stale match (e.g., from autosave)
         return jsonify({
@@ -2213,6 +2229,32 @@ def save_qualitative_scouting():
                 if not match_id:
                     return jsonify({'success': False, 'message': 'Missing team number or match'}), 400
 
+            # Ensure match_id points to a valid match row. If a stale id is sent,
+            # try resolving by logical key before rejecting.
+            match_row = Match.query.get(match_id) if match_id else None
+            if not match_row:
+                req_event_code = str(data.get('event_code') or '').strip()
+                req_match_type = str(data.get('match_type') or '').strip()
+                req_match_number = data.get('match_number')
+                try:
+                    req_match_number = int(req_match_number) if req_match_number is not None else None
+                except Exception:
+                    req_match_number = None
+
+                if req_event_code and req_match_type and req_match_number is not None:
+                    from sqlalchemy import func as sqlfunc
+                    fallback_match = Match.query.join(Event, Match.event_id == Event.id).filter(
+                        sqlfunc.upper(Event.code) == req_event_code.upper(),
+                        Match.match_type == req_match_type,
+                        Match.match_number == req_match_number
+                    ).order_by(Match.id.asc()).first()
+                    if fallback_match:
+                        match_id = fallback_match.id
+                        match_row = fallback_match
+
+            if not match_row:
+                return jsonify({'success': False, 'message': 'Selected match could not be found. Please reselect the match and try again.'}), 400
+
             # Server-side validation: overall rating (1-5) required for individual entries
             individual_block = team_data.get('individual', {})
             team_key = f'team_{team_number}'
@@ -2286,6 +2328,8 @@ def save_qualitative_scouting():
 
             # Server-side validation: require overall ratings for all teams in the selected alliance(s)
             if alliance_scouted in ('red', 'both'):
+                if not (team_data.get('red') or {}):
+                    return jsonify({'success': False, 'message': 'No red alliance teams were collected for this match. Please reselect the match and try again.'}), 400
                 for k, v in (team_data.get('red') or {}).items():
                     if v.get('overall_rating') is None:
                         return jsonify({'success': False, 'message': 'All teams in the selected alliance must have an overall rating'}), 400
@@ -2295,6 +2339,8 @@ def save_qualitative_scouting():
                     if show_endgame and not v.get('endgame_climb_result'):
                         return jsonify({'success': False, 'message': 'Endgame climb result required for all teams in the selected alliance(s) when Endgame Climb is visible'}), 400
             if alliance_scouted in ('blue', 'both'):
+                if not (team_data.get('blue') or {}):
+                    return jsonify({'success': False, 'message': 'No blue alliance teams were collected for this match. Please reselect the match and try again.'}), 400
                 for k, v in (team_data.get('blue') or {}).items():
                     if v.get('overall_rating') is None:
                         return jsonify({'success': False, 'message': 'All teams in the selected alliance must have an overall rating'}), 400

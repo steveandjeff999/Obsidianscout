@@ -280,6 +280,8 @@ def delete(event_id):
         if not event_ids_to_delete:
             return
 
+        preserve_event_links = {'shared_graph', 'shared_team_ranks', 'alliance_shared_pit_data'}
+
         all_matches = Match.query.filter(Match.event_id.in_(event_ids_to_delete)).all()
         match_ids = [m.id for m in all_matches]
 
@@ -330,6 +332,61 @@ def delete(event_id):
                     except Exception:
                         continue
 
+        inspector = sa.inspect(db.engine)
+        for table_name in inspector.get_table_names():
+            if table_name == 'event' or table_name in preserve_event_links:
+                continue
+
+            try:
+                columns = {column['name'] for column in inspector.get_columns(table_name)}
+            except Exception:
+                continue
+
+            reference_columns = []
+            if 'event_id' in columns:
+                reference_columns.append('event_id')
+
+            if not reference_columns:
+                for fk in inspector.get_foreign_keys(table_name):
+                    if fk.get('referred_table') == 'event':
+                        constrained_columns = fk.get('constrained_columns') or []
+                        if len(constrained_columns) == 1:
+                            reference_columns.append(constrained_columns[0])
+
+            if not reference_columns:
+                continue
+
+            for reference_column in dict.fromkeys(reference_columns):
+                try:
+                    db.session.execute(
+                        sa.text(f'DELETE FROM "{table_name}" WHERE {reference_column} IN :event_ids').bindparams(
+                            sa.bindparam('event_ids', expanding=True)
+                        ),
+                        {'event_ids': event_ids_to_delete},
+                    )
+                except Exception:
+                    continue
+
+        for table_name in preserve_event_links:
+            try:
+                inspector = sa.inspect(db.engine)
+                columns = {column['name'] for column in inspector.get_columns(table_name)}
+            except Exception:
+                continue
+
+            if 'event_id' not in columns:
+                continue
+
+            try:
+                db.session.execute(
+                    sa.text(f'UPDATE "{table_name}" SET event_id = NULL WHERE event_id IN :event_ids').bindparams(
+                        sa.bindparam('event_ids', expanding=True)
+                    ),
+                    {'event_ids': event_ids_to_delete},
+                )
+            except Exception:
+                continue
+
         for target_event in Event.query.filter(Event.id.in_(event_ids_to_delete)).all():
             for team in list(target_event.teams):
                 target_event.teams.remove(team)
@@ -348,14 +405,19 @@ def delete(event_id):
         # Import the DisableReplication context manager
         from app.utils.real_time_replication import DisableReplication
         
-        # Find ALL events with the same code + scouting team (catches unmerged duplicates)
-        all_event_ids = [event_id]
+        # Find ALL events with the same code + scouting team (catches unmerged duplicates).
+        # Always include the requested event id so alliance/legacy ownership edge-cases
+        # cannot accidentally produce an empty delete set.
+        all_event_ids = {event_id}
         if event_code:
-            duplicate_events = Event.query.filter(
-                func.upper(Event.code) == event_code.upper(),
-                Event.scouting_team_number == scouting_team
-            ).all()
-            all_event_ids = list(set([e.id for e in duplicate_events]))
+            duplicate_query = Event.query.filter(func.upper(Event.code) == event_code.upper())
+            if scouting_team is not None:
+                duplicate_query = duplicate_query.filter(Event.scouting_team_number == scouting_team)
+
+            duplicate_events = duplicate_query.all()
+            all_event_ids.update(e.id for e in duplicate_events)
+
+        all_event_ids = list(all_event_ids)
         
         # Temporarily disable replication during bulk delete to prevent queue issues
         with DisableReplication():
