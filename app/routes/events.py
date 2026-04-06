@@ -5,6 +5,7 @@ import sqlalchemy as sa
 from sqlalchemy import func
 from app import db
 from datetime import datetime, date
+import json
 from app.utils.config_manager import get_current_game_config, get_effective_game_config, save_game_config
 from app.utils.team_isolation import get_event_by_code, filter_events_by_scouting_team, filter_matches_by_scouting_team, get_current_scouting_team_number
 from app.models import TeamAllianceStatus
@@ -491,12 +492,31 @@ def set_current_event(event_identifier):
             # Use the uppercase code even if no Event row exists locally
             event_code_to_set = event_code_upper
 
-    # Update the game configuration
-    game_config = get_current_game_config()
+    # Update the game configuration. In alliance mode, this must update the effective
+    # alliance source config (game_config_team/shared_game_config), not only the
+    # current user's local file, or the selected event will revert on next page load.
+    game_config = get_effective_game_config()
     game_config['current_event_code'] = event_code_to_set
 
+    # Decide where to persist config so get_effective_game_config() returns the new event.
+    save_team_number = get_current_scouting_team_number()
+    active_alliance = TeamAllianceStatus.get_active_alliance_for_team(save_team_number) if save_team_number else None
+    if active_alliance and active_alliance.game_config_team:
+        save_team_number = active_alliance.game_config_team
+
+    save_ok = save_game_config(game_config, team_number=save_team_number)
+
+    # Keep alliance shared config in sync when alliance mode is active.
+    if save_ok and active_alliance:
+        try:
+            active_alliance.shared_game_config = json.dumps(game_config)
+            active_alliance.update_config_status()
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
     # Save the updated configuration to file
-    if save_game_config(game_config):
+    if save_ok:
         # Update the app config as well
         current_app.config['GAME_CONFIG'] = game_config
         flash(f'Current event set to: {event.name if event else event_code_to_set}', 'success')

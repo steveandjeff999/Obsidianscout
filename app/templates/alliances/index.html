@@ -10,7 +10,7 @@
 {% block content %}
 <div class="row mb-4">
     <!-- Hidden holder for server-side values to avoid embedding Jinja directly in JS -->
-    <div id="current-event-id-holder" data-event-id="{{ current_event.id }}" class="d-none"></div>
+    <div id="current-event-id-holder" data-event-id="{{ current_event_id }}" class="d-none"></div>
     <div class="col-md-8">
         <div class="card">
             <div class="card-header bg-primary text-white alliance-toolbar-header">
@@ -32,7 +32,7 @@
                         <ul class="dropdown-menu" aria-labelledby="eventDropdown">
                             {% for event in events|dedupe_events %}
                                 <li><a class="dropdown-item {% if event.id == current_event.id %}active{% endif %}" 
-                                href="{{ url_for('events.set_current_event', event_identifier=event.id, redirect_to='alliances.index') }}">
+                                href="{{ url_for('alliances.index', event=event.id) }}">
                                 {{ event.name }} ({{ event.year }}){% if event.is_alliance %} (Alliance){% endif %}
                             </a></li>
                             {% endfor %}
@@ -65,17 +65,15 @@
                         </select>
                         {{ help.help_icon('Filter and sort by GitHub-style tags. Intelligently sorts numbers, priorities (high/medium/low), and text. Use formats like "1 2 3", "priority:high", or "role:driver".', 'GitHub-style tag filtering') }}
                     </div>
-                    {% if not (current_event.is_alliance|default(false)) %}
-                    <a href="{{ url_for('alliances.manage_lists', event_id=current_event.id) }}" 
+                    <a href="{{ url_for('alliances.manage_lists', event_param=current_event_id) }}" 
                        class="btn btn-info btn-sm">
                         <i class="fas fa-list me-1"></i> Manage Lists {{ help.help_icon('Manage your custom pick list, declined, avoid and do-not-pick lists which influence recommendations.', 'Manage lists') }}
                     </a>
-                    <a href="{{ url_for('alliances.reset_alliances', event_id=current_event.id) }}" 
+                    <a href="{{ url_for('alliances.reset_alliances', event_param=current_event_id) }}" 
                        class="btn btn-warning btn-sm" 
                        onclick="return confirm('Are you sure you want to reset all alliance selections?')">
                         <i class="fas fa-undo me-1"></i> Reset All {{ help.help_icon('Clear all current alliance selections for the event. This is reversible only if you have saved or exported previous selections.', 'Reset all') }}
                     </a>
-                    {% endif %}
                     </div>
                 </div>
             </div>

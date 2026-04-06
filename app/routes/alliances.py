@@ -6,13 +6,16 @@ from flask_login import current_user
 from app import socketio
 from sqlalchemy import func, desc, and_
 import json
+import re
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_current_game_config, get_effective_game_config
+from app.utils.alliance_data import get_all_teams_for_alliance
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_events_by_scouting_team,
     filter_alliance_selections_by_scouting_team, filter_do_not_pick_by_scouting_team,
     filter_avoid_entries_by_scouting_team, assign_scouting_team_to_model,
-    get_current_scouting_team_number, get_event_by_code
+    get_current_scouting_team_number, get_event_by_code, resolve_event_id_from_param,
+    get_all_teams_at_event, filter_scouting_data_by_scouting_team, resolve_event_from_param
 )
 from app.utils.team_isolation import filter_declined_entries_by_scouting_team, get_combined_dropdown_events, filter_want_list_by_scouting_team
 
@@ -150,31 +153,59 @@ def index():
     """Alliance selection main page"""
     # Get all events for dropdown (combined + deduped as /events)
     events = get_combined_dropdown_events()
+    selected_event_param = request.args.get('event')
+    current_event = None
+    current_event_id = None
+
+    # Prefer an explicit event selection from the page querystring. This keeps
+    # selection local to /alliances and avoids mutating global/current config.
+    if selected_event_param:
+        current_event = resolve_event_from_param(selected_event_param, events=events)
+        current_event_id = resolve_event_id_from_param(selected_event_param, events=events)
+        # For synthetic alliance events that don't resolve to a local Event row,
+        # keep the synthetic id so client requests stay pinned to the selected event.
+        if current_event_id is None and current_event is not None:
+            current_event_id = getattr(current_event, 'id', None)
     
-    # Get current event from game config or fall back to most recent event (filtered by scouting team)
-    game_config = get_effective_game_config()
-    current_event_code = game_config.get('current_event_code')
-    
-    if current_event_code:
-        # Use get_event_by_code which handles year-prefixed codes
-        current_event = get_event_by_code(current_event_code)
-    else:
-        # Prefer a real Event object (with numeric id) as the fallback current event
-        current_event = None
-        if events:
-            # Prefer first ORM Event (numeric id), fall back to first entry regardless
-            current_event = next((e for e in events if isinstance(getattr(e, 'id', None), int)), events[0])
+    # If no explicit event selected, use effective config event and then fall back.
+    if not current_event:
+        game_config = get_effective_game_config()
+        current_event_code = game_config.get('current_event_code')
+
+        if current_event_code:
+            # Use get_event_by_code which handles year-prefixed codes
+            current_event = get_event_by_code(current_event_code)
+        else:
+            # Prefer a real Event object (with numeric id) as the fallback current event
+            if events:
+                # Prefer first ORM Event (numeric id), fall back to first entry regardless
+                current_event = next((e for e in events if isinstance(getattr(e, 'id', None), int)), events[0])
     
     if not current_event:
         flash('No events found. Please create an event first.', 'warning')
         return redirect(url_for('main.index'))
-    
+
+    # Resolve the concrete numeric event id for DB operations. Synthetic alliance-type
+    # event objects may use ids like 'alliance_2026OKOK' which cannot be compared
+    # directly against integer foreign keys.
+    if current_event_id is None:
+        if isinstance(getattr(current_event, 'id', None), int):
+            current_event_id = current_event.id
+        else:
+            current_event_id = resolve_event_id_from_param(getattr(current_event, 'code', None), events=events)
+
+    if current_event_id is None:
+        flash('Could not resolve the selected event to a valid event record.', 'danger')
+        return redirect(url_for('main.index'))
+
     # Get existing alliances for the current event (filtered by scouting team)
     # Fetch ordered by alliance_number and newest timestamp first so the first row for a
     # given alliance_number is the canonical one.
-    raw_alliances = filter_alliance_selections_by_scouting_team().filter(
-        AllianceSelection.event_id == current_event.id
-    ).order_by(AllianceSelection.alliance_number, AllianceSelection.timestamp.desc()).all()
+    raw_alliances = []
+    if isinstance(current_event_id, int):
+        raw_alliances = filter_alliance_selections_by_scouting_team().filter(
+            AllianceSelection.event_id == current_event_id
+        ).order_by(AllianceSelection.alliance_number, AllianceSelection.timestamp.desc()).all()
 
     # Deduplicate by alliance_number, keeping the latest (by timestamp). Collect duplicates
     # for removal so the database remains clean and the UI doesn't show repeated alliance cards.
@@ -188,7 +219,7 @@ def index():
             duplicates.append(a)
 
     if duplicates:
-        current_app.logger.info(f"Removing {len(duplicates)} duplicate alliance rows for event {current_event.id}")
+        current_app.logger.info(f"Removing {len(duplicates)} duplicate alliance rows for event {current_event_id}")
         for dup in duplicates:
             db.session.delete(dup)
         db.session.commit()
@@ -197,40 +228,106 @@ def index():
     alliances = [alliances_by_num[n] for n in sorted(alliances_by_num.keys())]
 
     # Create 8 alliances if they don't exist
-    if len(alliances) < 8:
+    if isinstance(current_event_id, int) and len(alliances) < 8:
         for i in range(1, 9):
             existing = next((a for a in alliances if a.alliance_number == i), None)
             if not existing:
-                new_alliance = AllianceSelection(alliance_number=i, event_id=current_event.id)
-                assign_scouting_team_to_model(new_alliance)  # Assign current scouting team
-                db.session.add(new_alliance)
+                    new_alliance = AllianceSelection(alliance_number=i, event_id=current_event_id)
+                    assign_scouting_team_to_model(new_alliance)  # Assign current scouting team
+                    db.session.add(new_alliance)
         db.session.commit()
         alliances = filter_alliance_selections_by_scouting_team().filter(
-            AllianceSelection.event_id == current_event.id
+            AllianceSelection.event_id == current_event_id
         ).order_by(AllianceSelection.alliance_number).all()
-    
-    return render_template('alliances/index.html', 
-                         alliances=alliances, 
+
+    return render_template('alliances/index.html',
+                         alliances=alliances,
                          current_event=current_event,
+                         current_event_id=current_event_id,
                          events=events,
                          **get_theme_context())
 
-@bp.route('/recommendations/<int:event_id>')
-def get_recommendations(event_id):
+@bp.route('/recommendations/<event_param>')
+def get_recommendations(event_param):
     """Get team recommendations based on points scored"""
     try:
+        event_id = resolve_event_id_from_param(event_param)
+        if event_id is None:
+            try:
+                if str(event_param).strip().isdigit():
+                    event_id = int(str(event_param).strip())
+            except Exception:
+                event_id = None
+
         # Check whether client requested trend-aware ranking (default true)
         use_trends = request.args.get('use_trends', '1') not in ('0', 'false', 'False')
-        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
-        if not event:
-            return jsonify({'error': 'Event not found or not accessible'}), 404
+        event = None
+        if event_id is not None:
+            event = Event.query.get(event_id)
+
+        event_code = ''
+        if event and getattr(event, 'code', None):
+            event_code = (event.code or '').upper()
+        else:
+            raw_param = str(event_param or '').strip()
+            if raw_param.startswith('alliance_'):
+                event_code = raw_param[len('alliance_'):].strip().upper()
+            elif raw_param and not raw_param.isdigit():
+                event_code = raw_param.upper()
+            if not event_code:
+                try:
+                    cfg_code = (get_effective_game_config().get('current_event_code') or '').strip().upper()
+                    event_code = cfg_code
+                except Exception:
+                    event_code = ''
+
+        scoped_event_ids = []
+        if event_code:
+            event_code_variants = [event_code]
+            if len(event_code) > 4 and event_code[:4].isdigit():
+                event_code_variants.append(event_code[4:])
+            try:
+                scoped_event_ids = [
+                    row[0] for row in filter_events_by_scouting_team()
+                    .with_entities(Event.id)
+                    .filter(func.upper(Event.code).in_(event_code_variants))
+                    .all()
+                ]
+            except Exception:
+                scoped_event_ids = []
+            if not scoped_event_ids:
+                scoped_event_ids = [
+                    row[0] for row in Event.query.with_entities(Event.id)
+                    .filter(func.upper(Event.code).in_(event_code_variants))
+                    .all()
+                ]
+
+        if event_id is not None and event_id not in scoped_event_ids:
+            scoped_event_ids.append(event_id)
+        if not scoped_event_ids and not event_code:
+            return jsonify({'error': 'Event not found'}), 404
         
-        # Get all teams associated with this event (filtered by scouting team)
-        all_teams = filter_teams_by_scouting_team().join(
-            Team.events
-        ).filter(
-            Event.id == event_id
-        ).order_by(Team.team_number).all()
+        # Prefer alliance-aware team loading first. In alliance mode this uses event-code
+        # scoping across member datasets and avoids going empty when only one member has
+        # populated team_event links.
+        all_teams = []
+        try:
+            alliance_teams, is_alliance_mode = get_all_teams_for_alliance(
+                event_id=event_id,
+                event_code=event_code
+            )
+            if is_alliance_mode and alliance_teams:
+                all_teams = alliance_teams
+        except Exception:
+            all_teams = []
+
+        # Fallback to direct event association query (normal mode and non-alliance cases).
+        if not all_teams and scoped_event_ids:
+            all_teams = filter_teams_by_scouting_team().join(
+                Team.events
+            ).filter(
+                Event.id.in_(scoped_event_ids)
+            ).order_by(Team.team_number).all()
         
         # Deduplicate teams in case of duplicate rows from join operations.
         # Use team_number as the dedupe key so two different DB rows representing the
@@ -250,22 +347,66 @@ def get_recommendations(event_id):
             current_app.logger.info(f"Deduplicated teams for event {event_id}: {len(all_teams)} -> {len(unique_all_teams)}")
         all_teams = unique_all_teams
 
-        # If no teams found in team_event, fall back to teams with scouting data for this scouting team
+        # If no teams found in team_event, broaden to event-code-aware team discovery.
         if not all_teams:
+            all_teams = get_all_teams_at_event(event_id=event_id, event_code=event_code)
+
+        # Final fallback: derive teams from scouting rows visible to this user/alliance
+        # for any event row that shares the selected code.
+        if not all_teams and scoped_event_ids:
             from app.models import Match
-            scouting_team_number = get_current_scouting_team_number()
-            query = db.session.query(Team).join(ScoutingData).join(
-                Match, ScoutingData.match_id == Match.id
-            ).filter(
-                Match.event_id == event_id
+            scoped_team_ids = [
+                row[0] for row in filter_scouting_data_by_scouting_team(
+                    db.session.query(ScoutingData.team_id).join(Match, ScoutingData.match_id == Match.id)
+                ).filter(
+                    Match.event_id.in_(scoped_event_ids)
+                ).distinct().all()
+            ]
+            if scoped_team_ids:
+                all_teams = filter_teams_by_scouting_team().filter(
+                    Team.id.in_(scoped_team_ids)
+                ).order_by(Team.team_number).all()
+
+        # Last-resort fallback: derive team numbers directly from match alliances
+        # for the selected event scope. This avoids blank recommendations when
+        # team_event links are missing or stale in alliance mode.
+        if not all_teams and scoped_event_ids:
+            from app.models import Match
+
+            def _extract_team_numbers(raw_alliance):
+                if not raw_alliance:
+                    return []
+                if isinstance(raw_alliance, (list, tuple)):
+                    values = raw_alliance
+                else:
+                    values = [raw_alliance]
+                nums = []
+                for value in values:
+                    try:
+                        nums.extend(int(x) for x in re.findall(r'\d+', str(value)))
+                    except Exception:
+                        continue
+                return nums
+
+            match_rows = Match.query.filter(Match.event_id.in_(scoped_event_ids)).all()
+            match_team_numbers = set()
+            for m in match_rows:
+                match_team_numbers.update(_extract_team_numbers(getattr(m, 'red_alliance', None)))
+                match_team_numbers.update(_extract_team_numbers(getattr(m, 'blue_alliance', None)))
+
+            if match_team_numbers:
+                all_teams = filter_teams_by_scouting_team().filter(
+                    Team.team_number.in_(match_team_numbers)
+                ).order_by(Team.team_number).all()
+
+        if not all_teams:
+            current_app.logger.warning(
+                "No teams resolved for alliance recommendations: event_param=%s event_id=%s event_code=%s scoped_event_ids=%s",
+                event_param,
+                event_id,
+                event_code,
+                scoped_event_ids,
             )
-            
-            if scouting_team_number is not None:
-                query = query.filter(ScoutingData.scouting_team_number == scouting_team_number)
-            else:
-                query = query.filter(ScoutingData.scouting_team_number.is_(None))
-                
-            all_teams = query.distinct().all()
         
         # Get game configuration
         game_config = get_effective_game_config()
@@ -300,48 +441,110 @@ def get_recommendations(event_id):
             
         # Get teams already picked in alliances (filtered by scouting team)
         picked_teams = set()
-        alliances = filter_alliance_selections_by_scouting_team().filter(
-            AllianceSelection.event_id == event_id
-        ).all()
-        for alliance in alliances:
-            picked_teams.update(alliance.get_all_teams())
+        picked_team_numbers = set()
+        if isinstance(event_id, int):
+            alliances = filter_alliance_selections_by_scouting_team().filter(
+                AllianceSelection.event_id == event_id
+            ).all()
+            for alliance in alliances:
+                picked_teams.update(alliance.get_all_teams())
+
+            if picked_teams:
+                picked_team_numbers = set(
+                    row[0] for row in Team.query.with_entities(Team.team_number).filter(
+                        Team.id.in_(picked_teams)
+                    ).all() if row and row[0] is not None
+                )
         
         # Get avoid and do not pick lists for this event (filtered by scouting team)
-        avoid_teams = set(entry.team_id for entry in filter_avoid_entries_by_scouting_team().filter(
-            AvoidEntry.event_id == event_id
-        ).all())
-        do_not_pick_teams = set(entry.team_id for entry in filter_do_not_pick_by_scouting_team().filter(
-            DoNotPickEntry.event_id == event_id
-        ).all())
+        avoid_teams = set()
+        do_not_pick_teams = set()
+        avoid_team_numbers = set()
+        do_not_pick_team_numbers = set()
+        if isinstance(event_id, int):
+            avoid_entries = filter_avoid_entries_by_scouting_team().filter(
+                AvoidEntry.event_id == event_id
+            ).all()
+            do_not_pick_entries = filter_do_not_pick_by_scouting_team().filter(
+                DoNotPickEntry.event_id == event_id
+            ).all()
+
+            avoid_teams = set(entry.team_id for entry in avoid_entries)
+            do_not_pick_teams = set(entry.team_id for entry in do_not_pick_entries)
+            avoid_team_numbers = set(
+                row[0] for row in Team.query.with_entities(Team.team_number).filter(
+                    Team.id.in_(avoid_teams)
+                ).all() if row and row[0] is not None
+            )
+            do_not_pick_team_numbers = set(
+                row[0] for row in Team.query.with_entities(Team.team_number).filter(
+                    Team.id.in_(do_not_pick_teams)
+                ).all() if row and row[0] is not None
+            )
+
         # Get declined list for this event (filtered by scouting team)
-        declined_teams = set(entry.team_id for entry in filter_declined_entries_by_scouting_team().filter(
-            DeclinedEntry.event_id == event_id
-        ).all())
+        declined_teams = set()
+        declined_team_numbers = set()
+        if isinstance(event_id, int):
+            declined_teams = set(entry.team_id for entry in filter_declined_entries_by_scouting_team().filter(
+                DeclinedEntry.event_id == event_id
+            ).all())
+            declined_team_numbers = set(
+                row[0] for row in Team.query.with_entities(Team.team_number).filter(
+                    Team.id.in_(declined_teams)
+                ).all() if row and row[0] is not None
+            )
         
         # Get want list for this event (filtered by scouting team) with rankings
-        want_list_entries = filter_want_list_by_scouting_team().filter(
-            WantListEntry.event_id == event_id
-        ).all()
-        want_list_teams = {}  # Map team_id to rank
-        want_list_tags = {}  # Legacy fallback: tags previously stored on want list entries
+        want_list_entries = []
+        if isinstance(event_id, int):
+            want_list_entries = filter_want_list_by_scouting_team().filter(
+                WantListEntry.event_id == event_id
+            ).all()
+        want_list_teams = {}  # Map team_number to rank
+        want_list_tags = {}  # Legacy fallback: tags previously stored on want list entries (by team_number)
+        want_team_ids = [entry.team_id for entry in want_list_entries if entry.team_id]
+        want_team_num_by_id = {}
+        if want_team_ids:
+            want_team_num_by_id = {
+                row[0]: row[1] for row in Team.query.with_entities(Team.id, Team.team_number).filter(
+                    Team.id.in_(want_team_ids)
+                ).all() if row and row[1] is not None
+            }
         for entry in want_list_entries:
-            want_list_teams[entry.team_id] = entry.rank
+            team_num = want_team_num_by_id.get(entry.team_id)
+            if team_num is None:
+                continue
+            want_list_teams[team_num] = entry.rank
             meta = _decode_pick_meta(entry.reason)
-            want_list_tags[entry.team_id] = {
+            want_list_tags[team_num] = {
                 'offense_tag': meta['offense_tag'],
                 'defense_tag': meta['defense_tag'],
                 'pick_note': meta['note']
             }
 
         # Separate Team Tags list (preferred source for offense/defense tag sorting)
-        team_tag_entries = TeamTagEntry.query.filter_by(
-            event_id=event_id,
-            scouting_team_number=current_user.scouting_team_number
-        ).all()
+        team_tag_entries = []
+        if isinstance(event_id, int):
+            team_tag_entries = TeamTagEntry.query.filter_by(
+                event_id=event_id,
+                scouting_team_number=current_user.scouting_team_number
+            ).all()
+        team_tag_team_ids = [entry.team_id for entry in team_tag_entries if entry.team_id]
+        team_tag_num_by_id = {}
+        if team_tag_team_ids:
+            team_tag_num_by_id = {
+                row[0]: row[1] for row in Team.query.with_entities(Team.id, Team.team_number).filter(
+                    Team.id.in_(team_tag_team_ids)
+                ).all() if row and row[1] is not None
+            }
         team_tags = {}
         for entry in team_tag_entries:
+            team_num = team_tag_num_by_id.get(entry.team_id)
+            if team_num is None:
+                continue
             meta = _decode_team_tag_meta(entry.reason)
-            team_tags[entry.team_id] = {
+            team_tags[team_num] = {
                 'custom_tags': meta.get('custom_tags', []),
                 'offense_tag': meta['offense_tag'],
                 'defense_tag': meta['defense_tag'],
@@ -354,8 +557,10 @@ def get_recommendations(event_id):
         teams_with_no_data = []  # For teams without scouting data
         
         for team in all_teams:
-            if team.id not in picked_teams:
-                tag_meta = team_tags.get(team.id, want_list_tags.get(team.id, {
+            team_key = team.team_number if getattr(team, 'team_number', None) is not None else team.id
+            is_picked = (team.id in picked_teams) or (team_key in picked_team_numbers)
+            if not is_picked:
+                tag_meta = team_tags.get(team_key, want_list_tags.get(team_key, {
                     'custom_tags': [],
                     'offense_tag': False,
                     'defense_tag': False,
@@ -365,6 +570,10 @@ def get_recommendations(event_id):
                     analytics_result = calculate_team_metrics(team.id)
                     metrics = analytics_result.get('metrics', {})
                     if metrics:
+                        is_avoided = (team.id in avoid_teams) or (team_key in avoid_team_numbers)
+                        is_dnp = (team.id in do_not_pick_teams) or (team_key in do_not_pick_team_numbers)
+                        is_want = team_key in want_list_teams
+                        is_declined = (team.id in declined_teams) or (team_key in declined_team_numbers)
                         team_data = {
                             'team': team,
                             'metrics': metrics,
@@ -372,10 +581,10 @@ def get_recommendations(event_id):
                             'auto_points': metrics.get('auto_points', 0),
                             'teleop_points': metrics.get('teleop_points', 0),
                             'endgame_points': metrics.get('endgame_points', 0),
-                            'is_avoided': team.id in avoid_teams,
-                            'is_do_not_pick': team.id in do_not_pick_teams,
-                            'is_want_list': team.id in want_list_teams,
-                            'want_list_rank': want_list_teams.get(team.id, 999),
+                            'is_avoided': is_avoided,
+                            'is_do_not_pick': is_dnp,
+                            'is_want_list': is_want,
+                            'want_list_rank': want_list_teams.get(team_key, 999),
                             'custom_tags': tag_meta.get('custom_tags', []),
                             'offense_tag': tag_meta.get('offense_tag', False),
                             'defense_tag': tag_meta.get('defense_tag', False),
@@ -384,13 +593,17 @@ def get_recommendations(event_id):
                         }
                         
                         # Mark declined flag for client to decide visibility
-                        team_data['is_declined'] = team.id in declined_teams
+                        team_data['is_declined'] = is_declined
 
-                        if team.id in do_not_pick_teams:
+                        if is_dnp:
                             do_not_pick_recommendations.append(team_data)
                         else:
                             team_recommendations.append(team_data)
                     else:
+                        is_avoided = (team.id in avoid_teams) or (team_key in avoid_team_numbers)
+                        is_dnp = (team.id in do_not_pick_teams) or (team_key in do_not_pick_team_numbers)
+                        is_want = team_key in want_list_teams
+                        is_declined = (team.id in declined_teams) or (team_key in declined_team_numbers)
                         # Team exists but has no metrics data
                         teams_with_no_data.append({
                             'team': team,
@@ -399,12 +612,12 @@ def get_recommendations(event_id):
                             'auto_points': 0,
                             'teleop_points': 0,
                             'endgame_points': 0,
-                            'is_avoided': team.id in avoid_teams,
-                            'is_do_not_pick': team.id in do_not_pick_teams,
-                            'is_declined': team.id in declined_teams,
+                            'is_avoided': is_avoided,
+                            'is_do_not_pick': is_dnp,
+                            'is_declined': is_declined,
                             'has_no_data': True,
-                            'is_want_list': team.id in want_list_teams,
-                            'want_list_rank': want_list_teams.get(team.id, 999),
+                            'is_want_list': is_want,
+                            'want_list_rank': want_list_teams.get(team_key, 999),
                             'custom_tags': tag_meta.get('custom_tags', []),
                             'offense_tag': tag_meta.get('offense_tag', False),
                             'defense_tag': tag_meta.get('defense_tag', False),
@@ -412,6 +625,10 @@ def get_recommendations(event_id):
                         })
                 except Exception as e:
                     print(f"Error calculating metrics for team {team.team_number}: {e}")
+                    is_avoided = (team.id in avoid_teams) or (team_key in avoid_team_numbers)
+                    is_dnp = (team.id in do_not_pick_teams) or (team_key in do_not_pick_team_numbers)
+                    is_want = team_key in want_list_teams
+                    is_declined = (team.id in declined_teams) or (team_key in declined_team_numbers)
                     # Still add the team without metrics
                     teams_with_no_data.append({
                         'team': team,
@@ -420,12 +637,12 @@ def get_recommendations(event_id):
                         'auto_points': 0,
                         'teleop_points': 0,
                         'endgame_points': 0,
-                        'is_avoided': team.id in avoid_teams,
-                        'is_do_not_pick': team.id in do_not_pick_teams,
-                        'is_declined': team.id in declined_teams,
+                        'is_avoided': is_avoided,
+                        'is_do_not_pick': is_dnp,
+                        'is_declined': is_declined,
                         'has_no_data': True,
-                        'is_want_list': team.id in want_list_teams,
-                        'want_list_rank': want_list_teams.get(team.id, 999),
+                        'is_want_list': is_want,
+                        'want_list_rank': want_list_teams.get(team_key, 999),
                         'custom_tags': tag_meta.get('custom_tags', []),
                         'offense_tag': tag_meta.get('offense_tag', False),
                         'defense_tag': tag_meta.get('defense_tag', False),
@@ -797,9 +1014,14 @@ def remove_team():
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
 
-@bp.route('/reset/<int:event_id>')
-def reset_alliances(event_id):
+@bp.route('/reset/<event_param>')
+def reset_alliances(event_param):
     """Reset all alliance selections for an event"""
+    event_id = resolve_event_id_from_param(event_param)
+    if event_id is None:
+        flash('Could not reset alliances: selected event is not mapped to a local event record yet.', 'warning')
+        return redirect(url_for('alliances.index', event=event_param))
+
     event = Event.query.get_or_404(event_id)
     
     # Clear all alliance selections for this event
@@ -824,9 +1046,14 @@ def reset_alliances(event_id):
     
     return redirect(url_for('alliances.index'))
 
-@bp.route('/manage_lists/<int:event_id>')
-def manage_lists(event_id):
+@bp.route('/manage_lists/<event_param>')
+def manage_lists(event_param):
     """Manage avoid, do not pick, declined, custom pick, and team tag lists"""
+    event_id = resolve_event_id_from_param(event_param)
+    if event_id is None:
+        flash('Could not open manage lists: selected event is not mapped to a local event record yet.', 'warning')
+        return redirect(url_for('alliances.index', event=event_param))
+
     event = Event.query.get_or_404(event_id)
     
     # Get current lists
@@ -958,10 +1185,16 @@ def add_to_list():
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
 
 
-@bp.route('/api/get_alliances/<int:event_id>')
-def get_alliances(event_id):
+@bp.route('/api/get_alliances/<event_param>')
+def get_alliances(event_param):
     """Get current state of all alliances for an event"""
     try:
+        event_id = resolve_event_id_from_param(event_param)
+        if event_id is None:
+            if str(event_param or '').strip().startswith('alliance_'):
+                return jsonify({'success': True, 'alliances': []})
+            return jsonify({'success': False, 'error': 'Event not found or not accessible'}), 404
+
         # Fetch ordered by alliance_number and newest timestamp so the first seen row is the canonical one
         raw_alliances = filter_alliance_selections_by_scouting_team().filter(
             AllianceSelection.event_id == event_id

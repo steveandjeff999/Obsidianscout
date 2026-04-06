@@ -419,6 +419,12 @@ function initializeSocketIO() {
 }
 
 function updateListUI(data) {
+    if (data.list_type === 'want_list') {
+        // Keep custom pick list in sync for add/remove/reorder events.
+        refreshWantList();
+        return;
+    }
+
     const listId = data.list_type === 'avoid' ? 'avoidList' : (data.list_type === 'do_not_pick' ? 'doNotPickList' : 'declinedList');
     const listContainer = document.getElementById(listId);
     
@@ -510,8 +516,12 @@ function showNotification(data) {
 }
 
 function addToList(listType) {
-    const selectId = listType === 'avoid' ? 'avoidTeamSelect' : 'doNotPickTeamSelect';
-    const reasonId = listType === 'avoid' ? 'avoidReason' : 'doNotPickReason';
+    const selectId = listType === 'avoid'
+        ? 'avoidTeamSelect'
+        : (listType === 'do_not_pick' ? 'doNotPickTeamSelect' : 'declinedTeamSelect');
+    const reasonId = listType === 'avoid'
+        ? 'avoidReason'
+        : (listType === 'do_not_pick' ? 'doNotPickReason' : 'declinedReason');
     
     const teamNumber = document.getElementById(selectId).value;
     const reason = document.getElementById(reasonId).value;
@@ -537,8 +547,23 @@ function addToList(listType) {
     .then(data => {
         if (!data.success) {
             alert('Error: ' + data.message);
+            return;
         }
-        // UI will be updated via SocketIO, no need to reload
+
+        // Update immediately in addition to Socket.IO (more reliable if socket hiccups)
+        const selectedOption = document.querySelector(`#${selectId} option[value="${teamNumber}"]`);
+        const teamLabel = selectedOption ? selectedOption.text : `Team ${teamNumber}`;
+        const dashIndex = teamLabel.indexOf(' - ');
+        const teamName = dashIndex >= 0 ? teamLabel.slice(dashIndex + 3) : '';
+        updateListUI({
+            event_id: manageEventId,
+            team_id: Number(data.team_id || 0) || Number(teamNumber),
+            team_number: Number(teamNumber),
+            team_name: teamName,
+            list_type: listType,
+            reason: reason,
+            action: 'add'
+        });
     })
     .catch(error => {
         console.error('Error:', error);
@@ -643,7 +668,8 @@ function addToWantList() {
             // Clear inputs
             document.getElementById('wantListTeamSelect').value = '';
             document.getElementById('wantListReason').value = '';
-            // UI will update via SocketIO automatically
+            // Update UI immediately (and Socket.IO will keep it in sync)
+            refreshWantList();
             showSuccessMessage('Team added to want list');
         } else {
             alert('Error: ' + data.message);
@@ -1048,7 +1074,7 @@ function removeFromWantList(teamId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // UI will update via SocketIO automatically
+            refreshWantList();
             showSuccessMessage('Team removed from want list');
         } else {
             alert('Error: ' + data.message);
@@ -1061,64 +1087,61 @@ function removeFromWantList(teamId) {
 }
 
 // Drag and drop functionality for want list reordering
-document.addEventListener('DOMContentLoaded', function() {
+let draggedWantListItem = null;
+
+function initializeWantListDragAndDrop() {
     const wantList = document.getElementById('wantList');
     if (!wantList) return;
-    
-    let draggedItem = null;
-    
-    // Add event listeners to all sortable items
-    function initializeDragAndDrop() {
-        const items = wantList.querySelectorAll('.sortable-item');
-        items.forEach(item => {
-            item.addEventListener('dragstart', handleDragStart);
-            item.addEventListener('dragover', handleDragOver);
-            item.addEventListener('drop', handleDrop);
-            item.addEventListener('dragend', handleDragEnd);
-        });
-    }
-    
+
+    const items = wantList.querySelectorAll('.sortable-item');
+    items.forEach(item => {
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('drop', handleDrop);
+        item.addEventListener('dragend', handleDragEnd);
+    });
+
     function handleDragStart(e) {
-        draggedItem = this;
+        draggedWantListItem = this;
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/html', this.innerHTML);
         this.style.opacity = '0.4';
     }
-    
+
     function handleDragOver(e) {
         if (e.preventDefault) {
             e.preventDefault();
         }
         e.dataTransfer.dropEffect = 'move';
-        
-        if (draggedItem !== this) {
+
+        if (draggedWantListItem !== this) {
             const rect = this.getBoundingClientRect();
             const midpoint = rect.top + rect.height / 2;
-            
+
             if (e.clientY < midpoint) {
-                this.parentNode.insertBefore(draggedItem, this);
+                this.parentNode.insertBefore(draggedWantListItem, this);
             } else {
-                this.parentNode.insertBefore(draggedItem, this.nextSibling);
+                this.parentNode.insertBefore(draggedWantListItem, this.nextSibling);
             }
         }
-        
+
         return false;
     }
-    
+
     function handleDrop(e) {
         if (e.stopPropagation) {
             e.stopPropagation();
         }
         return false;
     }
-    
+
     function handleDragEnd(e) {
         this.style.opacity = '1';
-        
+
         // Update ranks visually and send to server
         const items = wantList.querySelectorAll('.sortable-item');
         const orderedTeamIds = [];
-        
+
         items.forEach((item, index) => {
             const badge = item.querySelector('.badge');
             if (badge) {
@@ -1126,7 +1149,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             orderedTeamIds.push(parseInt(item.dataset.teamId));
         });
-        
+
         // Send new order to server
         fetch('/alliances/api/want_list/reorder', {
             method: 'POST',
@@ -1142,17 +1165,66 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (!data.success) {
                 alert('Error updating order: ' + data.message);
-                reloadPreservingScroll();
+                refreshWantList();
+            } else {
+                refreshWantList();
             }
         })
         .catch(error => {
             console.error('Error:', error);
             alert('Network error occurred');
-            reloadPreservingScroll();
+            refreshWantList();
         });
     }
-    
-    initializeDragAndDrop();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeWantListDragAndDrop();
 });
+
+function refreshWantList() {
+    fetch(`/alliances/api/want_list/get/${manageEventId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                return;
+            }
+            renderWantList(data.want_list || []);
+        })
+        .catch(error => {
+            console.error('Error refreshing want list:', error);
+        });
+}
+
+function renderWantList(entries) {
+    const list = document.getElementById('wantList');
+    if (!list) return;
+
+    if (!entries.length) {
+        list.innerHTML = '<div class="text-muted text-center py-3" id="wantListEmpty">No teams in custom pick list</div>';
+        return;
+    }
+
+    const html = entries.map(entry => `
+        <div class="d-flex justify-content-between align-items-center border-bottom py-2 sortable-item" data-team-id="${entry.team_id}" draggable="true">
+            <div class="d-flex align-items-center flex-grow-1">
+                <span class="badge bg-success me-2" style="min-width: 30px;">${entry.rank}</span>
+                <i class="fas fa-grip-vertical text-muted me-2" style="cursor: move;"></i>
+                <div>
+                    <strong>Team ${entry.team_number}</strong>${entry.team_name ? ` - ${entry.team_name}` : ''}
+                    ${entry.reason ? `<br><small class="text-muted">${escapeHtml(entry.reason)}</small>` : ''}
+                </div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger" onclick="removeFromWantList(${entry.team_id})">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `).join('');
+
+    list.innerHTML = html;
+
+    // Re-bind full drag/drop behavior for newly rendered items.
+    initializeWantListDragAndDrop();
+}
 </script>
 {% endblock %}
