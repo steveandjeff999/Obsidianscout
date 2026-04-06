@@ -1,4 +1,8 @@
 [
+  "tests/test_alliances_api.py::test_api_toggle_alliance_mode_requires_accepted_member_and_config",
+  "tests/test_alliances_api.py::test_import_game_config_template_scouting_team",
+  "tests/test_alliances_recommend_dedupe.py::test_recommendations_dedupes_teams",
+  "tests/test_alliances_recommend_dedupe_by_team_number.py::test_recommendations_dedupes_by_team_number",
   "tests/test_db_migrations.py::test_add_column_postgres_type_mapping",
   "tests/test_db_migrations.py::test_last_used_updated_on_requests",
   "tests/test_db_migrations.py::test_run_all_migrations_creates_offset_column",

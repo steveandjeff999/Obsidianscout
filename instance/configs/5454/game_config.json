@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "alliance_size": 3,
   "scouting_stations": 6,
-  "current_event_code": "OKTU",
+  "current_event_code": "OKOK",
   "match_types": [
     "Practice",
     "Qualification",
@@ -21,7 +21,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
-        "gamepiece_scoreible": true,
+        "gamepiece_scoreible": false,
         "points": 1.0,
         "alt_step": 10,
         "alt_step_enabled": true
@@ -32,7 +32,7 @@
         "name": "Climb L1 Auto",
         "type": "boolean",
         "default": false,
-        "display_in_predictions": true,
+        "display_in_predictions": false,
         "gamepiece_scoreible": false,
         "points": 15.0
       }
@@ -48,7 +48,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
-        "gamepiece_scoreible": true,
+        "gamepiece_scoreible": false,
         "points": 1.0,
         "alt_step": 10,
         "alt_step_enabled": true
@@ -63,27 +63,10 @@
         "perm_id": "elem_endgame_0",
         "name": "Climb",
         "type": "multiple_choice",
-        "default": "None",
-        "display_in_predictions": true,
+        "default": "",
+        "display_in_predictions": false,
         "gamepiece_scoreible": false,
-        "options": [
-          {
-            "name": "None",
-            "points": 0.0
-          },
-          {
-            "name": "L1",
-            "points": 10.0
-          },
-          {
-            "name": "L2",
-            "points": 20.0
-          },
-          {
-            "name": "L3",
-            "points": 30.0
-          }
-        ]
+        "options": []
       }
     ]
   },

@@ -16,19 +16,22 @@ def get_alliance_team_numbers():
         from app.models import TeamAllianceStatus
         
         current_team = get_current_scouting_team_number()
-        if not current_team:
+        if current_team is None:
             return []
         
         # Check if alliance mode is active for this team
         active_alliance = TeamAllianceStatus.get_active_alliance_for_team(current_team)
         
-        if active_alliance and active_alliance.is_config_complete():
+        if active_alliance:
             # Return all member team numbers
             team_numbers = set(active_alliance.get_member_team_numbers())
             
             # Also include the game_config_team if set (data may be synced under this team)
             if active_alliance.game_config_team:
                 team_numbers.add(active_alliance.game_config_team)
+
+            # Ensure current team remains included even if membership rows are stale.
+            team_numbers.add(current_team)
             
             return list(team_numbers)
         
@@ -60,15 +63,15 @@ def get_alliance_shared_event_codes():
         from app.models import TeamAllianceStatus
         
         current_team = get_current_scouting_team_number()
-        if not current_team:
+        if current_team is None:
             return []
         
         # Check if alliance mode is active for this team
         active_alliance = TeamAllianceStatus.get_active_alliance_for_team(current_team)
         
-        if active_alliance and active_alliance.is_config_complete():
+        if active_alliance:
             # Return all shared event codes
-            return active_alliance.get_shared_events()
+            return [str(c).strip().upper() for c in (active_alliance.get_shared_events() or []) if c]
         
         return []
     except Exception:
@@ -301,15 +304,37 @@ def resolve_event_id_from_param(raw_event_param, events=None):
     if not code:
         return None
 
+    code_upper = code.upper()
+    code_variants = [code_upper]
+    # Handle databases that store codes without year prefix while alliance
+    # selectors use year-prefixed synthetic codes (e.g., 2026WEEK0).
+    if len(code_upper) > 4 and code_upper[:4].isdigit():
+        code_variants.append(code_upper[4:])
+
+    # Prefer the current scouting team's own Event row when multiple rows share the same
+    # code (common in alliance mode). This keeps event switching stable for team-scoped
+    # tables that store integer event_id values.
     try:
-        scoped = filter_events_by_scouting_team().filter(func.upper(Event.code) == code.upper()).first()
+        current_team = get_current_scouting_team_number()
+        if current_team is not None:
+            own_evt = Event.query.filter(
+                func.upper(Event.code).in_(code_variants),
+                Event.scouting_team_number == current_team
+            ).first()
+            if own_evt:
+                return own_evt.id
+    except Exception:
+        pass
+
+    try:
+        scoped = filter_events_by_scouting_team().filter(func.upper(Event.code).in_(code_variants)).first()
         if scoped:
             return scoped.id
     except Exception:
         pass
 
     try:
-        any_evt = Event.query.filter(func.upper(Event.code) == code.upper()).first()
+        any_evt = Event.query.filter(func.upper(Event.code).in_(code_variants)).first()
         return any_evt.id if any_evt else None
     except Exception:
         return None

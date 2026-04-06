@@ -108,7 +108,7 @@ def get_current_game_config():
         team_number = current_user.scouting_team_number
     return load_game_config(team_number=team_number)
 
-def save_game_config(data):
+def save_game_config(data, team_number=None):
     """Saves the game configuration for the current user's team."""
     # Normalize event code to uppercase before saving to prevent duplicates
     try:
@@ -119,9 +119,9 @@ def save_game_config(data):
     except Exception:
         pass
     
-    team_number = None
-    if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
-        team_number = current_user.scouting_team_number
+    if team_number is None:
+        if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
+            team_number = current_user.scouting_team_number
 
     # If no team number is present (for example an admin editing the global config),
     # persist to the global config file under `config/game_config.json` so changes

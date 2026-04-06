@@ -13,5 +13,8 @@
   "tests/test_pit_form.py::test_form_prefills_when_team_selected": true,
   "tests/test_pit_form.py::test_ajax_endpoint_returns_empty_for_unscouted_team": true,
   "tests/test_pit_form.py::test_scouting_form_team_selector_optout": true,
-  "tests/test_pit_form.py::test_pit_form_alliance_gt_image_upload_honors_shared_flag": true
+  "tests/test_pit_form.py::test_pit_form_alliance_gt_image_upload_honors_shared_flag": true,
+  "tests/test_alliances_api.py::test_api_toggle_alliance_mode_requires_accepted_member_and_config": true,
+  "tests/test_alliances_api.py::test_import_game_config_template_scouting_team": true,
+  "tools/test_single_graph.py": true
 }
