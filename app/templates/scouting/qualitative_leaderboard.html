@@ -42,8 +42,8 @@
             <div class="mb-3">
                 <h6 class="mb-2"><i class="fas fa-calendar-alt me-2"></i>Filter by Event</h6>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
-                    <a href="{{ url_for('scouting.qualitative_leaderboard') }}"
-                       class="btn btn-sm {% if not selected_event_id %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                          <a href="{{ url_for('scouting.qualitative_leaderboard', all_events=1) }}"
+                              class="btn btn-sm {% if show_all_events or not selected_event_id %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
                         All Events
                     </a>
                     {% for event in events %}
@@ -130,6 +130,21 @@
                                     Avg Overall Rating <span class="text-muted small">(higher is better)</span> <i class="fas fa-sort-down sort-icon ms-1" data-for="avg_rating" style="{% if sort_by != 'avg_rating' %}opacity:0.3{% endif %}"></i>
                                 </button>
                             </th>
+                            <th style="width: 150px;">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-reset text-decoration-none {% if sort_by == 'driver_rating' %}fw-bold{% endif %}" data-sort="driver_rating" title="Sort by average driver rating">
+                                    Driver Rating <i class="fas fa-sort-down sort-icon ms-1" data-for="driver_rating" style="{% if sort_by != 'driver_rating' %}opacity:0.3{% endif %}"></i>
+                                </button>
+                            </th>
+                            <th style="width: 170px;">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-reset text-decoration-none {% if sort_by in ['defense_rating', 'defence_rating'] %}fw-bold{% endif %}" data-sort="defense_rating" title="Sort by average defense rating">
+                                    Defense Rating <i class="fas fa-sort-down sort-icon ms-1" data-for="defense_rating" style="{% if sort_by not in ['defense_rating', 'defence_rating'] %}opacity:0.3{% endif %}"></i>
+                                </button>
+                            </th>
+                            <th style="width: 150px;">
+                                <button type="button" class="sort-col btn btn-link p-0 border-0 text-reset text-decoration-none {% if sort_by == 'shot_accuracy' %}fw-bold{% endif %}" data-sort="shot_accuracy" title="Sort by average shot accuracy">
+                                    Shot Accuracy <i class="fas fa-sort-down sort-icon ms-1" data-for="shot_accuracy" style="{% if sort_by != 'shot_accuracy' %}opacity:0.3{% endif %}"></i>
+                                </button>
+                            </th>
                             <th style="width: 120px;">Appearances</th>
                             <th style="width: 200px;">Roles</th>
                             <th style="width: 120px;">
@@ -154,6 +169,9 @@
                         {% for team in leaderboard %}
                         <tr class="team-row"
                             data-average-ranking="{{ team.average_ranking }}"
+                            data-average-driver-rating="{{ team.average_driver_rating if team.average_driver_rating is not none else '' }}"
+                            data-average-defense-rating="{{ team.average_defense_effectiveness if team.average_defense_effectiveness is not none else '' }}"
+                            data-average-shot-accuracy="{{ team.average_shot_accuracy if team.average_shot_accuracy is not none else '' }}"
                             data-cycling="{{ team.roles.cycling }}"
                             data-stealing="{{ team.roles.stealing }}"
                             data-scoring="{{ team.roles.scoring }}"
@@ -200,6 +218,27 @@
                                         </div>
                                     </div>
                                 </div>
+                            </td>
+                            <td>
+                                {% if team.average_driver_rating is not none %}
+                                <span class="fw-semibold">{{ team.average_driver_rating }}</span>
+                                {% else %}
+                                <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if team.average_defense_effectiveness is not none %}
+                                <span class="fw-semibold">{{ team.average_defense_effectiveness }}</span>
+                                {% else %}
+                                <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if team.average_shot_accuracy is not none %}
+                                <span class="fw-semibold">{{ team.average_shot_accuracy }}</span>
+                                {% else %}
+                                <span class="text-muted small">—</span>
+                                {% endif %}
                             </td>
                             <td>
                                 <span class="badge bg-info">{{ team.total_appearances }} times</span>
@@ -442,6 +481,18 @@ function getSortKey(row, sortBy) {
     // header and still get sensible results.
     if (sortBy === 'avg_rating' || sortBy === 'rank') {
         return parseFloat(row.dataset.averageRanking) || 0;
+    }
+    if (sortBy === 'driver_rating') {
+        const v = parseFloat(row.dataset.averageDriverRating);
+        return Number.isFinite(v) ? v : -1;
+    }
+    if (sortBy === 'defense_rating' || sortBy === 'defence_rating') {
+        const v = parseFloat(row.dataset.averageDefenseRating);
+        return Number.isFinite(v) ? v : -1;
+    }
+    if (sortBy === 'shot_accuracy') {
+        const v = parseFloat(row.dataset.averageShotAccuracy);
+        return Number.isFinite(v) ? v : -1;
     }
     if (sortBy === 'auto_climb') {
         const s = parseInt(row.dataset.autoSuccess) || 0;

@@ -12,7 +12,8 @@ from app.utils.config_manager import get_id_to_perm_id_mapping, get_current_game
 from app.utils.theme_manager import ThemeManager
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
-    filter_events_by_scouting_team, get_event_by_code, get_all_teams_at_event, get_combined_dropdown_events
+    filter_events_by_scouting_team, get_event_by_code, get_all_teams_at_event,
+    get_combined_dropdown_events, resolve_event_id_from_param, dedupe_events_for_display
 )
 from app.utils.alliance_data import (
     get_all_scouting_data, get_all_pit_data, get_all_qualitative_data,
@@ -2541,6 +2542,15 @@ def qualitative_leaderboard():
     """Display a leaderboard of teams ranked by qualitative scouting rankings"""
     from collections import defaultdict
 
+    def _as_number(value):
+        """Convert rating-like values to float when possible, otherwise None."""
+        if value is None or value == '':
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
     # sort options from query string (default to average rating desc).
     # the leaderboard has two "logical" sort keys: avg_rating (the
     # numeric value we compute from individual entries) and rank.  The
@@ -2550,6 +2560,8 @@ def qualitative_leaderboard():
     # clicking the header can toggle between ascending/descending.
     sort_by = request.args.get('sort', 'avg_rating') or 'avg_rating'
     sort_dir = request.args.get('dir', 'desc') or 'desc'
+    if sort_by == 'defence_rating':
+        sort_by = 'defense_rating'
     if sort_dir not in ('asc', 'desc'):
         sort_dir = 'desc'
 
@@ -2588,8 +2600,51 @@ def qualitative_leaderboard():
                     events_with_data.append(e)
                     existing_ids.add(e.id)
 
-    # Optional event filter from query param
+    # Optional event filter from query param.
+    # If no explicit event is provided, default to the current configured event.
     selected_event_id = request.args.get('event_id', type=int)
+    show_all_events = request.args.get('all_events', '').strip().lower() in ('1', 'true', 'yes')
+
+    if selected_event_id is None and not show_all_events:
+        current_event_code = None
+        try:
+            cfg = get_effective_game_config()
+            if isinstance(cfg, dict):
+                current_event_code = (cfg.get('current_event_code') or '').strip().upper()
+        except Exception:
+            current_event_code = None
+
+        # Fallback to team-local config if effective config has no current event.
+        if not current_event_code:
+            try:
+                cfg = get_current_game_config()
+                if isinstance(cfg, dict):
+                    current_event_code = (cfg.get('current_event_code') or '').strip().upper()
+            except Exception:
+                current_event_code = None
+
+        if current_event_code:
+            selected_event_id = resolve_event_id_from_param(
+                current_event_code,
+                events=get_combined_dropdown_events()
+            )
+
+            # If multiple Event rows share this code (common in alliance mode),
+            # prefer one that already appears in the qualitative data event list.
+            if selected_event_id is not None:
+                preferred_event = next(
+                    (e for e in events_with_data if (getattr(e, 'code', '') or '').strip().upper() == current_event_code),
+                    None
+                )
+                if preferred_event and isinstance(getattr(preferred_event, 'id', None), int):
+                    selected_event_id = preferred_event.id
+
+    # Ensure selected event is visible in the filter chips even if it has no
+    # qualitative leaderboard rows yet.
+    if selected_event_id and not any(getattr(e, 'id', None) == selected_event_id for e in events_with_data):
+        selected_event_obj = Event.query.get(selected_event_id)
+        if selected_event_obj:
+            events_with_data.insert(0, selected_event_obj)
 
     # Build base query for own data
     base_query = QualitativeScoutingData.query.filter_by(
@@ -2620,6 +2675,9 @@ def qualitative_leaderboard():
     # Aggregate rankings by team
     team_rankings = defaultdict(lambda: {
         'rankings': [],
+        'driver_ratings': [],
+        'defense_ratings': [],
+        'shot_ratings': [],
         'notes': [],
         'appearances': 0,
         'roles': {'cycling': 0, 'stealing': 0, 'scoring': 0, 'feeding': 0, 'defending': 0, 'did_not_contribute': 0},
@@ -2642,6 +2700,15 @@ def qualitative_leaderboard():
                 if rating:
                     team_rankings[team_num]['rankings'].append(rating)
                     team_rankings[team_num]['appearances'] += 1
+                    driver_rating = _as_number(team_data.get('driver_rating'))
+                    defense_rating = _as_number(team_data.get('defense_effectiveness'))
+                    shot_rating = _as_number(team_data.get('shot_accuracy'))
+                    if driver_rating is not None:
+                        team_rankings[team_num]['driver_ratings'].append(driver_rating)
+                    if defense_rating is not None:
+                        team_rankings[team_num]['defense_ratings'].append(defense_rating)
+                    if shot_rating is not None:
+                        team_rankings[team_num]['shot_ratings'].append(shot_rating)
                     if team_data.get('notes'):
                         team_rankings[team_num]['notes'].append(team_data['notes'])
                     # Roles are stored as flat keys directly on team_data
@@ -2658,6 +2725,15 @@ def qualitative_leaderboard():
                         if rating:
                             team_rankings[team_num]['rankings'].append(rating)
                             team_rankings[team_num]['appearances'] += 1
+                            driver_rating = _as_number(team_data.get('driver_rating'))
+                            defense_rating = _as_number(team_data.get('defense_effectiveness'))
+                            shot_rating = _as_number(team_data.get('shot_accuracy'))
+                            if driver_rating is not None:
+                                team_rankings[team_num]['driver_ratings'].append(driver_rating)
+                            if defense_rating is not None:
+                                team_rankings[team_num]['defense_ratings'].append(defense_rating)
+                            if shot_rating is not None:
+                                team_rankings[team_num]['shot_ratings'].append(shot_rating)
                             if team_data.get('notes'):
                                 team_rankings[team_num]['notes'].append(team_data['notes'])
                             # Roles are stored as flat keys directly on team_data
@@ -2686,9 +2762,15 @@ def qualitative_leaderboard():
     for team_num, data in team_rankings.items():
         if data['rankings']:
             avg_ranking = sum(data['rankings']) / len(data['rankings'])
+            avg_driver = (sum(data['driver_ratings']) / len(data['driver_ratings'])) if data['driver_ratings'] else None
+            avg_defense = (sum(data['defense_ratings']) / len(data['defense_ratings'])) if data['defense_ratings'] else None
+            avg_shot = (sum(data['shot_ratings']) / len(data['shot_ratings'])) if data['shot_ratings'] else None
             leaderboard.append({
                 'team_number': team_num,
                 'average_ranking': round(avg_ranking, 2),
+                'average_driver_rating': round(avg_driver, 2) if avg_driver is not None else None,
+                'average_defense_effectiveness': round(avg_defense, 2) if avg_defense is not None else None,
+                'average_shot_accuracy': round(avg_shot, 2) if avg_shot is not None else None,
                 'total_appearances': data['appearances'],
                 'rankings': data['rankings'],
                 'notes': data['notes'],
@@ -2708,6 +2790,36 @@ def qualitative_leaderboard():
     if sort_by in ('avg_rating', 'rank'):
         leaderboard.sort(key=lambda x: x['average_ranking'],
                          reverse=(sort_dir == 'desc'))
+    elif sort_by == 'driver_rating':
+        if sort_dir == 'desc':
+            leaderboard.sort(
+                key=lambda x: (x.get('average_driver_rating') is not None, x.get('average_driver_rating') or 0),
+                reverse=True
+            )
+        else:
+            leaderboard.sort(
+                key=lambda x: (x.get('average_driver_rating') is None, x.get('average_driver_rating') or 0)
+            )
+    elif sort_by in ('defense_rating', 'defence_rating'):
+        if sort_dir == 'desc':
+            leaderboard.sort(
+                key=lambda x: (x.get('average_defense_effectiveness') is not None, x.get('average_defense_effectiveness') or 0),
+                reverse=True
+            )
+        else:
+            leaderboard.sort(
+                key=lambda x: (x.get('average_defense_effectiveness') is None, x.get('average_defense_effectiveness') or 0)
+            )
+    elif sort_by == 'shot_accuracy':
+        if sort_dir == 'desc':
+            leaderboard.sort(
+                key=lambda x: (x.get('average_shot_accuracy') is not None, x.get('average_shot_accuracy') or 0),
+                reverse=True
+            )
+        else:
+            leaderboard.sort(
+                key=lambda x: (x.get('average_shot_accuracy') is None, x.get('average_shot_accuracy') or 0)
+            )
     elif sort_by == 'team_number':
         leaderboard.sort(key=lambda x: int(x['team_number']),
                          reverse=(sort_dir == 'desc'))
@@ -2718,8 +2830,9 @@ def qualitative_leaderboard():
     return render_template('scouting/qualitative_leaderboard.html',
                          leaderboard=leaderboard,
                          total_teams=len(leaderboard),
-                         events=events_with_data,
+                         events=dedupe_events_for_display(events_with_data),
                          selected_event_id=selected_event_id,
+                         show_all_events=show_all_events,
                          sort_by=sort_by,
                          sort_dir=sort_dir,
                          **get_theme_context())

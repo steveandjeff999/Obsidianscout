@@ -1023,19 +1023,44 @@ function showToast(message, type) {
 }
 
 // Leave Alliance function from dashboard
-function leaveAllianceFromDashboard(allianceId, allianceName) {
-    // Show confirmation dialog
+async function leaveAllianceFromDashboard(allianceId, allianceName) {
+    let warningMessage = 'Warning details unavailable right now.';
+    let cleanupLine = '';
+
+    try {
+        const previewResponse = await fetch('/alliances/scouting/api/leave-alliance', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                alliance_id: allianceId,
+                preview_only: true
+            })
+        });
+        const previewData = await previewResponse.json();
+        if (previewData.success) {
+            warningMessage = previewData.warning || warningMessage;
+            const removeCount = Number(previewData.events_to_remove_count || 0);
+            cleanupLine = `• Remove ${removeCount} local alliance event copy/copies created under your team\n`;
+        }
+    } catch (error) {
+        console.error('Error getting leave warning preview:', error);
+    }
+
     const confirmMessage = `Are you sure you want to leave the alliance "${allianceName}"?\n\n` +
                           `This will:\n` +
                           `• Remove you from the alliance\n` +
                           `• Deactivate alliance mode if currently active\n` +
-                          `• Stop sharing scouting data with alliance members\n\n` +
+                          `• Stop sharing scouting data with alliance members\n` +
+                          cleanupLine +
+                          `\n${warningMessage}\n\n` +
                           `This action cannot be undone.`;
-    
+
     if (!confirm(confirmMessage)) {
         return;
     }
-    
+
     fetch('/alliances/scouting/api/leave-alliance', {
         method: 'POST',
         headers: {
@@ -1049,7 +1074,7 @@ function leaveAllianceFromDashboard(allianceId, allianceName) {
     .then(data => {
         if (data.success) {
             showToast(data.message, 'success');
-            
+
             // Reload page after a short delay to update the UI
             setTimeout(() => {
                 location.reload();
