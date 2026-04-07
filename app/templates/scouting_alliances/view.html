@@ -1243,20 +1243,9 @@ function showNotification(message, type) {
 }
 
 // Leave Alliance function
-function leaveAlliance(allianceId) {
-    // Show confirmation dialog
+async function leaveAlliance(allianceId) {
     const allianceName = '{{ alliance.alliance_name }}';
-    const confirmMessage = `Are you sure you want to leave the alliance "${allianceName}"?\n\n` +
-                          `This will:\n` +
-                          `• Remove you from the alliance\n` +
-                          `• Deactivate alliance mode if currently active\n` +
-                          `• Stop sharing scouting data with alliance members\n\n` +
-                          `This action cannot be undone.`;
-    
-    if (!confirm(confirmMessage)) {
-        return;
-    }
-    
+
     // Get CSRF token if available
     let headers = {
         'Content-Type': 'application/json',
@@ -1265,7 +1254,42 @@ function leaveAlliance(allianceId) {
     if (csrfMeta) {
         headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
     }
-    
+
+    let warningMessage = 'Warning details unavailable right now.';
+    let cleanupLine = '';
+
+    try {
+        const previewResponse = await fetch('/alliances/scouting/api/leave-alliance', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+                alliance_id: allianceId,
+                preview_only: true
+            })
+        });
+        const previewData = await previewResponse.json();
+        if (previewData.success) {
+            warningMessage = previewData.warning || warningMessage;
+            const removeCount = Number(previewData.events_to_remove_count || 0);
+            cleanupLine = `• Remove ${removeCount} local alliance event copy/copies created under your team\n`;
+        }
+    } catch (error) {
+        console.error('Error getting leave warning preview:', error);
+    }
+
+    const confirmMessage = `Are you sure you want to leave the alliance "${allianceName}"?\n\n` +
+                          `This will:\n` +
+                          `• Remove you from the alliance\n` +
+                          `• Deactivate alliance mode if currently active\n` +
+                          `• Stop sharing scouting data with alliance members\n` +
+                          cleanupLine +
+                          `\n${warningMessage}\n\n` +
+                          `This action cannot be undone.`;
+
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+
     fetch('/alliances/scouting/api/leave-alliance', {
         method: 'POST',
         headers: headers,
@@ -1277,7 +1301,7 @@ function leaveAlliance(allianceId) {
     .then(data => {
         if (data.success) {
             showNotification(data.message, 'success');
-            
+
             // Redirect to dashboard after a short delay
             setTimeout(() => {
                 window.location.href = '{{ url_for("scouting_alliances.dashboard") }}';

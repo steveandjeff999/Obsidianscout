@@ -17,7 +17,7 @@ from app.models import (
 from app.routes.auth import admin_required
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import load_game_config, load_pit_config
-from app.utils.team_isolation import get_current_scouting_team_number
+from app.utils.team_isolation import get_current_scouting_team_number, dedupe_events_for_display
 from datetime import datetime, timezone, timedelta
 from app.utils.timezone_utils import utc_now_iso, iso_utc
 import json
@@ -92,6 +92,91 @@ def _is_prescout_pit_entry(entry):
     if isinstance(val, str):
         return val.strip().lower() in ('1', 'true', 'yes', 'on')
     return False
+
+
+def _build_leave_alliance_event_cleanup_plan(alliance_id, current_team):
+    """Build a deterministic cleanup plan for local event copies when leaving an alliance.
+
+    The cleanup is intentionally scoped to the current team only, and excludes
+    event codes still used by any other alliance memberships for the same team.
+    """
+    plan = {
+        'alliance_event_codes': [],
+        'protected_event_codes': [],
+        'removable_event_codes': [],
+        'events_to_cleanup': [],
+        'warning': ''
+    }
+
+    alliance_event_rows = ScoutingAllianceEvent.query.filter_by(
+        alliance_id=alliance_id,
+        is_active=True
+    ).all()
+    alliance_codes = sorted({
+        str(row.event_code).strip().upper()
+        for row in alliance_event_rows
+        if getattr(row, 'event_code', None)
+    })
+    plan['alliance_event_codes'] = alliance_codes
+
+    if not alliance_codes:
+        plan['warning'] = 'No alliance event copies were found for cleanup.'
+        return plan
+
+    other_alliance_ids = [
+        row.alliance_id
+        for row in ScoutingAllianceMember.query.filter(
+            ScoutingAllianceMember.team_number == current_team,
+            ScoutingAllianceMember.status == 'accepted',
+            ScoutingAllianceMember.alliance_id != alliance_id
+        ).all()
+    ]
+
+    protected_codes = set()
+    if other_alliance_ids:
+        protected_rows = ScoutingAllianceEvent.query.filter(
+            ScoutingAllianceEvent.alliance_id.in_(other_alliance_ids),
+            ScoutingAllianceEvent.is_active == True
+        ).all()
+        protected_codes = {
+            str(row.event_code).strip().upper()
+            for row in protected_rows
+            if getattr(row, 'event_code', None)
+        }
+    plan['protected_event_codes'] = sorted(protected_codes)
+
+    removable_codes = sorted(set(alliance_codes) - protected_codes)
+    plan['removable_event_codes'] = removable_codes
+
+    if removable_codes:
+        removable_events = Event.query.filter(
+            Event.scouting_team_number == current_team,
+            db.func.upper(Event.code).in_(removable_codes)
+        ).all()
+    else:
+        removable_events = []
+
+    plan['events_to_cleanup'] = removable_events
+
+    if removable_events:
+        removed_codes = sorted({(evt.code or '').strip().upper() for evt in removable_events if getattr(evt, 'code', None)})
+        plan['warning'] = (
+            f'Warning: leaving this alliance will remove {len(removable_events)} local event copy/copies '
+            f'for your team ({", ".join(removed_codes)}). '
+            'Events used by your other alliances are preserved.'
+        )
+    elif removable_codes:
+        plan['warning'] = (
+            'No local event rows needed cleanup, but this alliance event access will be removed. '
+            'Events used by your other alliances are preserved.'
+        )
+    else:
+        plan['warning'] = (
+            'This alliance has no unique event codes for your team to remove. '
+            'Events used by your other alliances are preserved.'
+        )
+
+    return plan
 
 def get_theme_context():
     """Get theme context with alliance status"""
@@ -1843,8 +1928,9 @@ def api_sync_alliance_data():
 @login_required
 def api_leave_alliance():
     """API endpoint for teams to leave an alliance"""
-    data = request.get_json()
+    data = request.get_json() or {}
     alliance_id = data.get('alliance_id')
+    preview_only = bool(data.get('preview_only'))
     
     if not alliance_id:
         return jsonify({
@@ -1892,6 +1978,16 @@ def api_leave_alliance():
                     'success': False,
                     'error': 'You are the only administrator. Please transfer admin rights to another member before leaving.'
                 }), 400
+
+        cleanup_plan = _build_leave_alliance_event_cleanup_plan(alliance_id, current_team)
+
+        if preview_only:
+            return jsonify({
+                'success': True,
+                'warning': cleanup_plan['warning'],
+                'events_to_remove_count': len(cleanup_plan['events_to_cleanup']),
+                'event_codes_to_remove': cleanup_plan['removable_event_codes']
+            })
         
         # If this team has alliance mode active for this alliance, deactivate it
         alliance_status = TeamAllianceStatus.query.filter_by(
@@ -1904,6 +2000,17 @@ def api_leave_alliance():
             alliance_status.is_alliance_mode_active = False
             alliance_status.active_alliance_id = None
             alliance_status.last_updated = datetime.now(timezone.utc)
+
+        # Hide this alliance's local event copies for the leaving team only.
+        # We do not delete other alliances' events or shared alliance event records.
+        removed_event_ids = []
+        for cleanup_event in cleanup_plan['events_to_cleanup']:
+            for event_team in list(cleanup_event.teams):
+                if getattr(event_team, 'scouting_team_number', None) == current_team:
+                    cleanup_event.teams.remove(event_team)
+
+            cleanup_event.scouting_team_number = None
+            removed_event_ids.append(cleanup_event.id)
         
         # Remove the member from the alliance
         db.session.delete(member)
@@ -1937,8 +2044,13 @@ def api_leave_alliance():
         
         return jsonify({
             'success': True,
-            'message': f'Successfully left the alliance "{alliance_name}"',
-            'alliance_deleted': alliance_deleted
+            'message': (
+                f'Successfully left the alliance "{alliance_name}". '
+                f'Removed {len(removed_event_ids)} local alliance event copy/copies.'
+            ),
+            'alliance_deleted': alliance_deleted,
+            'events_removed_count': len(removed_event_ids),
+            'warning': cleanup_plan['warning']
         })
         
     except Exception as e:
@@ -4770,6 +4882,8 @@ def manage_alliance_teams(alliance_id):
     from app.utils.config_manager import get_effective_game_config
     game_config = get_effective_game_config()
     
+    events = dedupe_events_for_display(events, current_team=current_team)
+
     return render_template('scouting_alliances/manage_teams.html',
                            alliance=alliance,
                            member=member,
@@ -5063,6 +5177,8 @@ def manage_alliance_events(alliance_id):
     from app.utils.config_manager import get_effective_game_config
     game_config = get_effective_game_config()
     
+    events = dedupe_events_for_display(events, current_team=current_team)
+
     return render_template('scouting_alliances/manage_events.html',
                            alliance=alliance,
                            member=member,
@@ -5302,6 +5418,8 @@ def manage_alliance_matches(alliance_id):
     from app.utils.config_manager import get_effective_game_config
     game_config = get_effective_game_config()
     
+    events = dedupe_events_for_display(events, current_team=current_team)
+
     return render_template('scouting_alliances/manage_matches.html',
                            alliance=alliance,
                            member=member,

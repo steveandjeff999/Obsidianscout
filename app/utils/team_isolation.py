@@ -340,6 +340,250 @@ def resolve_event_id_from_param(raw_event_param, events=None):
         return None
 
 
+def dedupe_events_for_display(events, current_team=None):
+    """Collapse event lists so each code/year shows at most one team copy and one alliance copy.
+
+    When multiple alliance copies exist for the same code/year, prefer the copy
+    from the currently active alliance for the team. If no active alliance copy
+    exists, fall back to the most recently added alliance copy.
+    """
+    try:
+        if current_team is None:
+            current_team = get_current_scouting_team_number()
+
+        from datetime import datetime, timezone as _timezone
+        from app.models import TeamAllianceStatus, ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceEvent
+
+        def _normalize_code(value):
+            if not value:
+                return ''
+            try:
+                return str(value).strip().upper()
+            except Exception:
+                return ''
+
+        def _event_year(event):
+            year = getattr(event, 'year', None)
+            if year is None and isinstance(event, dict):
+                year = event.get('year')
+            try:
+                return int(year) if year is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        def _event_code(event):
+            if isinstance(event, dict):
+                code = event.get('code')
+            else:
+                code = getattr(event, 'code', None)
+            return _normalize_code(code)
+
+        def _event_team_number(event):
+            if isinstance(event, dict):
+                return event.get('scouting_team_number')
+            return getattr(event, 'scouting_team_number', None)
+
+        def _event_score(event):
+            score = 0
+            try:
+                name = getattr(event, 'name', None) if not isinstance(event, dict) else event.get('name')
+                location = getattr(event, 'location', None) if not isinstance(event, dict) else event.get('location')
+                start_date = getattr(event, 'start_date', None) if not isinstance(event, dict) else event.get('start_date')
+                end_date = getattr(event, 'end_date', None) if not isinstance(event, dict) else event.get('end_date')
+                timezone_value = getattr(event, 'timezone', None) if not isinstance(event, dict) else event.get('timezone')
+                year = _event_year(event)
+                if name:
+                    score += 10
+                if location:
+                    score += 5
+                if start_date:
+                    score += 5
+                if end_date:
+                    score += 3
+                if timezone_value:
+                    score += 2
+                if year:
+                    score += 1
+            except Exception:
+                pass
+            return score
+
+        def _added_at_value(value):
+            if not value:
+                return datetime.min.replace(tzinfo=_timezone.utc)
+            try:
+                if value.tzinfo is None:
+                    return value.replace(tzinfo=_timezone.utc)
+                return value
+            except Exception:
+                return datetime.min.replace(tzinfo=_timezone.utc)
+
+        if not events:
+            return []
+
+        active_alliance = None
+        if current_team is not None:
+            active_alliance = TeamAllianceStatus.get_active_alliance_for_team(current_team)
+
+        alliance_memberships = []
+        if current_team is not None:
+            alliance_memberships = ScoutingAllianceMember.query.filter_by(
+                team_number=current_team,
+                status='accepted'
+            ).all()
+
+        accepted_alliance_ids = [m.alliance_id for m in alliance_memberships if getattr(m, 'alliance_id', None)]
+        alliances_by_id = {}
+        alliance_team_numbers_by_id = {}
+        alliance_codes_by_id = {}
+        alliance_added_at_by_id = {}
+
+        if accepted_alliance_ids:
+            alliances = ScoutingAlliance.query.filter(ScoutingAlliance.id.in_(accepted_alliance_ids)).all()
+            alliances_by_id = {alliance.id: alliance for alliance in alliances}
+
+            for alliance in alliances:
+                team_numbers = set()
+                try:
+                    team_numbers.update(alliance.get_member_team_numbers() or [])
+                except Exception:
+                    pass
+                if getattr(alliance, 'game_config_team', None) is not None:
+                    team_numbers.add(alliance.game_config_team)
+                alliance_team_numbers_by_id[alliance.id] = team_numbers
+
+                alliance_rows = ScoutingAllianceEvent.query.filter_by(
+                    alliance_id=alliance.id,
+                    is_active=True
+                ).all()
+                code_set = set()
+                added_at_by_code = {}
+                for row in alliance_rows:
+                    event_code = _normalize_code(getattr(row, 'event_code', None))
+                    if not event_code:
+                        continue
+                    code_set.add(event_code)
+                    current_added_at = _added_at_value(getattr(row, 'added_at', None))
+                    existing_added_at = added_at_by_code.get(event_code)
+                    if existing_added_at is None or current_added_at > existing_added_at:
+                        added_at_by_code[event_code] = current_added_at
+                    try:
+                        from app.utils.api_utils import strip_year_prefix
+                        stripped_code = _normalize_code(strip_year_prefix(event_code))
+                        if stripped_code and stripped_code != event_code:
+                            code_set.add(stripped_code)
+                            existing_stripped = added_at_by_code.get(stripped_code)
+                            if existing_stripped is None or current_added_at > existing_stripped:
+                                added_at_by_code[stripped_code] = current_added_at
+                    except Exception:
+                        pass
+
+                alliance_codes_by_id[alliance.id] = code_set
+                alliance_added_at_by_id[alliance.id] = added_at_by_code
+
+        def _is_alliance_candidate(event, code_upper):
+            event_team = _event_team_number(event)
+            event_is_alliance = bool(getattr(event, 'is_alliance', False)) if not isinstance(event, dict) else bool(event.get('is_alliance', False))
+            synthetic_id = str(getattr(event, 'id', '')).startswith('alliance_') if not isinstance(event, dict) else str(event.get('id', '')).startswith('alliance_')
+
+            if event_is_alliance or synthetic_id:
+                return True
+
+            if current_team is None:
+                return False
+
+            try:
+                from app.utils.api_utils import strip_year_prefix
+                stripped_code = _normalize_code(strip_year_prefix(code_upper))
+            except Exception:
+                stripped_code = code_upper
+
+            for alliance_id, code_set in alliance_codes_by_id.items():
+                if code_upper not in code_set and stripped_code not in code_set:
+                    continue
+
+                team_numbers = alliance_team_numbers_by_id.get(alliance_id, set())
+                if event_team is not None and team_numbers and event_team not in team_numbers:
+                    continue
+
+                # Current active alliance gets the strongest preference.
+                if active_alliance and alliance_id == active_alliance.id:
+                    return True
+
+                return True
+
+            return False
+
+        def _alliance_rank(event, code_upper):
+            event_team = _event_team_number(event)
+            try:
+                from app.utils.api_utils import strip_year_prefix
+                stripped_code = _normalize_code(strip_year_prefix(code_upper))
+            except Exception:
+                stripped_code = code_upper
+
+            best_rank = None
+            for alliance_id, code_set in alliance_codes_by_id.items():
+                if code_upper not in code_set and stripped_code not in code_set:
+                    continue
+
+                team_numbers = alliance_team_numbers_by_id.get(alliance_id, set())
+                if event_team is not None and team_numbers and event_team not in team_numbers:
+                    continue
+
+                priority = 2 if active_alliance and alliance_id == active_alliance.id else 1
+                recency = alliance_added_at_by_id.get(alliance_id, {}).get(code_upper) or alliance_added_at_by_id.get(alliance_id, {}).get(stripped_code)
+                recency = _added_at_value(recency)
+                candidate_rank = (priority, recency, _event_score(event), alliance_id)
+                if best_rank is None or candidate_rank > best_rank:
+                    best_rank = candidate_rank
+
+            return best_rank
+
+        grouped_events = {}
+        for event in events:
+            code_upper = _event_code(event)
+            year = _event_year(event)
+            key = (code_upper, year)
+            bucket = grouped_events.setdefault(key, {'team': None, 'alliance': None})
+
+            if _is_alliance_candidate(event, code_upper):
+                rank = _alliance_rank(event, code_upper)
+                if rank is not None:
+                    current_entry = bucket['alliance']
+                    if current_entry is None or rank > current_entry[0]:
+                        bucket['alliance'] = (rank, event)
+                else:
+                    current_entry = bucket['alliance']
+                    fallback_rank = (1, _added_at_value(None), _event_score(event), 0)
+                    if current_entry is None or fallback_rank > current_entry[0]:
+                        bucket['alliance'] = (fallback_rank, event)
+            else:
+                current_entry = bucket['team']
+                team_rank = (_event_score(event), _added_at_value(None))
+                if current_entry is None or team_rank > current_entry[0]:
+                    bucket['team'] = (team_rank, event)
+
+        deduped = []
+        for bucket in grouped_events.values():
+            if bucket['team'] is not None:
+                deduped.append(bucket['team'][1])
+            if bucket['alliance'] is not None:
+                deduped.append(bucket['alliance'][1])
+
+        deduped = sorted(
+            deduped,
+            key=lambda evt: (
+                getattr(evt, 'year', 0) or 0,
+                getattr(evt, 'name', '') or ''
+            ),
+            reverse=True
+        )
+        return deduped
+    except Exception:
+        return list(events or [])
+
+
 def filter_events_by_scouting_team(query=None):
     """Filter events by current user's scouting team number.
     If alliance mode is active, filters by alliance shared event codes AND alliance team numbers.
@@ -898,125 +1142,9 @@ def get_combined_dropdown_events():
     except Exception:
         pass
 
-    # Now apply the /events index style dedup and is_alliance labeling
-    def event_score(e):
-        score = 0
-        try:
-            if getattr(e, 'name', None):
-                score += 10
-            if getattr(e, 'location', None):
-                score += 5
-            if getattr(e, 'start_date', None):
-                score += 5
-            if getattr(e, 'end_date', None):
-                score += 3
-            if getattr(e, 'timezone', None):
-                score += 2
-            if getattr(e, 'year', None):
-                score += 1
-        except Exception:
-            pass
-        return score
-
-    # Separate alliance and team events to allow both to exist with same code
-    team_events_by_code = {}
-    alliance_events_by_code = {}
-    
-    # Precompute alliance sets
-    alliance = None
-    try:
-        from app.models import TeamAllianceStatus
-        alliance = TeamAllianceStatus.get_active_alliance_for_team(current_team) if current_team else None
-    except Exception:
-        alliance = None
-
-    alliance_event_codes_upper = set([c.strip().upper() for c in (alliance.get_shared_events() if alliance else [])]) if alliance else set()
-    member_team_numbers_set = set([m.team_number for m in (alliance.get_active_members() if alliance else [])]) if alliance else set()
-
-    from app.models import ScoutingAllianceEvent
-    
-    for e in combined:
-        code = (getattr(e, 'code', None) or f'__id_{getattr(e, "id", None)}').strip().upper()
-        
-        # Check if this is an alliance synthetic entry (created above with id='alliance_CODE')
-        is_synthetic_alliance = str(getattr(e, 'id', '')).startswith('alliance_')
-        
-        # Determine if this event should be treated as an alliance event
-        is_alliance_event = False
-        try:
-            if is_synthetic_alliance:
-                is_alliance_event = True
-            elif alliance:
-                # Check if event code is in alliance shared events
-                # Also consider if the code is year-prefixed (e.g., 2026TEST)
-                from app.utils.api_utils import strip_year_prefix
-                code_stripped = strip_year_prefix(code)
-                if code in alliance_event_codes_upper or code_stripped in alliance_event_codes_upper:
-                    # Only mark as alliance if it's NOT owned by the current user's team
-                    event_scouting_team = getattr(e, 'scouting_team_number', None)
-                    if event_scouting_team != current_team:
-                        is_alliance_event = True
-                else:
-                    # Check if event is owned by an alliance member (not current team)
-                    event_scouting_team = getattr(e, 'scouting_team_number', None)
-                    if event_scouting_team and event_scouting_team != current_team and event_scouting_team in member_team_numbers_set:
-                        is_alliance_event = True
-            
-            # Also check ScoutingAllianceEvent table but only if not owned by current team
-            if not is_alliance_event and not code.startswith('__id_'):
-                    event_scouting_team = getattr(e, 'scouting_team_number', None)
-                    if event_scouting_team != current_team:
-                        from app.utils.api_utils import strip_year_prefix
-                        code_stripped = strip_year_prefix(code)
-                        sae = ScoutingAllianceEvent.query.filter(
-                            ScoutingAllianceEvent.is_active == True,
-                            func.upper(ScoutingAllianceEvent.event_code).in_([code.upper(), code_stripped.upper()])
-                        ).first()
-                        if sae is not None:
-                            is_alliance_event = True
-        except Exception:
-            is_alliance_event = False
-        
-        # Set the is_alliance attribute
-        try:
-            setattr(e, 'is_alliance', is_alliance_event)
-        except Exception:
-            pass
-        
-        # Store in appropriate dictionary based on alliance status
-        if is_alliance_event:
-            if code in alliance_events_by_code:
-                if event_score(e) > event_score(alliance_events_by_code[code]):
-                    alliance_events_by_code[code] = e
-            else:
-                alliance_events_by_code[code] = e
-        else:
-            if code in team_events_by_code:
-                if event_score(e) > event_score(team_events_by_code[code]):
-                    team_events_by_code[code] = e
-            else:
-                team_events_by_code[code] = e
-
-    # In alliance mode, if both a team and alliance copy of the same event code exist,
-    # keep only the alliance entry for dropdown consistency across pages.
-    if alliance:
-        deduped_events = []
-        all_codes = set(team_events_by_code.keys()) | set(alliance_events_by_code.keys())
-        for code in all_codes:
-            if code in alliance_events_by_code:
-                deduped_events.append(alliance_events_by_code[code])
-            elif code in team_events_by_code:
-                deduped_events.append(team_events_by_code[code])
-    else:
-        deduped_events = list(team_events_by_code.values()) + list(alliance_events_by_code.values())
-    
-    # Sort by year desc, then name
-    try:
-        deduped_events = sorted(deduped_events, key=lambda x: (getattr(x, 'year', 0) or 0, getattr(x, 'name', '') or ''), reverse=True)
-    except Exception:
-        pass
-
-    return deduped_events
+    # Apply the shared display dedupe so dropdowns and list views choose the
+    # current alliance copy first, then the most recent alliance copy.
+    return dedupe_events_for_display(combined, current_team=current_team)
 
 
 def filter_users_by_scouting_team(query=None):
