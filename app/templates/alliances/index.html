@@ -280,6 +280,24 @@
         </div>
     </div>
 </div>
+
+<!-- Recommendation Team Details Modal -->
+<div class="modal fade" id="teamDetailsModal" tabindex="-1" aria-labelledby="teamDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable team-details-modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="teamDetailsModalLabel"><i class="fas fa-users me-2"></i>Team Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="teamDetailsBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-success" role="status"></div>
+                    <div class="small text-muted mt-2">Loading team details...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -307,6 +325,13 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAlliances();
     setupEventListeners();
     startPolling();
+
+    const detailsModal = document.getElementById('teamDetailsModal');
+    if (detailsModal) {
+        detailsModal.addEventListener('hidden.bs.modal', function() {
+            destroyTeamDetailsCharts();
+        });
+    }
 });
 
 function startPolling() {
@@ -906,7 +931,7 @@ function displayRecommendations() {
         }
         const predictedHtml = team.predicted_points ? `<small class="text-muted d-block">Next: ${team.predicted_points} pts</small>` : '';
         return `
-            <div class="recommendation-item border-bottom pb-2 mb-2" data-team-id="${team.team_id}">
+            <div class="recommendation-item border-bottom pb-2 mb-2 recommendation-clickable" data-team-id="${team.team_id}" data-team-number="${team.team_number}" title="Click for team details">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <div class="fw-bold ${badgeClass}">${warningIcon}${rankText} - Team ${team.team_number}</div>
@@ -921,7 +946,7 @@ function displayRecommendations() {
                     </div>
                     </div>
                     <div class="ms-2">
-                        <button class="btn btn-sm btn-outline-secondary" title="Decline" onclick="declineTeam(${team.team_number})">
+                        <button class="btn btn-sm btn-outline-secondary" title="Decline" onclick="declineTeam(${team.team_number}, event)">
                             <i class="fas fa-user-times d-inline d-md-none"></i>
                             <span class="d-none d-md-inline"><i class="fas fa-user-times me-1"></i>Declined</span>
                         </button>
@@ -967,7 +992,7 @@ function displayRecommendations() {
         }
         const predictedHtml = team.predicted_points ? `<div class="small text-muted mt-1">Next: ${team.predicted_points} pts</div>` : '';
         return `
-            <div class="recommendation-item border-bottom pb-2 mb-2" data-team-id="${team.team_id}">
+            <div class="recommendation-item border-bottom pb-2 mb-2 recommendation-clickable" data-team-id="${team.team_id}" data-team-number="${team.team_number}" title="Click for team details">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <div class="fw-bold ${badgeClass}">${warningIcon}${trendHtml}Team ${team.team_number}</div>
@@ -980,7 +1005,7 @@ function displayRecommendations() {
                         ${predictedHtml}
                     </div>
                     <div class="ms-2">
-                        <button class="btn btn-sm btn-outline-secondary" title="Decline" onclick="declineTeam(${team.team_number})">
+                        <button class="btn btn-sm btn-outline-secondary" title="Decline" onclick="declineTeam(${team.team_number}, event)">
                             <i class="fas fa-user-times d-inline d-md-none"></i>
                             <span class="d-none d-md-inline"><i class="fas fa-user-times me-1"></i>Declined</span>
                         </button>
@@ -991,6 +1016,276 @@ function displayRecommendations() {
     }).join('');
     
     container.innerHTML = html;
+
+    // Open team details when clicking recommendation rows (except action buttons).
+    container.querySelectorAll('.recommendation-item').forEach(item => {
+        item.addEventListener('click', function(evt) {
+            if (evt.target.closest('button, a')) return;
+            const teamNumber = this.dataset.teamNumber;
+            if (teamNumber) {
+                showTeamDetails(teamNumber);
+            }
+        });
+    });
+}
+
+function formatIsoDate(isoString) {
+    if (!isoString) return 'Unknown';
+    try {
+        return new Date(isoString).toLocaleString();
+    } catch (_) {
+        return String(isoString);
+    }
+}
+
+function renderCompactDataMap(data) {
+    if (!data || typeof data !== 'object' || Object.keys(data).length === 0) {
+        return '<span class="text-muted">No pit fields recorded</span>';
+    }
+    return Object.entries(data)
+        .map(([k, v]) => `<div><strong>${k}:</strong> ${String(v)}</div>`)
+        .join('');
+}
+
+let teamDetailsCharts = { points: null, source: null };
+
+function destroyTeamDetailsCharts() {
+    try {
+        if (teamDetailsCharts.points) {
+            teamDetailsCharts.points.destroy();
+            teamDetailsCharts.points = null;
+        }
+        if (teamDetailsCharts.source) {
+            teamDetailsCharts.source.destroy();
+            teamDetailsCharts.source = null;
+        }
+    } catch (_) {
+        // no-op
+    }
+}
+
+function renderTeamDetailsCharts(matches) {
+    if (typeof Chart === 'undefined') return;
+
+    const pointsCanvas = document.getElementById('teamDetailsPointsChart');
+    const sourceCanvas = document.getElementById('teamDetailsSourceChart');
+    if (!pointsCanvas || !sourceCanvas) return;
+
+    destroyTeamDetailsCharts();
+
+    const sorted = (matches || []).slice().sort((a, b) => (Number(a.match_number) || 0) - (Number(b.match_number) || 0));
+    const labels = sorted.map(m => `M${m.match_number ?? '-'}`);
+    const pointsData = sorted.map(m => Number(m.points) || 0);
+    const pointColors = sorted.map(m => m.is_estimate ? '#f59f00' : '#20c997');
+
+    const scoutedCount = sorted.filter(m => !m.is_estimate).length;
+    const estimatedCount = sorted.filter(m => m.is_estimate).length;
+
+    teamDetailsCharts.points = new Chart(pointsCanvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Points',
+                data: pointsData,
+                backgroundColor: pointColors,
+                borderColor: pointColors,
+                borderWidth: 1,
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { ticks: { color: '#c9d1d9' }, grid: { color: 'rgba(255,255,255,0.08)' } },
+                y: { beginAtZero: true, ticks: { color: '#c9d1d9' }, grid: { color: 'rgba(255,255,255,0.08)' } }
+            },
+            plugins: {
+                legend: { labels: { color: '#c9d1d9' } }
+            }
+        }
+    });
+
+    teamDetailsCharts.source = new Chart(sourceCanvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Scouted', 'Estimated'],
+            datasets: [{
+                data: [scoutedCount, estimatedCount],
+                backgroundColor: ['#20c997', '#f59f00'],
+                borderWidth: 0,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#c9d1d9' } }
+            }
+        }
+    });
+}
+
+function showTeamDetails(teamNumber) {
+    const modalEl = document.getElementById('teamDetailsModal');
+    const bodyEl = document.getElementById('teamDetailsBody');
+    const titleEl = document.getElementById('teamDetailsModalLabel');
+    if (!modalEl || !bodyEl || !titleEl) return;
+
+    titleEl.innerHTML = `<i class="fas fa-users me-2"></i>Team ${teamNumber} Details`;
+    bodyEl.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-success" role="status"></div>
+            <div class="small text-muted mt-2">Loading team details...</div>
+        </div>
+    `;
+
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    fetch(`/alliances/api/team_details?team_number=${encodeURIComponent(teamNumber)}&event_param=${encodeURIComponent(currentEventId || '')}`)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                bodyEl.innerHTML = `<div class="alert alert-danger">${data.error || 'Failed to load team details.'}</div>`;
+                return;
+            }
+
+            const team = data.team || {};
+            const eventInfo = data.event || {};
+            const summary = data.summary || {};
+            const matches = Array.isArray(data.match_points) ? data.match_points : [];
+            const notes = Array.isArray(data.qualitative_notes) ? data.qualitative_notes : [];
+            const pit = Array.isArray(data.pit_data) ? data.pit_data : [];
+
+            const matchesHtml = matches.length
+                ? `
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle team-details-match-table">
+                            <thead>
+                                <tr>
+                                    <th>Match</th>
+                                    <th>Type</th>
+                                    <th>Alliance</th>
+                                    <th>Points</th>
+                                    <th>Source</th>
+                                    <th>Scout</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${matches.map(m => `
+                                    <tr class="${m.is_estimate ? 'statbotics-estimate-row' : ''}">
+                                        <td>${m.match_number ?? '-'}</td>
+                                        <td>${m.match_type || '-'}</td>
+                                        <td>${m.alliance || '-'}</td>
+                                        <td><strong>${m.points ?? 0}</strong></td>
+                                        <td>${m.points_source === 'statbotics' ? '<span class="badge bg-warning text-dark">Statbotics Est.</span>' : '<span class="badge bg-success">Scouted</span>'}</td>
+                                        <td>${m.scout_name || '-'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `
+                : '<div class="alert alert-secondary mb-0">No match scouting data found for this event.</div>';
+
+            const notesHtml = notes.length
+                ? notes.map(n => `
+                    <div class="border rounded p-2 mb-2">
+                        <div class="small text-muted mb-1">Match ${n.match_number ?? '-'} | ${n.alliance || '-'} | ${n.scout_name || 'Unknown'} | ${formatIsoDate(n.timestamp)}</div>
+                        <div>${n.notes}</div>
+                    </div>
+                `).join('')
+                : '<div class="alert alert-secondary mb-0">No qualitative notes found for this team.</div>';
+
+            const pitHtml = pit.length
+                ? pit.map(p => `
+                    <div class="border rounded p-2 mb-2">
+                        <div class="small text-muted mb-1">${p.scout_name || 'Unknown'} | ${formatIsoDate(p.timestamp)}</div>
+                        ${renderCompactDataMap(p.data)}
+                    </div>
+                `).join('')
+                : '<div class="alert alert-secondary mb-0">No pit scouting data found.</div>';
+
+            bodyEl.innerHTML = `
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-title mb-2">Team Data</h6>
+                                <div><strong>Team:</strong> ${team.team_number || '-'} - ${team.team_name || ''}</div>
+                                <div><strong>Location:</strong> ${team.location || 'Unknown'}</div>
+                                <div><strong>Owning Scout Team:</strong> ${team.scouting_team_number ?? 'Unknown'}</div>
+                                <div><strong>Starting Points:</strong> ${team.starting_points ?? 0} (${team.starting_points_enabled ? 'Enabled' : 'Disabled'})</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-title mb-2">Event Summary</h6>
+                                <div><strong>Event:</strong> ${eventInfo.event_name || eventInfo.event_code || 'Unknown'}</div>
+                                <div><strong>Event Code/Year:</strong> ${eventInfo.event_code || '-'} / ${eventInfo.event_year || '-'}</div>
+                                <div><strong>Event Rows In Scope:</strong> ${eventInfo.event_rows_in_scope ?? 0}</div>
+                                <div><strong>Matches In Table:</strong> ${summary.match_count ?? 0}</div>
+                                <div><strong>Scouted Matches:</strong> ${summary.scouted_matches_count ?? 0}</div>
+                                <div><strong>Estimated Matches:</strong> ${summary.estimated_matches_count ?? 0}</div>
+                                <div><strong>Average Points:</strong> ${summary.average_points ?? 0}</div>
+                                <div><strong>Avg Auto/Teleop/Endgame:</strong> ${(summary.average_auto_points ?? 0)} / ${(summary.average_teleop_points ?? 0)} / ${(summary.average_endgame_points ?? 0)}</div>
+                                <div><strong>Distinct Scouts:</strong> ${summary.distinct_scouts_count ?? 0}</div>
+                                ${summary.statbotics_estimate != null ? `<div><strong>Statbotics Per-Match Estimate:</strong> ${summary.statbotics_estimate}</div>` : ''}
+                                <div><strong>Qualitative Notes:</strong> ${summary.qualitative_notes_count ?? 0}</div>
+                                <div><strong>Pit Entries:</strong> ${summary.pit_entries_count ?? 0}</div>
+                                <div><strong>Last Scouted Match Entry:</strong> ${formatIsoDate(summary.latest_scouted_match_at)}</div>
+                                <div><strong>Last Qualitative Note:</strong> ${formatIsoDate(summary.latest_qual_note_at)}</div>
+                                <div><strong>Last Pit Entry:</strong> ${formatIsoDate(summary.latest_pit_entry_at)}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-8">
+                        <div class="card h-100">
+                            <div class="card-header"><strong>Points Trend</strong></div>
+                            <div class="card-body" style="height: 260px;">
+                                <canvas id="teamDetailsPointsChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="card h-100">
+                            <div class="card-header"><strong>Data Source Split</strong></div>
+                            <div class="card-body" style="height: 260px;">
+                                <canvas id="teamDetailsSourceChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header"><strong>Points By Match</strong></div>
+                    <div class="card-body">${matchesHtml}</div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header"><strong>Qualitative Notes</strong></div>
+                    <div class="card-body">${notesHtml}</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><strong>Pit / Team Data</strong></div>
+                    <div class="card-body">${pitHtml}</div>
+                </div>
+            `;
+
+            renderTeamDetailsCharts(matches);
+        })
+        .catch(error => {
+            console.error('Error loading team details:', error);
+            bodyEl.innerHTML = '<div class="alert alert-danger">Network error while loading team details.</div>';
+        });
 }
 
 function showTeamSelectionModal() {
@@ -1310,7 +1605,11 @@ function updateAllianceStrengths() {
     }
 }
 
-function declineTeam(teamNumber) {
+function declineTeam(teamNumber, evt) {
+    if (evt) {
+        evt.stopPropagation();
+        evt.preventDefault();
+    }
     if (!confirm(`Decline Team ${teamNumber} from recommendations?`)) return;
 
     fetch('/alliances/api/add_to_list', {
@@ -1378,6 +1677,25 @@ function declineTeam(teamNumber) {
     transition: all 0.2s ease-in-out;
     position: relative;
     z-index: 1;
+}
+
+.recommendation-clickable {
+    cursor: pointer;
+}
+
+.recommendation-clickable:hover {
+    background-color: rgba(25, 135, 84, 0.06);
+}
+
+.team-details-match-table th,
+.team-details-match-table td {
+    color: #e6edf3 !important;
+}
+
+.team-details-match-table .statbotics-estimate-row td {
+    background-color: #ffe8a3 !important;
+    color: #1f2328 !important;
+    font-weight: 600;
 }
 
 /* Ensure the entire card header with dropdown has higher z-index */
@@ -1680,6 +1998,20 @@ body.modern-layout.dark-mode .modal-header.bg-primary {
 body.modern-layout.dark-mode .modal-content .list-group-item-action:hover,
 body.modern-layout.dark-mode .modal-content .list-group-item-action:focus {
     background-color: #f8f9fa !important;
+}
+
+/* Let the Team Details modal expand wider on larger screens. */
+#teamDetailsModal .team-details-modal-dialog {
+    width: min(96vw, 1700px);
+    max-width: min(96vw, 1700px);
+}
+
+@media (max-width: 991.98px) {
+    #teamDetailsModal .team-details-modal-dialog {
+        width: calc(100vw - 1rem);
+        max-width: calc(100vw - 1rem);
+        margin: 0.5rem;
+    }
 }
 </style>
 {% endblock %}

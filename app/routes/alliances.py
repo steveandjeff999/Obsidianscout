@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app
 from flask_socketio import emit, join_room, leave_room
-from app.models import AllianceSelection, Team, Event, ScoutingData, DoNotPickEntry, AvoidEntry, db, team_event, DeclinedEntry, WantListEntry, TeamTagEntry
-from app.utils.analysis import calculate_team_metrics
+from app.models import AllianceSelection, Team, Event, Match, ScoutingData, DoNotPickEntry, AvoidEntry, db, team_event, DeclinedEntry, WantListEntry, TeamTagEntry
+from app.utils.analysis import calculate_team_metrics, get_epa_metrics_for_team
+from app.utils.statbotics_api_utils import get_statbotics_team_matches
 from flask_login import current_user
 from app import socketio
 from sqlalchemy import func, desc, and_
@@ -9,7 +10,12 @@ import json
 import re
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_current_game_config, get_effective_game_config
-from app.utils.alliance_data import get_all_teams_for_alliance
+from app.utils.alliance_data import (
+    get_all_teams_for_alliance,
+    get_scouting_data_for_team,
+    get_all_qualitative_data,
+    get_all_pit_data,
+)
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_events_by_scouting_team,
     filter_alliance_selections_by_scouting_team, filter_do_not_pick_by_scouting_team,
@@ -1280,6 +1286,360 @@ def team_metrics():
         return jsonify({'team_number': team.team_number, 'total_points': round(float(total), 1)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/api/team_details')
+def team_details():
+    """Return detailed team context for alliances recommendations.
+
+    Query params:
+      - team_number (required)
+      - event_param (optional): event id/code/alliance_<CODE>
+    """
+    team_number = request.args.get('team_number', type=int)
+    event_param = request.args.get('event_param', '').strip()
+
+    if not team_number:
+        return jsonify({'success': False, 'error': 'team_number required'}), 400
+
+    team = filter_teams_by_scouting_team().filter_by(team_number=team_number).first()
+    if not team:
+        team = Team.query.filter_by(team_number=team_number).first()
+
+    if not team:
+        return jsonify({'success': False, 'error': 'Team not found'}), 404
+
+    def _resolve_event_scope(param):
+        event_id_local = None
+        event_code_local = ''
+        scoped_ids = []
+
+        if param:
+            event_id_local = resolve_event_id_from_param(param)
+            if event_id_local is None and param.isdigit():
+                event_id_local = int(param)
+
+        event_obj = Event.query.get(event_id_local) if event_id_local else None
+        if event_obj and getattr(event_obj, 'code', None):
+            event_code_local = (event_obj.code or '').strip().upper()
+        elif param:
+            raw = str(param).strip()
+            if raw.startswith('alliance_'):
+                event_code_local = raw[len('alliance_'):].strip().upper()
+            elif not raw.isdigit():
+                event_code_local = raw.upper()
+
+        if event_code_local:
+            code_variants = [event_code_local]
+            if len(event_code_local) > 4 and event_code_local[:4].isdigit():
+                code_variants.append(event_code_local[4:])
+
+            scoped_ids = [
+                row[0] for row in Event.query.with_entities(Event.id)
+                .filter(func.upper(Event.code).in_(code_variants)).all()
+            ]
+
+        if event_id_local is not None and event_id_local not in scoped_ids:
+            scoped_ids.append(event_id_local)
+
+        return event_id_local, event_code_local, scoped_ids
+
+    event_id, event_code, scoped_event_ids = _resolve_event_scope(event_param)
+    game_config = get_effective_game_config()
+
+    def _entry_total_points(entry):
+        try:
+            auto_pts = entry._calculate_auto_points_dynamic(entry.data, game_config)
+            teleop_pts = entry._calculate_teleop_points_dynamic(entry.data, game_config)
+            endgame_pts = entry._calculate_endgame_points_dynamic(entry.data, game_config)
+            return round(float(auto_pts + teleop_pts + endgame_pts), 1)
+        except Exception:
+            try:
+                data = entry.data if isinstance(entry.data, dict) else {}
+                total = sum(float(v) for v in data.values() if isinstance(v, (int, float)))
+                return round(total, 1)
+            except Exception:
+                return 0.0
+
+    def _entry_component_points(entry):
+        try:
+            auto_pts = float(entry._calculate_auto_points_dynamic(entry.data, game_config) or 0)
+            teleop_pts = float(entry._calculate_teleop_points_dynamic(entry.data, game_config) or 0)
+            endgame_pts = float(entry._calculate_endgame_points_dynamic(entry.data, game_config) or 0)
+            return auto_pts, teleop_pts, endgame_pts
+        except Exception:
+            return 0.0, 0.0, 0.0
+
+    scouting_entries, _ = get_scouting_data_for_team(team.id, event_id=event_id if isinstance(event_id, int) else None)
+
+    filtered_entries = []
+    for entry in scouting_entries:
+        match_obj = getattr(entry, 'match', None)
+        if not match_obj:
+            continue
+        if scoped_event_ids and getattr(match_obj, 'event_id', None) not in scoped_event_ids:
+            continue
+        if event_code:
+            match_code = ((getattr(match_obj, 'event', None) and getattr(match_obj.event, 'code', None)) or '').upper()
+            if match_code and match_code != event_code:
+                continue
+        filtered_entries.append(entry)
+
+    # Build event-scoped match list for this team so we can fill gaps with estimates.
+    team_matches = []
+    if scoped_event_ids:
+        candidate_matches = Match.query.filter(Match.event_id.in_(scoped_event_ids)).order_by(*Match.schedule_order()).all()
+        for m in candidate_matches:
+            try:
+                if team.team_number in (m.red_teams + m.blue_teams):
+                    team_matches.append(m)
+            except Exception:
+                continue
+
+    # Deduplicate mirrored matches that can occur when alliance members each have
+    # their own local Event rows for the same event code.
+    deduped_matches = {}
+    for m in team_matches:
+        match_key = (
+            (getattr(m, 'comp_level', None) or '').lower(),
+            int(getattr(m, 'set_number', 0) or 0),
+            int(getattr(m, 'match_number', 0) or 0),
+            str(getattr(m, 'match_type', '') or '').lower(),
+        )
+        if match_key not in deduped_matches:
+            deduped_matches[match_key] = m
+    team_matches = list(deduped_matches.values())
+
+    match_points = []
+    total_points_accum = 0.0
+    auto_points_accum = 0.0
+    teleop_points_accum = 0.0
+    endgame_points_accum = 0.0
+    for entry in sorted(filtered_entries, key=lambda e: (getattr(getattr(e, 'match', None), 'match_number', 0) or 0)):
+        match_obj = entry.match
+        pts = _entry_total_points(entry)
+        auto_pts, teleop_pts, endgame_pts = _entry_component_points(entry)
+        total_points_accum += pts
+        auto_points_accum += auto_pts
+        teleop_points_accum += teleop_pts
+        endgame_points_accum += endgame_pts
+        match_points.append({
+            'match_id': match_obj.id,
+            'match_number': match_obj.match_number,
+            'match_type': match_obj.match_type,
+            'alliance': getattr(entry, 'alliance', None),
+            'points': pts,
+            'scout_name': getattr(entry, 'scout_name', '') or 'Unknown',
+            'timestamp': getattr(entry, 'timestamp', None).isoformat() if getattr(entry, 'timestamp', None) else None,
+            'points_source': 'scouted',
+            'is_estimate': False
+        })
+
+    # Fill missing match rows with per-match historical Statbotics EPA estimates.
+    statbotics_estimate = None
+    statbotics_by_match = {}
+
+    def _normalize_comp_level(match_obj):
+        level = (getattr(match_obj, 'comp_level', None) or '').lower()
+        if level in ('qm', 'ef', 'qf', 'sf', 'f'):
+            return level
+        mtype = (getattr(match_obj, 'match_type', None) or '').strip().lower()
+        if 'qual' in mtype:
+            return 'qm'
+        if 'playoff' in mtype or 'elim' in mtype:
+            return 'qf'
+        return ''
+
+    def _parse_statbotics_match_key(key):
+        # Example keys: 2025cabe_qm12, 2025cabe_qf1m2, 2025cabe_f1m1
+        text = str(key or '')
+        m = re.search(r'_(qm|ef|qf|sf|f)(\d+)(?:m(\d+))?$', text)
+        if not m:
+            return None
+        comp = m.group(1)
+        left = int(m.group(2) or 0)
+        right = int(m.group(3) or 0)
+        if comp == 'qm':
+            return comp, 0, left
+        return comp, left, right
+
+    if team_matches:
+        event_keys = []
+        events_for_scope = Event.query.filter(Event.id.in_(scoped_event_ids)).all() if scoped_event_ids else []
+        for ev in events_for_scope:
+            code = str(getattr(ev, 'code', '') or '').strip().lower()
+            year = getattr(ev, 'year', None)
+            if not code:
+                continue
+            if year and not code.startswith(str(year)):
+                event_keys.append(f"{year}{code}")
+            event_keys.append(code)
+
+        # Keep order but remove duplicates.
+        seen_event_keys = set()
+        event_keys = [k for k in event_keys if not (k in seen_event_keys or seen_event_keys.add(k))]
+
+        statbotics_rows = []
+        for key in event_keys:
+            rows = get_statbotics_team_matches(team.team_number, event_key=key, limit=300)
+            if rows:
+                statbotics_rows = rows
+                break
+
+        for row in statbotics_rows:
+            parsed = _parse_statbotics_match_key(row.get('match'))
+            if not parsed:
+                continue
+            sb_comp, sb_set, sb_match_num = parsed
+            sb_points = (((row.get('epa') or {}).get('total_points')) if isinstance(row.get('epa'), dict) else None)
+            if sb_points is None:
+                continue
+            sb_alliance = row.get('alliance')
+            statbotics_by_match[(sb_comp, int(sb_set), int(sb_match_num), str(sb_alliance or ''))] = round(max(float(sb_points), 0.0), 1)
+
+        # Fallback single estimate if no per-match history is available.
+        if not statbotics_by_match:
+            raw_estimate = (get_epa_metrics_for_team(team.team_number) or {}).get('total')
+            if raw_estimate is not None:
+                statbotics_estimate = round(max(float(raw_estimate), 0.0), 1)
+
+    scouted_match_ids = {row.get('match_id') for row in match_points if row.get('match_id') is not None}
+    if team_matches:
+        for m in team_matches:
+            if m.id in scouted_match_ids:
+                continue
+            if team.team_number in m.red_teams:
+                alliance_side = 'red'
+            elif team.team_number in m.blue_teams:
+                alliance_side = 'blue'
+            else:
+                alliance_side = None
+
+            comp_level = _normalize_comp_level(m)
+            set_number = int(getattr(m, 'set_number', 0) or 0)
+            match_number = int(getattr(m, 'match_number', 0) or 0)
+            estimate = statbotics_by_match.get((comp_level, set_number, match_number, str(alliance_side or '')))
+
+            # Some sources omit alliance side; try without it.
+            if estimate is None:
+                for key_tuple, val in statbotics_by_match.items():
+                    if key_tuple[:3] == (comp_level, set_number, match_number):
+                        estimate = val
+                        break
+
+            if estimate is None:
+                estimate = statbotics_estimate
+
+            if estimate is None:
+                continue
+
+            total_points_accum += estimate
+            match_points.append({
+                'match_id': m.id,
+                'match_number': m.match_number,
+                'match_type': m.match_type,
+                'alliance': alliance_side,
+                'points': estimate,
+                'scout_name': 'Statbotics Historical Estimate',
+                'timestamp': getattr(m, 'scheduled_time', None).isoformat() if getattr(m, 'scheduled_time', None) else None,
+                'points_source': 'statbotics',
+                'is_estimate': True
+            })
+
+    match_points.sort(key=lambda row: (row.get('match_number') if row.get('match_number') is not None else 9999, row.get('is_estimate', False)))
+
+    qualitative_entries, _, _ = get_all_qualitative_data(event_ids=scoped_event_ids if scoped_event_ids else None)
+    qualitative_notes = []
+    team_key = f'team_{team.team_number}'
+    for qentry in qualitative_entries:
+        qdata = qentry.data if isinstance(getattr(qentry, 'data', None), dict) else {}
+        for alliance_key in ['red', 'blue', 'individual']:
+            alliance_data = qdata.get(alliance_key, {})
+            if not isinstance(alliance_data, dict):
+                continue
+            tdata = alliance_data.get(team_key)
+            if not isinstance(tdata, dict):
+                continue
+            note = str(tdata.get('notes') or '').strip()
+            if not note:
+                continue
+            qmatch = getattr(qentry, 'match', None)
+            qualitative_notes.append({
+                'match_id': qmatch.id if qmatch else None,
+                'match_number': qmatch.match_number if qmatch else None,
+                'alliance': alliance_key,
+                'notes': note,
+                'scout_name': getattr(qentry, 'scout_name', '') or 'Unknown',
+                'timestamp': qentry.timestamp.isoformat() if getattr(qentry, 'timestamp', None) else None
+            })
+
+    qualitative_notes.sort(key=lambda n: (n['match_number'] if n['match_number'] is not None else 9999))
+
+    pit_entries, _, _ = get_all_pit_data(team_number=team.team_number)
+    pit_summary = []
+    for p in pit_entries:
+        pdata = p.data if isinstance(getattr(p, 'data', None), dict) else {}
+        # Keep the payload small but useful.
+        compact = {}
+        for k, v in list(pdata.items())[:8]:
+            compact[str(k)] = v
+        pit_summary.append({
+            'scout_name': getattr(p, 'scout_name', '') or 'Unknown',
+            'timestamp': p.timestamp.isoformat() if getattr(p, 'timestamp', None) else None,
+            'data': compact
+        })
+
+    def _latest_iso(values):
+        cleaned = [v for v in values if v]
+        if not cleaned:
+            return None
+        return max(cleaned)
+
+    scouted_only_rows = [m for m in match_points if not m.get('is_estimate')]
+    unique_scouts = {str(m.get('scout_name') or '').strip() for m in scouted_only_rows if m.get('scout_name')}
+    unique_scouts.discard('')
+
+    detected_event = Event.query.filter(Event.id.in_(scoped_event_ids)).first() if scoped_event_ids else None
+    event_context = {
+        'event_code': (detected_event.code if detected_event and getattr(detected_event, 'code', None) else event_code),
+        'event_name': (detected_event.name if detected_event and getattr(detected_event, 'name', None) else None),
+        'event_year': (detected_event.year if detected_event and getattr(detected_event, 'year', None) else None),
+        'event_rows_in_scope': len(scoped_event_ids),
+    }
+
+    return jsonify({
+        'success': True,
+        'team': {
+            'team_id': team.id,
+            'team_number': team.team_number,
+            'team_name': team.team_name or f'Team {team.team_number}',
+            'location': team.location,
+            'scouting_team_number': getattr(team, 'scouting_team_number', None),
+            'starting_points': team.starting_points,
+            'starting_points_enabled': bool(getattr(team, 'starting_points_enabled', False)),
+        },
+        'event': event_context,
+        'summary': {
+            'match_count': len(match_points),
+            'average_points': round((total_points_accum / len(match_points)), 1) if match_points else 0,
+            'total_points': round(total_points_accum, 1),
+            'average_auto_points': round((auto_points_accum / len(filtered_entries)), 1) if filtered_entries else 0,
+            'average_teleop_points': round((teleop_points_accum / len(filtered_entries)), 1) if filtered_entries else 0,
+            'average_endgame_points': round((endgame_points_accum / len(filtered_entries)), 1) if filtered_entries else 0,
+            'qualitative_notes_count': len(qualitative_notes),
+            'pit_entries_count': len(pit_summary),
+            'estimated_matches_count': len([m for m in match_points if m.get('is_estimate')]),
+            'scouted_matches_count': len([m for m in match_points if not m.get('is_estimate')]),
+            'distinct_scouts_count': len(unique_scouts),
+            'latest_scouted_match_at': _latest_iso([m.get('timestamp') for m in scouted_only_rows]),
+            'latest_qual_note_at': _latest_iso([n.get('timestamp') for n in qualitative_notes]),
+            'latest_pit_entry_at': _latest_iso([p.get('timestamp') for p in pit_summary]),
+            'statbotics_estimate': statbotics_estimate,
+        },
+        'match_points': match_points,
+        'qualitative_notes': qualitative_notes,
+        'pit_data': pit_summary[:5],
+    })
 
 @bp.route('/api/remove_from_list', methods=['POST'])
 def remove_from_list():

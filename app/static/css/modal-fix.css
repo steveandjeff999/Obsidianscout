@@ -38,6 +38,20 @@
     animation: none !important;
 }
 
+/* Allow the alliances Team Details modal to be wider than the global 500px lock. */
+#teamDetailsModal .team-details-modal-dialog {
+    width: min(96vw, 1700px) !important;
+    max-width: min(96vw, 1700px) !important;
+}
+
+@media (max-width: 991.98px) {
+    #teamDetailsModal .team-details-modal-dialog {
+        width: calc(100vw - 1rem) !important;
+        max-width: calc(100vw - 1rem) !important;
+        margin: 0.5rem !important;
+    }
+}
+
 /* Modal content */
 .modal-content {
     position: relative !important;
