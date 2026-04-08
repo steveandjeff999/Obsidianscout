@@ -317,75 +317,33 @@
         }
 
         function init() {
-            if (document.documentElement.classList.contains('dark-mode')) {
-                applyDarkToSuggestions(document);
+            if (!document.documentElement.classList.contains('dark-mode')) return;
+            applyDarkToSuggestions(document);
 
-                // Watch for new suggestion elements being added dynamically
-                const bodyObs = new MutationObserver(mutations => {
-                    mutations.forEach(m => {
-                        m.addedNodes && m.addedNodes.forEach(node => {
-                            if (node.nodeType === 1) {
-                                if (node.matches && (node.matches('.enhanced-search-suggestions') || node.matches('.enhanced-search-suggestions-main') || node.id === 'searchSuggestionsTop' || node.id === 'suggestions')) {
-                                    applyDarkToSuggestions(node.parentNode || document);
-                                }
-                            }
-                        });
-                    });
-                });
-                bodyObs.observe(document.body, { childList: true, subtree: true });
+            // Apply lazily when users interact with search, avoiding a subtree observer
+            // that runs for every DOM mutation site-wide.
+            document.addEventListener('focusin', function(evt) {
+                const target = evt.target;
+                if (target && (target.matches('.enhanced-search-input') || target.matches('#quick-search-input'))) {
+                    window.requestAnimationFrame(function(){ applyDarkToSuggestions(document); });
+                }
+            });
 
-                // Also observe html element class changes (theme toggles)
-                const htmlObs = new MutationObserver(mutations => {
-                    mutations.forEach(m => {
-                        if (m.attributeName === 'class') {
-                            if (document.documentElement.classList.contains('dark-mode')) applyDarkToSuggestions(document);
-                        }
-                    });
+            // Observe theme class changes only (very low-cost) and re-apply as needed.
+            const htmlObs = new MutationObserver(function(mutations) {
+                mutations.forEach(function(m) {
+                    if (m.attributeName === 'class' && document.documentElement.classList.contains('dark-mode')) {
+                        applyDarkToSuggestions(document);
+                    }
                 });
-                htmlObs.observe(document.documentElement, { attributes: true });
-            }
+            });
+            htmlObs.observe(document.documentElement, { attributes: true });
         }
 
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
     })();
     </script>
-    <script>
-    // Aggressive short-duration re-apply to catch suggestion elements created very early
-    (function(){
-        function reapplyDark() {
-            try {
-                if (!document.documentElement.classList.contains('dark-mode')) return;
-                const sel = ['.enhanced-search-suggestions', '.enhanced-search-suggestions-main', '#suggestions', '#searchSuggestionsTop'];
-                sel.forEach(s => {
-                    document.querySelectorAll(s).forEach(el => {
-                        el.style.setProperty('background', '#0b0b0d', 'important');
-                        el.style.setProperty('color', '#ffffff', 'important');
-                        el.style.setProperty('border-color', 'rgba(255,255,255,0.04)', 'important');
-                        el.querySelectorAll('.suggestion-item').forEach(it => {
-                            it.style.setProperty('background', 'transparent', 'important');
-                            it.style.setProperty('color', '#ffffff', 'important');
-                        });
-                    });
-                });
-            } catch (e) { console && console.debug && console.debug('reapplyDark error', e); }
-        }
 
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-            // Run immediately and schedule short repeated attempts
-            reapplyDark();
-        } else {
-            document.addEventListener('DOMContentLoaded', reapplyDark);
-        }
-
-        // Run repeatedly for a short window to catch dynamically added inline-styled elements
-        let tries = 0;
-        const id = setInterval(() => {
-            reapplyDark();
-            tries += 1;
-            if (tries > 20) clearInterval(id); // ~2 seconds at 100ms intervals
-        }, 100);
-    })();
-    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
     <meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
@@ -1768,25 +1726,7 @@
             window.addEventListener('resize', function(){ try{ ensure(); } catch(e){} });
         })();
 
-        // Avoid repositioning fixed dropdowns while page scrolls; only reposition if user opens a dropdown or resizes
-        let lastScrollY = window.scrollY;
-        window.addEventListener('scroll', function() {
-            // If any topbar dropdown menu is positioned fixed, don't adjust its position on scroll
-            const fixedMenus = document.querySelectorAll('.topbar .dropdown-menu');
-            let hasFixed = false;
-            fixedMenus.forEach(menu => {
-                if (getComputedStyle(menu).position === 'fixed' && menu.classList.contains('show')) hasFixed = true;
-            });
-            if (hasFixed) {
-                // nothing to do while scrolling
-                lastScrollY = window.scrollY;
-                return;
-            }
-
-            // If no fixed menus, allow repositioning logic for dropdowns that rely on normal flow
-            // (for example on desktop navbar dropdowns not positioned fixed)
-            lastScrollY = window.scrollY;
-        });
+        // Removed no-op per-scroll menu checks to keep scrolling work minimal.
     })();
     </script>
     <script>
@@ -3261,8 +3201,26 @@
         }
         // Update on page load
         updateChatUnreadBadge();
-        // Poll every 5 seconds so notifications stay timely across all pages
-        setInterval(updateChatUnreadBadge, 5000);
+        // Poll less aggressively and pause while tab is hidden to reduce background work.
+        let chatBadgePoller = null;
+        function startChatBadgePolling() {
+            if (chatBadgePoller) return;
+            chatBadgePoller = setInterval(updateChatUnreadBadge, 15000);
+        }
+        function stopChatBadgePolling() {
+            if (!chatBadgePoller) return;
+            clearInterval(chatBadgePoller);
+            chatBadgePoller = null;
+        }
+        if (document.visibilityState === 'visible') startChatBadgePolling();
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                updateChatUnreadBadge();
+                startChatBadgePolling();
+            } else {
+                stopChatBadgePolling();
+            }
+        });
         // Listen for real-time DM and group chat events if socket.io is available
         if (window.socket) {
             window.socket.on('dm_message', function(msg) {
@@ -4758,21 +4716,20 @@
             console.warn('searchSuggestions element not found for event delegation');
         }
         
-        // Reposition dropdown on window resize
-        window.addEventListener('resize', function() {
-            if (searchSuggestions && searchSuggestions.classList.contains('show')) {
+        // Reposition dropdown using one rAF-throttled scheduler to avoid running
+        // layout work on every native scroll/resize event.
+        let suggestionRepositionQueued = false;
+        function scheduleSuggestionReposition() {
+            if (!searchSuggestions || !searchSuggestions.classList.contains('show')) return;
+            if (suggestionRepositionQueued) return;
+            suggestionRepositionQueued = true;
+            window.requestAnimationFrame(function() {
+                suggestionRepositionQueued = false;
                 positionSearchSuggestions();
-            }
-        });
-        
-        // Reposition dropdown on scroll
-        window.addEventListener('scroll', function() {
-            if (searchSuggestions && searchSuggestions.classList.contains('show')) {
-                positionSearchSuggestions();
-            }
-        });
-        
-        window.addEventListener('resize', positionSearchSuggestions);
+            });
+        }
+        window.addEventListener('resize', scheduleSuggestionReposition, { passive: true });
+        window.addEventListener('scroll', scheduleSuggestionReposition, { passive: true });
         
         // Enhanced keyboard navigation
         searchInput.addEventListener('keydown', function(e) {

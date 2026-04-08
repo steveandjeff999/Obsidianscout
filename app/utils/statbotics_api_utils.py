@@ -496,6 +496,41 @@ def get_statbotics_team_total_epa(team_number: int | str) -> Optional[float]:
     return parsed.get("total") if parsed else None
 
 
+def get_statbotics_team_matches(team_number: int | str,
+                                event_key: Optional[str] = None,
+                                year: Optional[int] = None,
+                                limit: int = 200) -> list[Dict[str, Any]]:
+    """Return historical per-match Statbotics rows for a team.
+
+    This uses the official TeamMatch endpoint so callers can use the match-time
+    EPA estimate (``epa.total_points``) instead of the current team EPA.
+    """
+    params: Dict[str, Any] = {
+        "team": int(team_number),
+        "limit": max(1, min(int(limit or 200), 1000)),
+    }
+    if event_key:
+        params["event"] = str(event_key).strip().lower()
+    if year:
+        params["year"] = int(year)
+
+    try:
+        resp = requests.get(
+            f"{STATBOTICS_API_BASE}/team_matches",
+            params=params,
+            headers={"Accept": "application/json", "User-Agent": _USER_AGENT},
+            timeout=_DEFAULT_TIMEOUT,
+        )
+        if resp.status_code != 200:
+            return []
+        payload = resp.json()
+        if not isinstance(payload, list):
+            return []
+        return [row for row in payload if isinstance(row, dict)]
+    except Exception:
+        return []
+
+
 def clear_epa_caches() -> None:
     """Clear ALL in-memory EPA caches.
 
