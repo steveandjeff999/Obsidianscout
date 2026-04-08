@@ -1,7 +1,7 @@
 // Service Worker for ObsidianScout - Simplified version without offline analytics
 
 // Increment the CACHE_VERSION to force clients to update caches when you change assets
-const CACHE_VERSION = 14;
+const CACHE_VERSION = 16;
 const CACHE_NAME = `scout-app-cache-v${CACHE_VERSION}`;
 const ROBOT_IMAGE_PATHS = ['/pit_scouting/image/', '/pit-scouting/image/'];
 
