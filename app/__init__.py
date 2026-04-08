@@ -1256,26 +1256,20 @@ def create_app(test_config=None, use_postgres=False):
     # Serve service worker at root path so tools (and PWABuilder) can fetch it at /sw.js
     @app.route('/sw.js')
     def service_worker():
-        # Prefer a root-level sw.js (project root) so service worker can be placed at repo root.
-        # Fall back to static folder if root-level sw.js is not present.
+        # Serve the root-level sw.js from the project root only.
+        # Do not fall back to app/static/sw.js.
         import os.path
         root_path = os.path.abspath(os.path.join(app.root_path, '..'))
         possible_root = os.path.join(root_path, 'sw.js')
-        
-        if os.path.exists(possible_root):
-            response = send_from_directory(root_path, 'sw.js')
-        else:
-            # Check in static folder
-            static_sw = os.path.join(app.static_folder, 'sw.js')
-            if os.path.exists(static_sw):
-                response = send_from_directory(app.static_folder, 'sw.js')
-            else:
-                # Last resort - return error
-                from flask import abort
-                abort(404)
-        
-        # Set proper MIME type for JavaScript
+
+        if not os.path.exists(possible_root):
+            from flask import abort
+            abort(404)
+
+        response = send_from_directory(root_path, 'sw.js')
+        response.headers['Cache-Control'] = 'public, max-age=86400'
         response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
+        return response
         # Prevent caching of service worker to ensure updates are loaded
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
