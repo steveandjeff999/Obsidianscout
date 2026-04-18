@@ -1,0 +1,1211 @@
+/* ============================================================
+   MODERN REFRESH — Pure Black & White
+   Stark monochrome aesthetic. Pure #000 background, clean
+   card surfaces, no colored gradients on backgrounds.
+   Precision typography, subtle depth, seamless elements.
+   ============================================================ */
+
+/* ---------------------------------------------------------------
+   1. COLOR SYSTEM — monochrome with single accent
+   --------------------------------------------------------------- */
+:root {
+    --mr-black: #000000;
+    --mr-white: #ffffff;
+    --mr-grey-50: #fafafa;
+    --mr-grey-100: #f5f5f5;
+    --mr-grey-200: #e5e5e5;
+    --mr-grey-300: #d4d4d4;
+    --mr-grey-400: #a3a3a3;
+    --mr-grey-500: #737373;
+    --mr-grey-600: #525252;
+    --mr-grey-700: #404040;
+    --mr-grey-800: #262626;
+    --mr-grey-900: #171717;
+    --mr-grey-950: #0a0a0a;
+
+    /* Single accent — a clean blue that works on both B&W */
+    --mr-accent: #3b82f6;
+    --mr-accent-hover: #2563eb;
+    --mr-accent-muted: rgba(59, 130, 246, 0.12);
+
+    /* Surfaces */
+    --mr-card-dark: #111111;
+    --mr-card-dark-hover: #1a1a1a;
+    --mr-card-border-dark: rgba(255, 255, 255, 0.08);
+    --mr-card-border-dark-hover: rgba(255, 255, 255, 0.14);
+
+    /* Motion */
+    --mr-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --mr-duration: 0.25s;
+    --mr-radius: 14px;
+    --mr-radius-sm: 10px;
+}
+
+/* ---------------------------------------------------------------
+   2. DARK MODE — pure black background
+   --------------------------------------------------------------- */
+html,
+html.dark-mode,
+html.dark-mode body,
+body.dark-mode,
+body.modern-layout.dark-mode,
+html[data-bs-theme="dark"],
+body[data-bs-theme="dark"] {
+    background: #000000 !important;
+    background-color: #000000 !important;
+    background-image: none !important;
+    color: var(--mr-grey-200) !important;
+    min-height: 100vh !important;
+    height: auto !important;
+}
+
+/* ---------------------------------------------------------------
+   3. CARDS — solid dark surface, clean border, no glass blur
+   --------------------------------------------------------------- */
+html body.dark-mode .card,
+html body.dark-mode .card .card-body,
+html body.modern-layout.dark-mode .card,
+html body.modern-layout.dark-mode .card .card-body,
+body.dark-mode .dashboard-card,
+body.dark-mode .stat-card,
+body.dark-mode .stat-card.card-interactive,
+body.dark-mode .data-card,
+body.dark-mode .team-card,
+body.dark-mode .match-card,
+body.modern-layout.dark-mode .dashboard-card,
+body.modern-layout.dark-mode .stat-card,
+body.modern-layout.dark-mode .data-card,
+body.modern-layout.dark-mode .team-card,
+body.modern-layout.dark-mode .match-card,
+html body.dark-mode .widget-view-card,
+html body.dark-mode .widget-view-card .card-body {
+    background: var(--mr-card-dark) !important;
+    background-image: none !important;
+    border: 1px solid var(--mr-card-border-dark) !important;
+    border-radius: var(--mr-radius) !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    color: var(--mr-grey-200) !important;
+    transition: background var(--mr-duration) var(--mr-ease),
+                border-color var(--mr-duration) var(--mr-ease),
+                transform var(--mr-duration) var(--mr-ease) !important;
+    overflow: hidden !important;
+    background-clip: padding-box !important;
+}
+
+/* Card hover — subtle lift, brighter border, no glow */
+html body.dark-mode .card:hover,
+html body.modern-layout.dark-mode .card:hover,
+body.dark-mode .stat-card:hover,
+body.dark-mode .stat-card.card-interactive:hover,
+body.dark-mode .dashboard-card:hover,
+body.modern-layout.dark-mode .stat-card:hover,
+body.modern-layout.dark-mode .dashboard-card:hover {
+    background: var(--mr-card-dark-hover) !important;
+    border-color: var(--mr-card-border-dark-hover) !important;
+    transform: translateY(-3px) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Card headers — very slightly lighter */
+html body.dark-mode .card-header,
+html body.modern-layout.dark-mode .card-header,
+body.dark-mode .card .card-header {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    color: var(--mr-white) !important;
+    padding: 0.9rem 1.1rem !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Card bodies — transparent on parent card bg */
+html body.dark-mode .card-body,
+html body.modern-layout.dark-mode .card-body {
+    background: transparent !important;
+    color: var(--mr-grey-200) !important;
+}
+
+/* Card footers */
+html body.dark-mode .card-footer,
+html body.modern-layout.dark-mode .card-footer {
+    background: rgba(255, 255, 255, 0.02) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+    color: var(--mr-grey-400) !important;
+}
+
+/* ---------------------------------------------------------------
+   4. SIDEBAR — solid black panel, clean lines
+   --------------------------------------------------------------- */
+html body.dark-mode #appSidebar,
+html body.dark-mode .sidebar,
+body.modern-layout.dark-mode #appSidebar,
+body.modern-layout.dark-mode .sidebar {
+    background: var(--mr-black) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Sidebar nav links */
+html body.dark-mode #appSidebar .nav-link,
+body.modern-layout.dark-mode #appSidebar .nav-link {
+    color: var(--mr-grey-400) !important;
+    border-radius: var(--mr-radius-sm) !important;
+    transition: all var(--mr-duration) var(--mr-ease) !important;
+    padding: 8px 10px !important;
+    border-left: 2px solid transparent !important;
+}
+
+html body.dark-mode #appSidebar .nav-link:hover,
+body.modern-layout.dark-mode #appSidebar .nav-link:hover {
+    background: rgba(255, 255, 255, 0.04) !important;
+    color: var(--mr-white) !important;
+    transform: none !important;
+}
+
+html body.dark-mode #appSidebar .nav-link.active,
+body.modern-layout.dark-mode #appSidebar .nav-link.active {
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: var(--mr-white) !important;
+    border-left: 2px solid var(--mr-white) !important;
+    box-shadow: none !important;
+}
+
+html body.dark-mode #appSidebar .nav-link.active i,
+body.modern-layout.dark-mode #appSidebar .nav-link.active i {
+    color: var(--mr-white) !important;
+}
+
+html body.dark-mode #appSidebar .nav-link i,
+body.modern-layout.dark-mode #appSidebar .nav-link i {
+    color: var(--mr-grey-500) !important;
+}
+
+/* Sidebar group labels */
+html body.dark-mode #appSidebar .nav-group-title,
+body.modern-layout.dark-mode #appSidebar .nav-group-title {
+    color: var(--mr-grey-600) !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    font-size: 0.68rem !important;
+    font-weight: 700 !important;
+}
+
+/* Brand logo — white on black */
+html body.dark-mode #appSidebar .brand-logo,
+body.modern-layout.dark-mode #appSidebar .brand-logo {
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+html body.dark-mode #appSidebar .brand-logo .brand-icon,
+body.modern-layout.dark-mode #appSidebar .brand-logo .brand-icon {
+    color: var(--mr-black) !important;
+}
+
+html body.dark-mode #appSidebar .brand-logo .brand-svg,
+body.modern-layout.dark-mode #appSidebar .brand-logo .brand-svg {
+    color: var(--mr-black) !important;
+    stroke: var(--mr-black) !important;
+}
+
+html body.dark-mode #appSidebar .brand-text,
+body.modern-layout.dark-mode #appSidebar .brand-text {
+    color: var(--mr-white) !important;
+}
+
+html body.dark-mode #appSidebar .brand-sub,
+body.modern-layout.dark-mode #appSidebar .brand-sub {
+    color: var(--mr-grey-500) !important;
+}
+
+/* Sidebar footer */
+html body.dark-mode .sidebar-footer,
+body.modern-layout.dark-mode .sidebar-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+    background: transparent !important;
+}
+
+/* ---------------------------------------------------------------
+   5. TOPBAR — pure black, single line separator
+   --------------------------------------------------------------- */
+html body.dark-mode .topbar,
+body.modern-layout.dark-mode .topbar {
+    background: var(--mr-black) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+html body.dark-mode .topbar .btn,
+body.modern-layout.dark-mode .topbar .btn {
+    color: var(--mr-grey-300) !important;
+}
+
+/* ---------------------------------------------------------------
+   6. BUTTONS — clean, minimal, monochrome
+   --------------------------------------------------------------- */
+/* Primary button: solid white on black */
+html body.dark-mode .btn.btn-primary,
+html body.modern-layout.dark-mode .btn.btn-primary {
+    background: #3b82f6 !important; /* Vivid Blue */
+    background-color: #3b82f6 !important;
+    background-image: none !important;
+    border: none !important;
+    color: var(--mr-white) !important;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+    border-radius: var(--mr-radius-sm) !important;
+    font-weight: 600 !important;
+    transition: all var(--mr-duration) var(--mr-ease) !important;
+}
+
+html body.dark-mode .btn.btn-primary:hover,
+html body.modern-layout.dark-mode .btn.btn-primary:hover {
+    background: #2563eb !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4) !important;
+}
+
+html body.dark-mode .btn.btn-primary:active,
+html body.modern-layout.dark-mode .btn.btn-primary:active {
+    background: var(--mr-grey-300) !important;
+    transform: translateY(0) scale(0.98) !important;
+    box-shadow: none !important;
+}
+
+/* All other buttons: ghost outline */
+html body.dark-mode .btn:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info):not(.btn-close):not(.btn-link),
+html body.modern-layout.dark-mode .btn:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info):not(.btn-close):not(.btn-link) {
+    background: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: var(--mr-grey-200) !important;
+    border-radius: var(--mr-radius-sm) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    transition: all var(--mr-duration) var(--mr-ease) !important;
+    box-shadow: none !important;
+}
+
+html body.dark-mode .btn:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info):not(.btn-close):not(.btn-link):hover,
+html body.modern-layout.dark-mode .btn:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info):not(.btn-close):not(.btn-link):hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Semantic buttons — desaturated, clean look */
+html body.dark-mode .btn.btn-success,
+html body.modern-layout.dark-mode .btn.btn-success {
+    background-color: #10b981 !important; /* Vivid Emerald */
+    background: #10b981 !important;
+    border: none !important;
+    color: white !important;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25) !important;
+}
+
+html body.dark-mode .btn.btn-danger,
+html body.modern-layout.dark-mode .btn.btn-danger {
+    background-color: #ef4444 !important; /* Vivid Red */
+    background: #ef4444 !important;
+    border: none !important;
+    color: white !important;
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.25) !important;
+}
+
+html body.dark-mode .btn.btn-warning,
+html body.modern-layout.dark-mode .btn.btn-warning {
+    background: #f59e0b !important; /* Vivid Amber */
+    border: none !important;
+    color: white !important;
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.2) !important;
+}
+
+html body.dark-mode .btn.btn-info,
+html body.modern-layout.dark-mode .btn.btn-info {
+    background: #0ea5e9 !important; /* Vivid Sky Blue */
+    border: none !important;
+    color: white !important;
+    box-shadow: 0 4px 14px rgba(14, 165, 233, 0.2) !important;
+}
+
+/* ---------------------------------------------------------------
+   7. FORM CONTROLS — dark input, clean border
+   --------------------------------------------------------------- */
+html body.dark-mode .form-control,
+html body.dark-mode .form-select,
+html body.dark-mode .enhanced-search-input,
+html body.modern-layout.dark-mode .form-control,
+html body.modern-layout.dark-mode .form-select {
+    background: var(--mr-card-dark) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: var(--mr-grey-200) !important;
+    border-radius: var(--mr-radius-sm) !important;
+    transition: border-color var(--mr-duration) var(--mr-ease) !important;
+    box-shadow: none !important;
+}
+
+html body.dark-mode .form-control:hover,
+html body.dark-mode .form-select:hover {
+    border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+html body.dark-mode .form-control:focus,
+html body.dark-mode .form-select:focus,
+html body.dark-mode .enhanced-search-input:focus {
+    border-color: var(--mr-white) !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background: var(--mr-card-dark) !important;
+}
+
+html body.dark-mode .form-control::placeholder {
+    color: var(--mr-grey-600) !important;
+}
+
+/* Search bar */
+html body.dark-mode .search-input-wrapper {
+    background: var(--mr-card-dark) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 999px !important;
+    transition: border-color var(--mr-duration) var(--mr-ease) !important;
+    box-shadow: none !important;
+}
+
+html body.dark-mode .search-input-wrapper:focus-within {
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    box-shadow: none !important;
+}
+
+/* ---------------------------------------------------------------
+   8. DROPDOWN MENUS — solid dark panel
+   --------------------------------------------------------------- */
+html body.dark-mode .dropdown-menu,
+html body.modern-layout.dark-mode .dropdown-menu {
+    background: var(--mr-card-dark) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: var(--mr-radius) !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 4px !important;
+}
+
+html body.dark-mode .dropdown-item,
+html body.modern-layout.dark-mode .dropdown-item {
+    color: var(--mr-grey-300) !important;
+    border-radius: var(--mr-radius-sm) !important;
+    padding: 8px 12px !important;
+    transition: all 0.15s ease !important;
+}
+
+html body.dark-mode .dropdown-item:hover,
+html body.modern-layout.dark-mode .dropdown-item:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: var(--mr-white) !important;
+    transform: none !important;
+}
+
+html body.dark-mode .dropdown-divider,
+html body.modern-layout.dark-mode .dropdown-divider {
+    border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* ---------------------------------------------------------------
+   9. LIST GROUPS — flush, minimal
+   --------------------------------------------------------------- */
+html body.dark-mode .list-group-item,
+html body.modern-layout.dark-mode .list-group-item {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+    color: var(--mr-grey-300) !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    transition: background var(--mr-duration) var(--mr-ease) !important;
+}
+
+html body.dark-mode .list-group-item:last-child,
+html body.modern-layout.dark-mode .list-group-item:last-child {
+    border-bottom: none !important;
+}
+
+html body.dark-mode .list-group-item:hover,
+html body.modern-layout.dark-mode .list-group-item:hover {
+    background: rgba(255, 255, 255, 0.03) !important;
+    transform: none !important;
+}
+
+/* ---------------------------------------------------------------
+   10. BADGES — minimal pill
+   --------------------------------------------------------------- */
+html body.dark-mode .badge,
+html body.modern-layout.dark-mode .badge {
+    background: var(--mr-grey-800) !important;
+    border: none !important;
+    color: var(--mr-grey-300) !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    backdrop-filter: none !important;
+}
+
+/* Semantic badge colors — toned, not garish */
+html body.dark-mode .badge.bg-primary,
+html body.modern-layout.dark-mode .badge.bg-primary {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: #93c5fd !important;
+}
+
+html body.dark-mode .badge.bg-success,
+html body.modern-layout.dark-mode .badge.bg-success {
+    background: rgba(34, 197, 94, 0.15) !important;
+    color: #86efac !important;
+}
+
+html body.dark-mode .badge.bg-danger,
+html body.modern-layout.dark-mode .badge.bg-danger {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #fca5a5 !important;
+}
+
+html body.dark-mode .badge.bg-warning,
+html body.modern-layout.dark-mode .badge.bg-warning {
+    background: rgba(234, 179, 8, 0.15) !important;
+    color: #fde68a !important;
+}
+
+html body.dark-mode .badge.bg-info,
+html body.modern-layout.dark-mode .badge.bg-info {
+    background: rgba(6, 182, 212, 0.15) !important;
+    color: #a5f3fc !important;
+}
+
+/* ---------------------------------------------------------------
+   11. MODALS — dark solid panel, no blur
+   --------------------------------------------------------------- */
+html body.dark-mode .modal-content,
+html body.modern-layout.dark-mode .modal-content {
+    background: var(--mr-grey-900) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: var(--mr-radius) !important;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    color: var(--mr-grey-200) !important;
+}
+
+html body.dark-mode .modal-header,
+html body.modern-layout.dark-mode .modal-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    background: transparent !important;
+}
+
+html body.dark-mode .modal-footer,
+html body.modern-layout.dark-mode .modal-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+    background: transparent !important;
+}
+
+/* ---------------------------------------------------------------
+   12. TABLES — clean minimal lines
+   --------------------------------------------------------------- */
+html body.dark-mode .table,
+html body.modern-layout.dark-mode .table {
+    color: var(--mr-grey-300) !important;
+}
+
+html body.dark-mode .table thead th,
+html body.modern-layout.dark-mode .table thead th {
+    background: transparent !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: var(--mr-grey-500) !important;
+    font-weight: 600 !important;
+    font-size: 0.78rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
+}
+
+html body.dark-mode .table tbody tr,
+html body.modern-layout.dark-mode .table tbody tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+    transition: background 0.15s ease !important;
+}
+
+html body.dark-mode .table tbody tr:hover,
+html body.modern-layout.dark-mode .table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* ---------------------------------------------------------------
+   13. TEXT & TYPOGRAPHY — sharp hierarchy
+   --------------------------------------------------------------- */
+html body.dark-mode .text-muted,
+html body.modern-layout.dark-mode .text-muted {
+    color: var(--mr-grey-500) !important;
+}
+
+html body.dark-mode .text-dark,
+html body.modern-layout.dark-mode .text-dark {
+    color: var(--mr-grey-200) !important;
+}
+
+html body.dark-mode h1, html body.dark-mode h2, html body.dark-mode h3,
+html body.dark-mode h4, html body.dark-mode h5, html body.dark-mode h6,
+html body.dark-mode .card-title {
+    color: var(--mr-white) !important;
+}
+
+html body.dark-mode .stat-value,
+html body.modern-layout.dark-mode .stat-value {
+    color: var(--mr-white) !important;
+    font-weight: 700 !important;
+}
+
+html body.dark-mode .stat-label,
+html body.modern-layout.dark-mode .stat-label {
+    color: var(--mr-grey-500) !important;
+}
+
+html body.dark-mode .stat-card .stat-icon i,
+html body.modern-layout.dark-mode .stat-card .stat-icon i {
+    color: var(--mr-grey-400) !important;
+}
+
+/* Preserve colored stat values */
+html body.dark-mode .stat-value.text-primary { color: #60a5fa !important; }
+html body.dark-mode .stat-value.text-success { color: #4ade80 !important; }
+html body.dark-mode .stat-value.text-danger  { color: #f87171 !important; }
+html body.dark-mode .stat-value.text-info    { color: #22d3ee !important; }
+html body.dark-mode .stat-value.text-warning { color: #facc15 !important; }
+
+/* Obsidian gradient text — white in monochrome mode */
+html body.dark-mode .obsidian-gradient,
+html body.modern-layout.dark-mode .obsidian-gradient {
+    background: var(--mr-white) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+}
+
+/* ---------------------------------------------------------------
+   14. ALERTS — minimal treatment
+   --------------------------------------------------------------- */
+html body.dark-mode .alert,
+html body.modern-layout.dark-mode .alert {
+    background: var(--mr-card-dark) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    color: var(--mr-grey-200) !important;
+    border-radius: var(--mr-radius-sm) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+html body.dark-mode .alert.alert-danger { border-left: 3px solid #ef4444 !important; }
+html body.dark-mode .alert.alert-success { border-left: 3px solid #22c55e !important; }
+html body.dark-mode .alert.alert-info { border-left: 3px solid #06b6d4 !important; }
+html body.dark-mode .alert.alert-warning { border-left: 3px solid #eab308 !important; }
+
+/* ---------------------------------------------------------------
+   15. TOASTS
+   --------------------------------------------------------------- */
+html body.dark-mode .toast,
+html body.modern-layout.dark-mode .toast {
+    background: var(--mr-grey-900) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: var(--mr-radius) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    color: var(--mr-grey-200) !important;
+}
+
+/* ---------------------------------------------------------------
+   16. SCROLLBAR — ultra-thin, monochrome
+   --------------------------------------------------------------- */
+html.dark-mode ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+html.dark-mode ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+html.dark-mode ::-webkit-scrollbar-thumb {
+    background: var(--mr-grey-800);
+    border-radius: 10px;
+}
+
+html.dark-mode ::-webkit-scrollbar-thumb:hover {
+    background: var(--mr-grey-700);
+}
+
+/* ---------------------------------------------------------------
+   17. PROGRESS BARS
+   --------------------------------------------------------------- */
+html body.dark-mode .progress,
+html body.modern-layout.dark-mode .progress {
+    background: var(--mr-grey-900) !important;
+    border-radius: 999px !important;
+    overflow: hidden !important;
+    height: 6px !important;
+}
+
+html body.dark-mode .progress-bar,
+html body.modern-layout.dark-mode .progress-bar {
+    background: var(--mr-white) !important;
+    border-radius: 999px !important;
+}
+
+/* ---------------------------------------------------------------
+   18. GRADIENT HEADERS — keep color meaning but desaturated
+   --------------------------------------------------------------- */
+html body.dark-mode .card-header.bg-gradient-primary,
+html body.dark-mode .card-header[class*='bg-gradient'],
+html body.modern-layout.dark-mode .card-header.bg-gradient-primary {
+    background: var(--mr-grey-900) !important;
+    color: var(--mr-white) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+html body.dark-mode .card-header.bg-danger,
+html body.modern-layout.dark-mode .card-header.bg-danger {
+    background: rgba(239, 68, 68, 0.1) !important;
+    border-bottom: 1px solid rgba(239, 68, 68, 0.15) !important;
+}
+
+html body.dark-mode .card-header.bg-success,
+html body.modern-layout.dark-mode .card-header.bg-success {
+    background: rgba(34, 197, 94, 0.1) !important;
+    border-bottom: 1px solid rgba(34, 197, 94, 0.15) !important;
+}
+
+html body.dark-mode .card-header.bg-primary,
+html body.modern-layout.dark-mode .card-header.bg-primary {
+    background: rgba(59, 130, 246, 0.1) !important;
+    border-bottom: 1px solid rgba(59, 130, 246, 0.15) !important;
+}
+
+/* ---------------------------------------------------------------
+   19. UTILITIES
+   --------------------------------------------------------------- */
+html body.dark-mode .bg-white,
+html body.dark-mode .bg-light,
+html body.modern-layout.dark-mode .bg-white,
+html body.modern-layout.dark-mode .bg-light {
+    background: var(--mr-card-dark) !important;
+    color: var(--mr-grey-200) !important;
+}
+
+html body.dark-mode [style*="background-color: white"],
+html body.dark-mode [style*="background-color: #fff"],
+html body.dark-mode [style*="background-color: #ffffff"],
+html body.dark-mode [style*="background: white"],
+html body.dark-mode [style*="background: #fff"] {
+    background-color: var(--mr-card-dark) !important;
+    background: var(--mr-card-dark) !important;
+    color: var(--mr-grey-200) !important;
+}
+
+html body.dark-mode [style*="color: black"],
+html body.dark-mode [style*="color: #000"] {
+    color: var(--mr-grey-200) !important;
+}
+
+/* ---------------------------------------------------------------
+   20. ANIMATIONS — subtle, not distracting
+   --------------------------------------------------------------- */
+@keyframes mr-fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+html body.dark-mode .card {
+    animation: mr-fade-in 0.3s var(--mr-ease) both !important;
+}
+
+html body.dark-mode .row > [class*='col-']:nth-child(1) .card { animation-delay: 0.02s !important; }
+html body.dark-mode .row > [class*='col-']:nth-child(2) .card { animation-delay: 0.05s !important; }
+html body.dark-mode .row > [class*='col-']:nth-child(3) .card { animation-delay: 0.08s !important; }
+html body.dark-mode .row > [class*='col-']:nth-child(4) .card { animation-delay: 0.11s !important; }
+
+/* ---------------------------------------------------------------
+   21. MOTION PREFERENCE
+   --------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    html body.dark-mode .card,
+    html body.dark-mode .btn,
+    html body.dark-mode .nav-link,
+    html body.dark-mode .list-group-item,
+    html body.dark-mode .dropdown-item {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+/* ---------------------------------------------------------------
+   22. HERO & MISC
+   --------------------------------------------------------------- */
+html body.dark-mode .hero,
+html body.modern-layout.dark-mode .hero {
+    background: var(--mr-card-dark) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    box-shadow: none !important;
+    border-radius: var(--mr-radius) !important;
+}
+
+html body.dark-mode .pill {
+    background: var(--mr-grey-800) !important;
+    color: var(--mr-grey-300) !important;
+}
+
+/* ---------------------------------------------------------------
+   23. QR CODE — stays white for scannability
+   --------------------------------------------------------------- */
+html body.dark-mode .qr-container {
+    background: var(--mr-white) !important;
+    color: var(--mr-black) !important;
+    border-radius: var(--mr-radius) !important;
+}
+
+/* ---------------------------------------------------------------
+   24. NUCLEAR OVERRIDE — strip ALL colored backgrounds
+   Every Bootstrap bg-* class, gradient, and inline color gets
+   flattened to the uniform card surface. This ensures a completely
+   monochrome, seamless UI with no leftover color patches.
+   --------------------------------------------------------------- */
+
+/* --- ALL bg-* utility classes on any element --- */
+html body.dark-mode .bg-primary,
+html body.dark-mode .bg-secondary,
+html body.dark-mode .bg-success,
+html body.dark-mode .bg-danger,
+html body.dark-mode .bg-warning,
+html body.dark-mode .bg-info,
+html body.dark-mode .bg-dark,
+html body.dark-mode .bg-black,
+html body.dark-mode .bg-white,
+html body.dark-mode .bg-light,
+html body.dark-mode .bg-body,
+html body.dark-mode .bg-transparent,
+html body.modern-layout.dark-mode .bg-primary,
+html body.modern-layout.dark-mode .bg-secondary,
+html body.modern-layout.dark-mode .bg-success,
+html body.modern-layout.dark-mode .bg-danger,
+html body.modern-layout.dark-mode .bg-warning,
+html body.modern-layout.dark-mode .bg-info,
+html body.modern-layout.dark-mode .bg-dark,
+html body.modern-layout.dark-mode .bg-black,
+html body.modern-layout.dark-mode .bg-white,
+html body.modern-layout.dark-mode .bg-light {
+    background: var(--mr-card-dark) !important;
+    background-image: none !important;
+    color: var(--mr-grey-200) !important;
+}
+
+/* --- ALL gradient variants --- */
+html body.dark-mode .bg-gradient,
+html body.dark-mode [class*="bg-gradient-"],
+html body.dark-mode .bg-gradient-primary,
+html body.dark-mode .bg-gradient-secondary,
+html body.dark-mode .bg-gradient-success,
+html body.dark-mode .bg-gradient-danger,
+html body.dark-mode .bg-gradient-warning,
+html body.dark-mode .bg-gradient-info,
+html body.dark-mode .bg-gradient-dark,
+html body.dark-mode .bg-gradient-light,
+html body.modern-layout.dark-mode .bg-gradient,
+html body.modern-layout.dark-mode [class*="bg-gradient-"],
+html body.modern-layout.dark-mode .bg-gradient-primary,
+html body.modern-layout.dark-mode .bg-gradient-secondary,
+html body.modern-layout.dark-mode .bg-gradient-success,
+html body.modern-layout.dark-mode .bg-gradient-danger,
+html body.modern-layout.dark-mode .bg-gradient-warning,
+html body.modern-layout.dark-mode .bg-gradient-info,
+html body.modern-layout.dark-mode .bg-gradient-dark {
+    background: var(--mr-card-dark) !important;
+    background-image: none !important;
+    color: var(--mr-grey-200) !important;
+}
+
+/* --- Card headers specifically — complete flattening --- */
+html body.dark-mode .card-header,
+html body.dark-mode .card-header.bg-primary,
+html body.dark-mode .card-header.bg-secondary,
+html body.dark-mode .card-header.bg-success,
+html body.dark-mode .card-header.bg-danger,
+html body.dark-mode .card-header.bg-warning,
+html body.dark-mode .card-header.bg-info,
+html body.dark-mode .card-header.bg-dark,
+html body.dark-mode .card-header.bg-black,
+html body.dark-mode .card-header.bg-white,
+html body.dark-mode .card-header.bg-light,
+html body.dark-mode .card-header.bg-gradient,
+html body.dark-mode .card-header[class*="bg-gradient"],
+html body.dark-mode .card-header.bg-gradient-primary,
+html body.dark-mode .card-header.bg-gradient-info,
+html body.dark-mode .card-header.bg-gradient-success,
+html body.dark-mode .card-header.bg-gradient-danger,
+html body.dark-mode .card-header.bg-gradient-warning,
+html body.modern-layout.dark-mode .card-header,
+html body.modern-layout.dark-mode .card-header.bg-primary,
+html body.modern-layout.dark-mode .card-header.bg-secondary,
+html body.modern-layout.dark-mode .card-header.bg-success,
+html body.modern-layout.dark-mode .card-header.bg-danger,
+html body.modern-layout.dark-mode .card-header.bg-warning,
+html body.modern-layout.dark-mode .card-header.bg-info,
+html body.modern-layout.dark-mode .card-header.bg-dark,
+html body.modern-layout.dark-mode .card-header.bg-black,
+html body.modern-layout.dark-mode .card-header[class*="bg-gradient"] {
+    background: rgba(255, 255, 255, 0.03) !important;
+    background-image: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    color: var(--mr-white) !important;
+    box-shadow: none !important;
+}
+
+/* Text inside flattened headers stays white */
+html body.dark-mode .card-header .text-white,
+html body.dark-mode .card-header .text-light,
+html body.dark-mode .card-header i,
+html body.dark-mode .card-header .fa,
+html body.dark-mode .card-header .fas,
+html body.dark-mode .card-header .far,
+html body.dark-mode .card-header .fab,
+html body.dark-mode .card-header h1,
+html body.dark-mode .card-header h2,
+html body.dark-mode .card-header h3,
+html body.dark-mode .card-header h4,
+html body.dark-mode .card-header h5,
+html body.dark-mode .card-header h6,
+html body.dark-mode .card-header span,
+html body.dark-mode .card-header a,
+html body.dark-mode .card-header .btn-light {
+    color: var(--mr-grey-200) !important;
+}
+
+/* --- Buttons inside colored headers: override btn-light/btn-white --- */
+html body.dark-mode .card-header .btn-light,
+html body.dark-mode .card-header .btn-white,
+html body.dark-mode .card-header .btn-outline-light,
+html body.modern-layout.dark-mode .card-header .btn-light,
+html body.modern-layout.dark-mode .card-header .btn-outline-light {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: var(--mr-grey-200) !important;
+}
+
+/* --- Period sections (auto/teleop/endgame colored borders) --- */
+html body.dark-mode .auto-period,
+html body.dark-mode .teleop-period,
+html body.dark-mode .endgame-period,
+html body.dark-mode .post-match,
+html body.dark-mode .period-section {
+    background: var(--mr-card-dark) !important;
+    border-left-color: var(--mr-grey-600) !important;
+}
+
+/* --- Alliance colors: flatten to monochrome --- */
+html body.dark-mode .red-alliance,
+html body.dark-mode .blue-alliance {
+    background: var(--mr-card-dark) !important;
+}
+
+html body.dark-mode .red-alliance {
+    border-left: 3px solid var(--mr-grey-500) !important;
+}
+
+html body.dark-mode .blue-alliance {
+    border-left: 3px solid var(--mr-grey-400) !important;
+}
+
+/* --- text-white helper — make it work in flattened context --- */
+html body.dark-mode .bg-primary .text-white,
+html body.dark-mode .bg-success .text-white,
+html body.dark-mode .bg-danger .text-white,
+html body.dark-mode .bg-info .text-white,
+html body.dark-mode .bg-warning .text-white,
+html body.dark-mode .bg-dark .text-white,
+html body.dark-mode [class*="bg-gradient"] .text-white {
+    color: var(--mr-grey-200) !important;
+}
+
+/* --- Inline styles on specific dashboard cards --- */
+html body.dark-mode [style*="background"],
+html body.modern-layout.dark-mode [style*="background"] {
+    background-color: var(--mr-card-dark) !important;
+    background-image: none !important;
+}
+
+/* Exception: keep colored buttons themselves if they have text-white */
+html body.dark-mode .btn[style*="background"] {
+    /* buttons can keep their background; they are handled by button rules */
+}
+
+/* --- Nested cards: ensure everything is #111 uniformly --- */
+html body.dark-mode .card .card,
+html body.dark-mode .card .card .card-body,
+html body.dark-mode .card .card .card-header,
+html body.modern-layout.dark-mode .card .card {
+    background: var(--mr-card-dark) !important;
+    background-image: none !important;
+    border-color: rgba(255, 255, 255, 0.06) !important;
+    box-shadow: none !important;
+}
+
+/* --- Stat cards inside column layouts --- */
+html body.dark-mode .row .stat-card,
+html body.dark-mode div[class*="col-"] .stat-card,
+html body.dark-mode .row.mb-4.g-3 .stat-card {
+    background: var(--mr-card-dark) !important;
+    background-image: none !important;
+    border: 1px solid var(--mr-card-border-dark) !important;
+}
+
+/* --- Ensure ALL text on dark surfaces is readable --- */
+html body.dark-mode .fw-bold,
+html body.dark-mode .fw-medium,
+html body.dark-mode strong {
+    color: var(--mr-white) !important;
+}
+
+html body.dark-mode small.text-muted,
+html body.dark-mode .text-muted {
+    color: var(--mr-grey-500) !important;
+}
+
+/* --- btn-outline variants: uniform ghost style --- */
+html body.dark-mode .btn-outline-primary,
+html body.dark-mode .btn-outline-secondary,
+html body.dark-mode .btn-outline-success,
+html body.dark-mode .btn-outline-danger,
+html body.dark-mode .btn-outline-info,
+html body.dark-mode .btn-outline-warning,
+html body.dark-mode .btn-outline-light,
+html body.dark-mode .btn-outline-dark {
+    background: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: var(--mr-grey-200) !important;
+    box-shadow: none !important;
+}
+
+html body.dark-mode .btn-outline-primary:hover,
+html body.dark-mode .btn-outline-secondary:hover,
+html body.dark-mode .btn-outline-success:hover,
+html body.dark-mode .btn-outline-danger:hover,
+html body.dark-mode .btn-outline-info:hover,
+html body.dark-mode .btn-outline-warning:hover,
+html body.dark-mode .btn-outline-light:hover,
+html body.dark-mode .btn-outline-dark:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    color: var(--mr-white) !important;
+}
+
+/* --- Select2 and other plugin elements --- */
+html body.dark-mode .select2-container--default .select2-selection,
+html body.dark-mode .select2-container .select2-selection {
+    background: var(--mr-card-dark) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: var(--mr-grey-200) !important;
+}
+
+html body.dark-mode .select2-dropdown {
+    background: var(--mr-card-dark) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ---------------------------------------------------------------
+   25. ZERO GRADIENT POLICY — High Specificity Lockdown
+   Forcefully strips all background images and gradients from
+   every possible element AND pseudo-element in dark mode.
+   --------------------------------------------------------------- */
+
+/* KILL ALL PSEUDO-ELEMENT HIGHLIGHTS (The "Shine") */
+html.dark-mode *::before,
+html.dark-mode *::after,
+body.dark-mode *::before,
+body.dark-mode *::after,
+html[data-bs-theme="dark"] *::before,
+html[data-bs-theme="dark"] *::after {
+    background: none !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+/* FORCE PURE BLACK GLOBAL BACKGROUND - Full Coverage */
+html, 
+html.dark-mode,
+body.dark-mode,
+html[data-bs-theme="dark"],
+body[data-bs-theme="dark"] {
+    background-color: #000000 !important;
+    background: #000000 !important;
+    background-image: none !important;
+    min-height: 100vh !important;
+}
+
+html.dark-mode *,
+body.dark-mode *,
+html[data-bs-theme="dark"] * {
+    background-image: none !important;
+    border-radius: var(--mr-radius-sm) !important;
+}
+
+/* Specifically target remaining teal/blue/green/grey alerts */
+html body.dark-mode .alert-info,
+html body.dark-mode .alert-primary,
+html body.dark-mode .alert-success,
+html body.dark-mode .alert-warning,
+html body.dark-mode .alert-danger,
+html body.modern-layout.dark-mode .alert-info,
+html body.modern-layout.dark-mode .alert {
+    background-color: #111111 !important;
+    background: #111111 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: var(--mr-grey-200) !important;
+}
+
+/* Flatten any remaining gradient badges */
+html body.dark-mode .badge,
+html body.dark-mode .badge[class*="bg-gradient-"] {
+    background-color: #222222 !important;
+    background: #222222 !important;
+    color: var(--mr-grey-200) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Ensure the topbar is strictly flat black */
+html body.dark-mode .topbar,
+html body.modern-layout.dark-mode .topbar,
+html body.dark-mode .navbar {
+    background-color: #000000 !important;
+    background: #000000 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    backdrop-filter: none !important;
+}
+
+/* Enforce solid surface on all cards and sidebars regardless of origin */
+html body.dark-mode .card,
+html body.dark-mode .dashboard-card,
+html body.dark-mode .stat-card,
+html body.dark-mode .sidebar,
+html body.modern-layout.dark-mode .sidebar {
+    background-color: #111111 !important;
+    background: #111111 !important;
+    box-shadow: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Flatten active side-nav links */
+html body.dark-mode .sidebar .nav-link.active,
+html body.modern-layout.dark-mode .sidebar .nav-link.active {
+    background-color: #222222 !important;
+    background: #222222 !important;
+    color: white !important;
+}
+
+/* ---------------------------------------------------------------
+   26. REFINEMENTS — Logo & Toggles
+   --------------------------------------------------------------- */
+
+/* Fix sidebar brand logo background in dark mode */
+html body.dark-mode .brand-logo,
+html body.modern-layout.dark-mode .brand-logo {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Fix visibility of toggles/switches in Monochrome Theme */
+html body.dark-mode .form-check-input,
+html body.modern-layout.dark-mode .form-check-input {
+    background-color: #222222 !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+html body.dark-mode .form-check-input:checked,
+html body.modern-layout.dark-mode .form-check-input:checked {
+    background-color: white !important;
+    border-color: white !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m6 10 3 3 6-6'/%3e%3c/svg%3e") !important;
+}
+
+/* Special treatment for form-switches (toggles) */
+html body.dark-mode .form-switch .form-check-input,
+html body.modern-layout.dark-mode .form-switch .form-check-input {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba(255,255,255,0.4)'/%3e%3c/svg%3e") !important;
+    background-color: #222222 !important; /* Dark track when OFF */
+    transition: background-position 0.2s var(--mr-ease), background-color 0.2s var(--mr-ease) !important;
+}
+
+html body.dark-mode .form-switch .form-check-input:checked,
+html body.modern-layout.dark-mode .form-switch .form-check-input:checked {
+    background-color: white !important; /* White track when ON */
+    border-color: white !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23000'/%3e%3c/svg%3e") !important;
+}
+
+/* ---------------------------------------------------------------
+   27. FINAL VIVID ACTION OVERRIDES 
+   (Ensures colored buttons survive the wide-reaching monochrome rules)
+   --------------------------------------------------------------- */
+
+/* Primary - Blue */
+html body.dark-mode .btn.btn-primary,
+html body.modern-layout.dark-mode .btn.btn-primary,
+.btn-primary {
+    background-color: #3b82f6 !important;
+    background: #3b82f6 !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* Success - Emerald */
+html body.dark-mode .btn.btn-success,
+html body.modern-layout.dark-mode .btn.btn-success,
+.btn-success {
+    background-color: #10b981 !important;
+    background: #10b981 !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+}
+
+/* Danger - Red */
+html body.dark-mode .btn.btn-danger,
+html body.modern-layout.dark-mode .btn.btn-danger,
+.btn-danger {
+    background-color: #ef4444 !important;
+    background: #ef4444 !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3) !important;
+}
+
+/* Warning - Amber */
+html body.dark-mode .btn.btn-warning,
+html body.modern-layout.dark-mode .btn.btn-warning,
+.btn-warning {
+    background-color: #f59e0b !important;
+    background: #f59e0b !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2) !important;
+}
+
+/* Ensure background coverage on ALL pages even when scrolling */
+html, body {
+    background-color: #000000 !important;
+    background: #000000 !important;
+    min-height: 100vh !important;
+    height: auto !important;
+}
+
+

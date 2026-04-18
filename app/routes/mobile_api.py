@@ -16,12 +16,13 @@ import uuid
 import threading
 import math
 import statistics
+from typing import Optional
 
 from app.models import (
     User, Team, Event, Match, ScoutingData, PitScoutingData, 
     DoNotPickEntry, AvoidEntry, ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceInvitation, ScoutingAllianceEvent,
     ScoutingAllianceChat, TeamAllianceStatus, ScoutingDirectMessage, db, Role,
-    AllianceSharedScoutingData, AllianceSharedPitData
+    AllianceSharedScoutingData, AllianceSharedPitData, ScoutingTeamSettings
 )
 from app import socketio
 from app import load_user_chat_history, load_group_chat_history, load_assistant_chat_history, save_user_chat_history, save_group_chat_history, get_user_chat_file_path, load_group_members, save_group_members, get_group_members_file_path
@@ -3889,6 +3890,629 @@ def get_game_config():
             'success': False,
             'error': 'Failed to retrieve game configuration',
             'error_code': 'CONFIG_ERROR'
+        }), 500
+
+
+def _map_epa_source_to_mobile_data_mode(epa_source):
+    """Convert an EPA source setting into a human-readable mobile data-mode label."""
+    mapping = {
+        'scouted_only': 'Scouted Data Only',
+        'scouted_with_statbotics': 'Scouted Data + Statbotics EPA Gap-Fill',
+        'statbotics_only': 'Statbotics EPA Only',
+        'scouted_with_tba_opr': 'Scouted Data + TBA OPR Gap-Fill',
+        'tba_opr_only': 'TBA OPR Only'
+    }
+    return mapping.get(str(epa_source or '').strip().lower(), 'Scouted Data Only')
+
+
+def _get_team_epa_source(team_number):
+    """Return the raw EPA source configured for a scouting team."""
+    try:
+        resolved_team_number = safe_int_team_number(team_number)
+        if resolved_team_number is None:
+            return 'scouted_only'
+        settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=resolved_team_number).first()
+        if settings:
+            return getattr(settings, 'epa_source', 'scouted_only') or 'scouted_only'
+    except Exception:
+        pass
+    return 'scouted_only'
+
+
+def _resolve_mobile_event_id_for_team(team_number, event_value=None):
+    """Resolve an event id from an explicit id/code or the team's current config."""
+    if event_value not in (None, ''):
+        try:
+            return int(event_value)
+        except Exception:
+            pass
+        try:
+            return resolve_event_code_to_id(event_value, team_number)
+        except Exception:
+            return None
+
+    try:
+        from app.utils.config_manager import load_game_config
+        game_config = load_game_config(team_number=team_number)
+        current_event_code = (game_config.get('current_event_code') or '').strip() if isinstance(game_config, dict) else ''
+        if current_event_code:
+            return resolve_event_code_to_id(current_event_code, team_number)
+    except Exception:
+        pass
+
+    return None
+
+
+def _build_mobile_match_points_for_team(team, token_team_number, event_id, epa_source):
+    """Build per-match points for a team using the current mobile data mode."""
+    from app.utils.alliance_data import get_scouting_data_query_for_team
+
+    query, is_alliance_mode, alliance_id = get_scouting_data_query_for_team(
+        token_team_number,
+        event_id=event_id,
+        team_id=team.id
+    )
+
+    rows = []
+    try:
+        rows = query.order_by(Match.match_number.asc(), Match.id.asc()).all()
+    except Exception:
+        try:
+            rows = query.all()
+        except Exception:
+            rows = []
+
+    latest_by_match = {}
+    for row in rows:
+        match_id = getattr(row, 'match_id', None)
+        if match_id is None:
+            continue
+        existing = latest_by_match.get(match_id)
+        if not existing:
+            latest_by_match[match_id] = row
+            continue
+        try:
+            row_ts = getattr(row, 'timestamp', None)
+            existing_ts = getattr(existing, 'timestamp', None)
+            if row_ts and existing_ts and row_ts >= existing_ts:
+                latest_by_match[match_id] = row
+        except Exception:
+            latest_by_match[match_id] = row
+
+    external_total = None
+    external_source = None
+    try:
+        if epa_source == 'scouted_with_statbotics':
+            from app.utils.statbotics_api_utils import get_statbotics_team_epa
+            epa = get_statbotics_team_epa(team.team_number)
+            external_total = (epa or {}).get('total')
+            external_source = 'statbotics'
+        elif epa_source == 'statbotics_only':
+            from app.utils.statbotics_api_utils import get_statbotics_team_epa
+            epa = get_statbotics_team_epa(team.team_number)
+            external_total = (epa or {}).get('total')
+            external_source = 'statbotics'
+        elif epa_source == 'scouted_with_tba_opr':
+            from app.utils.tba_api_utils import get_tba_team_opr
+            opr = get_tba_team_opr(team.team_number)
+            external_total = (opr or {}).get('total')
+            external_source = 'tba_opr'
+        elif epa_source == 'tba_opr_only':
+            from app.utils.tba_api_utils import get_tba_team_opr
+            opr = get_tba_team_opr(team.team_number)
+            external_total = (opr or {}).get('total')
+            external_source = 'tba_opr'
+    except Exception as exc:
+        current_app.logger.warning(f"mobile_api.current-data-mode: external total lookup failed for team {team.team_number}: {exc}")
+
+    match_points = []
+    for row in sorted(latest_by_match.values(), key=lambda r: (getattr(getattr(r, 'match', None), 'match_number', 9999), getattr(r, 'id', 0))):
+        match = getattr(row, 'match', None)
+        match_number = getattr(match, 'match_number', None)
+        try:
+            auto_points = row.calculate_metric('apt') if hasattr(row, 'calculate_metric') else 0
+            teleop_points = row.calculate_metric('tpt') if hasattr(row, 'calculate_metric') else 0
+            endgame_points = row.calculate_metric('ept') if hasattr(row, 'calculate_metric') else 0
+            scouted_total = row.calculate_metric('tot') if hasattr(row, 'calculate_metric') else (auto_points + teleop_points + endgame_points)
+        except Exception:
+            auto_points = 0
+            teleop_points = 0
+            endgame_points = 0
+            scouted_total = 0
+
+        has_scouted_data = any(v not in (None, 0, 0.0) for v in (auto_points, teleop_points, endgame_points, scouted_total))
+        if epa_source == 'scouted_only':
+            selected_total = scouted_total
+            selected_source = 'scouted'
+        elif epa_source in ('statbotics_only', 'tba_opr_only'):
+            selected_total = external_total if external_total is not None else scouted_total
+            selected_source = external_source or 'scouted'
+        else:
+            selected_total = scouted_total if has_scouted_data else (external_total if external_total is not None else scouted_total)
+            selected_source = 'scouted' if has_scouted_data else (external_source or 'scouted')
+
+        match_points.append({
+            'match_id': getattr(match, 'id', None),
+            'match_number': match_number,
+            'scouted_auto_points': auto_points,
+            'scouted_teleop_points': teleop_points,
+            'scouted_endgame_points': endgame_points,
+            'scouted_total_points': scouted_total,
+            'external_total_points': external_total,
+            'selected_total_points': selected_total,
+            'selected_source': selected_source,
+            'has_scouted_data': has_scouted_data,
+        })
+
+    return {
+        'team_number': team.team_number,
+        'team_name': team.team_name,
+        'is_alliance_mode': is_alliance_mode,
+        'alliance_id': alliance_id,
+        'match_count': len(match_points),
+        'external_total_points': external_total,
+        'match_points': match_points,
+    }
+
+
+@mobile_api.route('/config/game/data-mode', methods=['GET'])
+@token_required
+def get_game_data_mode():
+    """
+    Return the effective data mode for the mobile team's current scouting setup.
+
+    Response:
+    {
+        "success": true,
+        "epa_source": "scouted_with_statbotics",
+        "data_mode": "Scouted Data + Statbotics EPA Gap-Fill"
+    }
+    """
+    try:
+        token_team = getattr(request, 'mobile_team_number', None)
+        mobile_user = getattr(request, 'mobile_user', None)
+
+        team_number = token_team
+        if mobile_user and getattr(mobile_user, 'scouting_team_number', None) is not None:
+            db_team = mobile_user.scouting_team_number
+            if token_team is not None and str(token_team) != str(db_team):
+                current_app.logger.info(
+                    f"mobile_api.get_game_data_mode: token team {token_team} differs from DB scouting_team_number {db_team}; using DB value"
+                )
+            team_number = db_team
+
+        requested_team = None
+        try:
+            hdr = request.headers.get('X-Mobile-Requested-Team')
+            if hdr:
+                requested_team = int(hdr)
+            else:
+                qp = request.args.get('team_number')
+                if qp is not None:
+                    requested_team = int(qp)
+        except Exception:
+            requested_team = None
+
+        if requested_team is not None:
+            if mobile_user and getattr(mobile_user, 'has_role', None) and mobile_user.has_role('superadmin'):
+                current_app.logger.info(
+                    f"mobile_api.get_game_data_mode: superadmin override requested_team={requested_team}; using it instead of resolved {team_number}"
+                )
+                team_number = requested_team
+            else:
+                try:
+                    if int(requested_team) != int(team_number if team_number is not None else -999999):
+                        return jsonify({'success': False, 'error': 'Forbidden to access another team', 'error_code': 'FORBIDDEN'}), 403
+                except Exception:
+                    return jsonify({'success': False, 'error': 'Forbidden to access another team', 'error_code': 'FORBIDDEN'}), 403
+
+        epa_source = 'scouted_only'
+        try:
+            resolved_team_number = safe_int_team_number(team_number)
+            if resolved_team_number is not None:
+                settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=resolved_team_number).first()
+                if settings is not None:
+                    epa_source = getattr(settings, 'epa_source', 'scouted_only') or 'scouted_only'
+            else:
+                current_app.logger.warning(
+                    f"mobile_api.get_game_data_mode: unable to resolve team number from value={team_number!r}; defaulting epa_source"
+                )
+        except Exception:
+            epa_source = 'scouted_only'
+
+        data_mode = _map_epa_source_to_mobile_data_mode(epa_source)
+        return jsonify({
+            'success': True,
+            'epa_source': epa_source,
+            'data_mode': data_mode
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Get game data mode error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to retrieve game data mode',
+            'error_code': 'CONFIG_ERROR'
+        }), 500
+
+
+@mobile_api.route('/config/game/current-data-mode', methods=['GET', 'POST'])
+@token_required
+def get_current_data_mode_match_points():
+    """Return per-match points for one team or all teams at an event using the team's current data mode."""
+    try:
+        payload = request.get_json(silent=True) or {}
+
+        token_team = getattr(request, 'mobile_team_number', None)
+        mobile_user = getattr(request, 'mobile_user', None)
+        if mobile_user and getattr(mobile_user, 'scouting_team_number', None) is not None:
+            token_team = mobile_user.scouting_team_number
+
+        team_number = safe_int_team_number(token_team)
+        epa_source = _get_team_epa_source(team_number)
+        data_mode = _map_epa_source_to_mobile_data_mode(epa_source)
+
+        event_value = payload.get('event_id') if isinstance(payload, dict) else None
+        if event_value in (None, ''):
+            event_value = request.args.get('event_id')
+        event_id = _resolve_mobile_event_id_for_team(team_number, event_value)
+
+        requested_team_numbers = []
+        raw_team_numbers = None
+        if isinstance(payload, dict):
+            raw_team_numbers = payload.get('team_numbers')
+            if raw_team_numbers in (None, ''):
+                raw_team_numbers = payload.get('team_number')
+        if raw_team_numbers in (None, ''):
+            raw_team_numbers = request.args.get('team_numbers') or request.args.get('team_number')
+
+        if isinstance(raw_team_numbers, (list, tuple, set)):
+            requested_team_numbers = [safe_int_team_number(t) for t in raw_team_numbers]
+        elif isinstance(raw_team_numbers, str) and ',' in raw_team_numbers:
+            requested_team_numbers = [safe_int_team_number(t.strip()) for t in raw_team_numbers.split(',')]
+        elif raw_team_numbers not in (None, ''):
+            requested_team_numbers = [safe_int_team_number(raw_team_numbers)]
+
+        requested_team_numbers = [tn for tn in requested_team_numbers if tn is not None]
+
+        # If no explicit teams were provided, default to every team visible in the event.
+        teams = []
+        if requested_team_numbers:
+            for requested_team_number in requested_team_numbers:
+                team = Team.query.filter_by(team_number=requested_team_number, scouting_team_number=team_number).first()
+                if not team:
+                    team = Team.query.filter_by(team_number=requested_team_number).first()
+                if team:
+                    teams.append(team)
+        elif event_id is not None:
+            alliance_id = get_active_alliance_id_for_team(team_number)
+            if alliance_id:
+                teams, _ = get_all_teams_for_alliance(event_id=event_id)
+            else:
+                teams = Team.query.join(Team.events).filter(
+                    Event.id == event_id,
+                    Team.scouting_team_number == team_number
+                ).order_by(Team.team_number).all()
+        else:
+            team = Team.query.filter_by(scouting_team_number=team_number).order_by(Team.team_number).first()
+            if team:
+                teams = [team]
+
+        if not teams:
+            return jsonify({
+                'success': True,
+                'epa_source': epa_source,
+                'data_mode': data_mode,
+                'event_id': event_id,
+                'teams': [],
+                'count': 0,
+                'warning': 'No teams found for the requested event or team selection'
+            }), 200
+
+        teams_payload = []
+        for team in teams:
+            try:
+                team_payload = _build_mobile_match_points_for_team(team, team_number, event_id, epa_source)
+                teams_payload.append(team_payload)
+            except Exception as exc:
+                current_app.logger.error(f"mobile_api.current-data-mode: failed to build match points for team {getattr(team, 'team_number', None)}: {exc}")
+
+        return jsonify({
+            'success': True,
+            'epa_source': epa_source,
+            'data_mode': data_mode,
+            'event_id': event_id,
+            'team_count': len(teams_payload),
+            'teams': teams_payload,
+            'requested_team_numbers': requested_team_numbers,
+            'includes_scouted_data': True,
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Get current data mode match points error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to retrieve current data mode match points',
+            'error_code': 'CONFIG_ERROR'
+        }), 500
+
+
+# Helper functions for EPA/OPR history endpoint
+def _get_team_match_epa_history(team_number: int, event_key: Optional[str] = None) -> list:
+    """Fetch per-match EPA history from Statbotics for a team at an event.
+    
+    Args:
+        team_number: Team number to fetch EPA for
+        event_key: TBA event key (e.g., '2026casj') or None
+        
+    Returns:
+        List of match records with EPA data
+    """
+    try:
+        from app.utils.statbotics_api_utils import get_statbotics_team_matches
+        matches = get_statbotics_team_matches(team_number, event_key=event_key)
+        return matches or []
+    except Exception as exc:
+        current_app.logger.debug(f"Failed to fetch EPA matches for team {team_number}: {exc}")
+        return []
+
+
+def _build_event_key_candidates(event, team_number=None) -> list[str]:
+    """Build likely event-key variants for TBA/Statbotics lookups.
+
+    Handles mixed storage formats where Event.code may already include a
+    year prefix (for example 2026OKTU) or may be raw (OKTU).
+    """
+    keys = []
+    try:
+        event_code = str(getattr(event, 'code', '') or '').strip()
+        event_year = int(getattr(event, 'year', datetime.now(timezone.utc).year) or datetime.now(timezone.utc).year)
+
+        # Team season from config is often the most accurate year context for
+        # resolving ambiguous/duplicated event rows.
+        team_season = None
+        try:
+            if team_number is not None:
+                from app.utils.config_manager import load_game_config
+                game_config = load_game_config(team_number=team_number)
+                if isinstance(game_config, dict):
+                    team_season_raw = game_config.get('season') or game_config.get('year')
+                    if team_season_raw not in (None, ''):
+                        team_season = int(team_season_raw)
+        except Exception:
+            team_season = None
+
+        from app.utils.tba_api_utils import construct_tba_event_key
+        normalized = construct_tba_event_key(event_code, event_year)
+        if normalized:
+            keys.append(str(normalized).strip().lower())
+
+        if team_season and team_season != event_year:
+            normalized_team_season = construct_tba_event_key(event_code, team_season)
+            if normalized_team_season:
+                keys.append(str(normalized_team_season).strip().lower())
+
+        # Fall back to raw code variants if needed.
+        raw_lower = event_code.lower()
+        if raw_lower:
+            keys.append(raw_lower)
+            if not raw_lower[:4].isdigit():
+                keys.append(f"{event_year}{raw_lower}")
+                if team_season and team_season != event_year:
+                    keys.append(f"{team_season}{raw_lower}")
+            else:
+                # If code is already prefixed, also try stripped form + known years.
+                stripped = raw_lower[4:]
+                if stripped:
+                    keys.append(stripped)
+                    keys.append(f"{event_year}{stripped}")
+                    if team_season and team_season != event_year:
+                        keys.append(f"{team_season}{stripped}")
+    except Exception:
+        pass
+
+    seen = set()
+    ordered = []
+    for key in keys:
+        if key and key not in seen:
+            seen.add(key)
+            ordered.append(key)
+    return ordered
+
+
+def _get_team_opr_at_event(team_number: int, event_key: str) -> Optional[dict]:
+    """Fetch OPR data from TBA for a team at an event.
+    
+    Args:
+        team_number: Team number
+        event_key: TBA event key (e.g., '2026casj')
+        
+    Returns:
+        Dict with 'opr', 'dpr', 'ccwm' keys or None
+    """
+    try:
+        from app.utils.tba_api_utils import get_tba_team_opr
+        opr_data = get_tba_team_opr(team_number, event_key)
+        return opr_data
+    except Exception as exc:
+        current_app.logger.debug(f"Failed to fetch OPR for team {team_number} at event {event_key}: {exc}")
+        return None
+
+
+@mobile_api.route('/config/game/stats/epa-opr-history', methods=['GET', 'POST'])
+@token_required
+def get_team_epa_opr_history():
+    """Return per-match EPA history and OPR data for teams at a requested event.
+    
+    This endpoint provides historical performance metrics from Statbotics (per-match EPA)
+    and The Blue Alliance (OPR/DPR/CCWM) to help mobile clients analyze team performance.
+    
+    Query/Body Parameters:
+        - event_id (int): Database event ID to fetch metrics for
+        - team_numbers (int|str|list): Specific team(s) to return (default: all teams at event)
+        - limit (int): Maximum matches to return per team (default: 200)
+        
+    Response:
+    {
+        "success": true,
+        "event_id": 123,
+        "event_code": "2026casj",
+        "teams": [
+            {
+                "team_number": 254,
+                "team_name": "The Cheesy Poofs",
+                "match_epa_history": [
+                    {
+                        "match_number": 1,
+                        "event_key": "2026casj",
+                        "comp_level": "qm",
+                        "epa": { "total_points": 45.2, ... },
+                        "timestamp": "2026-03-15T14:30:00Z"
+                    },
+                    ...
+                ],
+                "opr_data": {
+                    "opr": 42.5,
+                    "dpr": 12.3,
+                    "ccwm": 8.9
+                }
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        token_team = getattr(request, 'mobile_team_number', None)
+        if not token_team:
+            return jsonify({'success': False, 'error': 'Scouting team not resolved', 'error_code': 'TEAM_NOT_RESOLVED'}), 400
+        
+        # Parse request parameters
+        payload = request.get_json(silent=True) or {}
+        event_value = payload.get('event_id') if isinstance(payload, dict) else None
+        if event_value in (None, ''):
+            event_value = request.args.get('event_id')
+        
+        event_id = _resolve_mobile_event_id_for_team(token_team, event_value)
+        if not event_id:
+            return jsonify({
+                'success': False, 
+                'error': 'Event not found or not accessible',
+                'error_code': 'EVENT_NOT_FOUND'
+            }), 400
+        
+        # Get the event record to retrieve its TBA event key
+        event = Event.query.get(event_id)
+        if not event:
+            return jsonify({
+                'success': False,
+                'error': 'Event not found',
+                'error_code': 'EVENT_NOT_FOUND'
+            }), 404
+
+        event_code = event.code or ''
+        event_key_candidates = _build_event_key_candidates(event, team_number=token_team)
+        primary_event_key = event_key_candidates[0] if event_key_candidates else None
+        
+        # Parse requested team numbers
+        requested_team_numbers = []
+        raw_team_numbers = None
+        if isinstance(payload, dict):
+            raw_team_numbers = payload.get('team_numbers')
+            if raw_team_numbers in (None, ''):
+                raw_team_numbers = payload.get('team_number')
+        if raw_team_numbers in (None, ''):
+            raw_team_numbers = request.args.get('team_numbers') or request.args.get('team_number')
+        
+        if isinstance(raw_team_numbers, (list, tuple, set)):
+            requested_team_numbers = [safe_int_team_number(t) for t in raw_team_numbers]
+        elif isinstance(raw_team_numbers, str) and ',' in raw_team_numbers:
+            requested_team_numbers = [safe_int_team_number(t.strip()) for t in raw_team_numbers.split(',')]
+        elif raw_team_numbers not in (None, ''):
+            requested_team_numbers = [safe_int_team_number(raw_team_numbers)]
+        
+        requested_team_numbers = [tn for tn in requested_team_numbers if tn is not None]
+        
+        # Get teams to return metrics for
+        teams = []
+        if requested_team_numbers:
+            for team_num in requested_team_numbers:
+                team = Team.query.filter_by(team_number=team_num).first()
+                if team:
+                    teams.append(team)
+        else:
+            # Return all teams at the event
+            alliance_id = get_active_alliance_id_for_team(token_team)
+            if alliance_id:
+                teams, _ = get_all_teams_for_alliance(event_id=event_id)
+            else:
+                teams = Team.query.join(Team.events).filter(
+                    Event.id == event_id,
+                    Team.scouting_team_number == token_team
+                ).order_by(Team.team_number).all()
+        
+        if not teams:
+            return jsonify({
+                'success': True,
+                'event_id': event_id,
+                'event_code': event_code,
+                'team_count': 0,
+                'teams': [],
+                'warning': 'No teams found for the requested event'
+            }), 200
+        
+        # Fetch EPA and OPR data for each team
+        teams_data = []
+        limit = int(request.args.get('limit', 200))
+        limit = max(1, min(limit, 500))  # Cap at 500 matches per team
+        
+        for team in teams:
+            try:
+                team_num = team.team_number
+
+                # Fetch per-match EPA history from Statbotics using key fallbacks.
+                epa_matches = []
+                for candidate_key in event_key_candidates:
+                    epa_matches = _get_team_match_epa_history(team_num, candidate_key)
+                    if epa_matches:
+                        break
+                
+                # Limit to requested number of matches
+                epa_matches = epa_matches[:limit]
+
+                # Fetch OPR data from TBA using key fallbacks.
+                opr_data = None
+                for candidate_key in event_key_candidates:
+                    opr_data = _get_team_opr_at_event(team_num, candidate_key)
+                    if opr_data:
+                        break
+                
+                teams_data.append({
+                    'team_number': team_num,
+                    'team_name': team.team_name or f'Team {team_num}',
+                    'match_epa_history': epa_matches,
+                    'opr_data': opr_data
+                })
+                
+            except Exception as exc:
+                current_app.logger.error(f"Failed to fetch metrics for team {getattr(team, 'team_number', '?')}: {exc}")
+                continue
+        
+        return jsonify({
+            'success': True,
+            'event_id': event_id,
+            'event_code': event_code,
+            'tba_event_key': primary_event_key,
+            'event_key_candidates': event_key_candidates,
+            'team_count': len(teams_data),
+            'teams': teams_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get team EPA/OPR history error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to retrieve EPA/OPR history',
+            'error_code': 'STATS_ERROR'
         }), 500
 
 

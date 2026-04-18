@@ -13,7 +13,7 @@ body.modern-layout.dark-mode .stat-card.card-interactive,
 body.modern-layout.dark-mode .data-card,
 body.modern-layout.dark-mode .team-card,
 body.modern-layout.dark-mode .match-card {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     border-color: #444 !important;
     color: #e6e6e6 !important;
 }
@@ -21,7 +21,7 @@ body.modern-layout.dark-mode .match-card {
 /* Force stat cards specifically */
 body.modern-layout.dark-mode .stat-card,
 body.modern-layout.dark-mode .stat-card.card-interactive {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     border-color: #444 !important;
     color: #e6e6e6 !important;
     box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3) !important;
@@ -65,14 +65,14 @@ body.modern-layout.dark-mode .stat-card .stat-value.text-warning {
 /* Force card bodies */
 body.modern-layout.dark-mode .card .card-body,
 body.modern-layout.dark-mode .card-body {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     color: #e6e6e6 !important;
 }
 
 /* Force card headers */
 body.modern-layout.dark-mode .card .card-header,
 body.modern-layout.dark-mode .card-header {
-    background-color: #252a30 !important;
+    background-color: #111111 !important;
     color: #e6e6e6 !important;
     border-bottom-color: #444 !important;
 }
@@ -84,7 +84,7 @@ body.modern-layout.dark-mode .col-xl-4 .card,
 body.modern-layout.dark-mode .col-md-6 .card,
 body.modern-layout.dark-mode .col-md-4 .card,
 body.modern-layout.dark-mode div[class*="col"] .card {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     border-color: #444 !important;
     color: #e6e6e6 !important;
 }
@@ -96,14 +96,14 @@ body.modern-layout.dark-mode .col-xl-4 .card-body,
 body.modern-layout.dark-mode .col-md-6 .card-body,
 body.modern-layout.dark-mode .col-md-4 .card-body,
 body.modern-layout.dark-mode div[class*="col"] .card-body {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     color: #e6e6e6 !important;
 }
 
 /* Override Bootstrap utility classes */
 body.modern-layout.dark-mode .bg-white,
 body.modern-layout.dark-mode .bg-light {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     color: #e6e6e6 !important;
 }
 
@@ -117,7 +117,7 @@ body.modern-layout.dark-mode .text-muted {
 
 /* Force list groups */
 body.modern-layout.dark-mode .list-group-item {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     color: #e6e6e6 !important;
     border-color: #444 !important;
 }
@@ -129,13 +129,13 @@ body.modern-layout.dark-mode .list-group-item-action:hover {
 
 /* Force list group flush items (commonly used in cards) */
 body.modern-layout.dark-mode .list-group-flush .list-group-item {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     color: #e6e6e6 !important;
     border-color: #444 !important;
 }
 
 body.modern-layout.dark-mode .list-group-flush .list-group-item-action {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     color: #e6e6e6 !important;
 }
 
@@ -179,7 +179,7 @@ body.modern-layout.dark-mode .list-group-item .text-info {
 
 /* Force alerts */
 body.modern-layout.dark-mode .alert {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     color: #e6e6e6 !important;
     border-color: #444 !important;
 }
@@ -200,7 +200,7 @@ html body.dark-mode .alert.alert-danger strong {
 
 /* Force badges */
 body.modern-layout.dark-mode .badge {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     color: #e6e6e6 !important;
     border: 1px solid #444 !important;
 }
@@ -264,7 +264,7 @@ body.modern-layout.dark-mode .card-header.bg-gradient-info .btn-light:hover {
 
 /* Force dropdown menus */
 body.modern-layout.dark-mode .dropdown-menu {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     border-color: #444 !important;
     color: #e6e6e6 !important;
 }
@@ -291,8 +291,8 @@ body.modern-layout.dark-mode [style*="background-color: #ffffff"],
 body.modern-layout.dark-mode [style*="background: white"],
 body.modern-layout.dark-mode [style*="background: #fff"],
 body.modern-layout.dark-mode [style*="background: #ffffff"] {
-    background-color: #2d3338 !important;
-    background: #2d3338 !important;
+    background-color: #111111 !important;
+    background: #111111 !important;
     color: #e6e6e6 !important;
 }
 
@@ -308,9 +308,9 @@ html body.modern-layout.dark-mode .row .col-lg-3 .stat-card,
 html body.modern-layout.dark-mode .row .stat-card.card-interactive,
 html body.modern-layout.dark-mode .col-sm-6 .stat-card,
 html body.modern-layout.dark-mode .col-lg-3 .stat-card {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     background-image: none !important;
-    background: #2d3338 !important;
+    background: #111111 !important;
     border-color: #444 !important;
     color: #e6e6e6 !important;
     box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3) !important;
@@ -320,9 +320,9 @@ html body.modern-layout.dark-mode .col-lg-3 .stat-card {
 html body.modern-layout.dark-mode .card .card-body .list-group-flush .list-group-item,
 html body.modern-layout.dark-mode .card-body .list-group-flush .list-group-item,
 html body.modern-layout.dark-mode .list-group-flush .list-group-item {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     background-image: none !important;
-    background: #2d3338 !important;
+    background: #111111 !important;
     border-color: #444 !important;
     color: #e6e6e6 !important;
 }
@@ -349,9 +349,9 @@ html body.modern-layout.dark-mode .list-group-item span.fw-bold {
 /* Override any gradient backgrounds on stat cards */
 html body.modern-layout.dark-mode .stat-card,
 html body.modern-layout.dark-mode .stat-card.card-interactive {
-    background: #2d3338 !important;
+    background: #111111 !important;
     background-image: none !important;
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     border: 1px solid #444 !important;
     color: #e6e6e6 !important;
 }
@@ -359,9 +359,9 @@ html body.modern-layout.dark-mode .stat-card.card-interactive {
 /* Target stat cards in specific column layouts */
 html body.modern-layout.dark-mode .row.mb-4.g-3 .stat-card,
 html body.modern-layout.dark-mode div[class*="col-"] .stat-card {
-    background: #2d3338 !important;
+    background: #111111 !important;
     background-image: none !important;
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     border: 1px solid #444 !important;
     color: #e6e6e6 !important;
     padding: 20px !important;
@@ -594,9 +594,9 @@ html body.dark-mode #teamSelectionModal .list-group-item,
 html body.modern-layout.dark-mode #teamSelectionModal .team-selection-item,
 html body.dark-mode #teamSelectionModal .team-selection-item {
     /* Use a solid dark card inside dark mode but ensure full opacity and readable text */
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     background-image: none !important;
-    background: #2d3338 !important;
+    background: #111111 !important;
     color: #e6e6e6 !important;
     border: 1px solid #444 !important;
     box-shadow: 0 2px 8px rgba(0,0,0,0.35) !important;
@@ -609,7 +609,7 @@ html body.dark-mode #teamSelectionModal .team-selection-item {
 /* Ensure general modals (including the Wipe DB modal) use dark surfaces in dark mode */
 html body.modern-layout.dark-mode .modal-content,
 html body.dark-mode .modal-content {
-    background-color: #2d3338 !important;
+    background-color: #111111 !important;
     color: #e6e6e6 !important;
     border-color: #444 !important;
     box-shadow: 0 6px 18px rgba(0,0,0,0.6) !important;
@@ -932,8 +932,8 @@ html body.modern-layout.dark-mode #teamSelectionModal .modal-content,
 html body.dark-mode #teamSelectionModal .modal-content,
 html body.modern-layout.dark-mode #teamSelectionModal .modal-body,
 html body.dark-mode #teamSelectionModal .modal-body {
-    background: #2d3338 !important;
-    background-color: #2d3338 !important;
+    background: #111111 !important;
+    background-color: #111111 !important;
     background-image: none !important;
     color: #e6e6e6 !important;
     border: 1px solid #444 !important;

@@ -1434,6 +1434,9 @@ Retrieve game configuration for mobile app. The mobile API now exposes multiple 
 - **Active config (team or alliance):** `GET /api/mobile/config/game` and `GET /api/mobile/config/game/active` — returns the ``active`` configuration for the requester. If the requesting team's alliance mode is active and the alliance has a shared config, the active config will be the alliance-shared configuration; otherwise it is the team's explicit saved config.
 - **Per-team explicit config file:** `GET /api/mobile/config/game/team` — returns the explicit saved per-team `game_config.json` (instance file) if present. This never merges alliance config and is useful for showing or downloading the raw team-level file.
 - **Alliance shared config (by alliance id):** `GET /api/mobile/alliances/<alliance_id>/config/game` — returns the alliance's shared game configuration for the specified alliance if the requesting user is a member of that alliance (status `accepted`). This endpoint is designed to allow alliance members to fetch the alliance-shared configuration even when *their team has not activated alliance mode*; it requires a valid mobile JWT and membership in the alliance and will return `403 FORBIDDEN` if the caller is not a member.
+- **Mobile data mode:** `GET /api/mobile/config/game/data-mode` — returns the effective data mode for the requesting team's current analysis settings, including the raw `epa_source` and a human-readable `data_mode` label.
+- **Current data-mode match points:** `GET /api/mobile/config/game/current-data-mode` — returns match-by-match point estimates for one team or all teams at an event using the requesting team's current EPA/OPR/scouting mode.
+- **Team EPA/OPR history:** `GET /api/mobile/config/game/stats/epa-opr-history` — returns per-match EPA history from Statbotics and event-level OPR data from The Blue Alliance for teams at a requested event, useful for analyzing historical team performance.
 
 All GET endpoints return the full gameconfig JSON used by the web UI (not a trimmed subset). Mobile clients should expect the complete configuration including sections, rules, validation, and any custom fields.
 
@@ -1449,6 +1452,230 @@ curl -H "Authorization: Bearer $TOKEN" "https://your-server.com/api/mobile/confi
 - Fetch alliance shared config by alliance id (requires alliance membership):
 ```bash
 curl -H "Authorization: Bearer $TOKEN" "https://your-server.com/api/mobile/alliances/123/config/game"
+```
+
+### Get Mobile Data Mode
+
+Retrieve the effective mobile data mode derived from the team's configured EPA source. This endpoint is useful for mobile clients that need to know whether the current analysis mode is:
+- Scouted Data Only
+- Statbotics EPA Only
+- Scouted Data + Statbotics EPA Gap-Fill
+- TBA OPR Only
+- Scouted Data + TBA OPR Gap-Fill
+
+**Endpoint:** `GET /api/mobile/config/game/data-mode`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "epa_source": "scouted_with_statbotics",
+  "data_mode": "Scouted Data + Statbotics EPA Gap-Fill"
+}
+```
+
+**Notes:**
+- `epa_source` is the raw server-side setting stored on the team's `ScoutingTeamSettings` record.
+- `data_mode` is the normalized label intended for mobile clients.
+- If no team settings exist, the endpoint defaults to `epa_source: "scouted_only"` and `data_mode: "Scouted Data Only"`.
+
+### Get Current Data-Mode Match Points
+
+Return match-by-match point estimates for one team or all teams at an event using the team's current EPA/OPR/scouting mode. This is the endpoint used by the standalone Tkinter client in `mobile_data_mode_client.py`.
+
+**Endpoint:** `GET` or `POST /api/mobile/config/game/current-data-mode`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request body fields:**
+- `event_id` or `event_code` - optional event identifier; if omitted, the server uses the current event from the team's config
+- `team_number` - optional single team to fetch
+- `team_numbers` - optional list of team numbers to fetch
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "epa_source": "scouted_with_statbotics",
+  "data_mode": "Scouted Data + Statbotics EPA Gap-Fill",
+  "event_id": 123,
+  "team_count": 2,
+  "requested_team_numbers": [1111, 2222],
+  "includes_scouted_data": true,
+  "teams": [
+    {
+      "team_number": 1111,
+      "team_name": "Team A",
+      "match_count": 1,
+      "external_total_points": 42,
+      "match_points": [
+        {
+          "match_id": 555,
+          "match_number": 1,
+          "scouted_auto_points": 1,
+          "scouted_teleop_points": 2,
+          "scouted_endgame_points": 3,
+          "scouted_total_points": 6,
+          "external_total_points": 42,
+          "selected_total_points": 6,
+          "selected_source": "scouted",
+          "has_scouted_data": true
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Notes:**
+- If `team_number`/`team_numbers` is omitted, the endpoint returns all teams visible for the event.
+- In `statbotics_only` or `tba_opr_only` mode, the selected totals come from the external estimator.
+- In blended modes, scouted rows are returned alongside the external estimate so the client can display both.
+
+### Get Team EPA/OPR History
+
+Retrieve historical per-match EPA estimates and OPR ratings for teams at a specific event. This endpoint aggregates performance data from Statbotics (per-match EPA, used for historical analysis) and The Blue Alliance (OPR/DPR/CCWM, used for overall event performance ranking).
+
+**Endpoint:** `GET` or `POST /api/mobile/config/game/stats/epa-opr-history`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request Parameters:**
+- `event_id` - **required** — Database event ID, year-prefixed event code (e.g., `2026OKTU`), or raw event code
+- `team_numbers` - **optional** — Single team number, comma-separated list, or JSON array of team numbers; if omitted, returns all teams at the event
+- `limit` - **optional** — Maximum per-match records to return per team (default: 200, max: 500)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "event_id": 123,
+  "event_code": "OKTU",
+  "tba_event_key": "2026oktu",
+  "team_count": 2,
+  "teams": [
+    {
+      "team_number": 254,
+      "team_name": "The Cheesy Poofs",
+      "match_epa_history": [
+        {
+          "team": 254,
+          "event": "2026oktu",
+          "comp_level": "qm",
+          "match_number": 1,
+          "set_number": 1,
+          "alliance": "blue",
+          "epa": {
+            "total_points": 45.2,
+            "auto_points": 12.1,
+            "teleop_points": 28.5,
+            "endgame_points": 4.6
+          },
+          "timestamp": "2026-03-10T14:30:00Z"
+        },
+        {
+          "team": 254,
+          "event": "2026oktu",
+          "comp_level": "qm",
+          "match_number": 2,
+          "set_number": 1,
+          "alliance": "red",
+          "epa": {
+            "total_points": 48.7,
+            "auto_points": 10.2,
+            "teleop_points": 32.1,
+            "endgame_points": 6.4
+          },
+          "timestamp": "2026-03-10T15:00:00Z"
+        }
+      ],
+      "opr_data": {
+        "opr": 45.3,
+        "dpr": 15.2,
+        "ccwm": 8.1
+      }
+    },
+    {
+      "team_number": 1678,
+      "team_name": "Citrus Circuits",
+      "match_epa_history": [
+        {
+          "team": 1678,
+          "event": "2026oktu",
+          "comp_level": "qm",
+          "match_number": 1,
+          "set_number": 1,
+          "alliance": "red",
+          "epa": {
+            "total_points": 42.1,
+            "auto_points": 11.0,
+            "teleop_points": 28.2,
+            "endgame_points": 2.9
+          },
+          "timestamp": "2026-03-10T14:30:00Z"
+        }
+      ],
+      "opr_data": {
+        "opr": 41.8,
+        "dpr": 16.5,
+        "ccwm": 5.2
+      }
+    }
+  ]
+}
+```
+
+**Error Responses:**
+- 401 / AUTH_REQUIRED: Missing or invalid token
+- 400 / EVENT_NOT_FOUND: Event ID not found or not accessible to requesting team
+- 400 / TEAM_NOT_RESOLVED: Scouting team cannot be determined from token
+- 500 / STATS_ERROR: Failed to retrieve EPA/OPR data from external sources
+
+**Notes:**
+- **match_epa_history** contains per-match EPA data from Statbotics API (when available). Each record represents one team's performance in a single match.
+- **opr_data** contains overall event-level OPR (Offensive Power Rating), DPR (Defensive Power Rating), and CCWM (Contribution to Winning Margin) from The Blue Alliance API.
+- If a team has no EPA history or OPR data available, those fields will be empty arrays or null respectively.
+- OPR data is event-level and does not vary per-match (same `opr_data` for all matches within an event).
+- The `timestamp` field in match EPA records reflects when the match was played.
+- Both Statbotics and TBA queries may return null/incomplete data depending on external API availability and whether the team participated at the specified event.
+
+**Examples:**
+
+- Fetch EPA/OPR history for all teams at event 123:
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://your-server.com/api/mobile/config/game/stats/epa-opr-history?event_id=123"
+```
+
+- Fetch EPA/OPR history for specific teams (254 and 1678) at event code 2026OKTU:
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://your-server.com/api/mobile/config/game/stats/epa-opr-history?event_id=2026OKTU&team_numbers=254,1678"
+```
+
+- POST version with JSON body:
+```bash
+curl -X POST "https://your-server.com/api/mobile/config/game/stats/epa-opr-history" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_id": "2026OKTU",
+    "team_numbers": [254, 1678],
+    "limit": 100
+  }'
 ```
 
 ### Set / Update Game Configuration
