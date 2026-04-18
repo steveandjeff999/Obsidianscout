@@ -15,3 +15,4 @@ See the `mobile api docs/` folder for comprehensive mobile API documentation:
 - `MOBILE_API_DOCUMENTATION.md` - Full API reference
 - `MOBILE_API_README.md` - Implementation summary
 - `MOBILE_API_QUICKSTART.md` - Getting started guide
+- `mobile_data_mode_client.py` - Standalone Tkinter client for logging in and fetching current-data-mode match points

@@ -38,6 +38,7 @@ A comprehensive REST API has been added to OBSIDIAN Scout specifically designed 
 - **Scouting Data** - Submit and retrieve match scouting
 - **Pit Scouting** - Submit pit scouting observations
 - **Game Configuration** - Download current game config
+- **Current Data-Mode Match Points** - Fetch per-match point estimates using the team's current EPA/OPR/scouting mode
 - **Sync Status** - Check for updates
 
 ## Files Added
@@ -80,6 +81,13 @@ Automated test script that:
 - Checks data access
 - Provides detailed output
 
+### 5. `mobile_data_mode_client.py`
+Standalone Tkinter client that:
+- logs in against a chosen server/IP
+- accepts insecure HTTPS certificates for self-signed setups
+- fetches current-data-mode match points for a team or event
+- displays the full JSON response in the UI
+
 ## Files Modified
 
 ### 1. `app/__init__.py`
@@ -111,7 +119,9 @@ Automated test script that:
 ├── pit-scouting/
 │   └── submit                      [POST]   Submit pit scouting
 ├── config/
-│   └── game                        [GET]    Game configuration
+│   ├── game                        [GET]    Game configuration
+│   ├── game/current-data-mode      [GET/POST] Current data-mode match points
+│   └── game/data-mode              [GET]    Human-readable current mode label
 └── sync/
     └── status                      [GET]    Sync status
 ```
@@ -131,6 +141,11 @@ python run.py
 ### Step 3: Test the API
 ```bash
 python test_mobile_api.py
+```
+
+### Step 3b: Launch the standalone match-points client
+```bash
+python mobile_data_mode_client.py
 ```
 
 ### Step 4: Read Documentation

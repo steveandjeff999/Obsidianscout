@@ -1,11 +1,11 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 {#
     If the server already knows the current theme is a dark variant, add
     `dark-mode` class (and some inline background color) to the <html> element
     so the browser paints correctly before any scripts run.  This covers the
     common case where users have saved a dark theme as their preference.
 #}
-<html lang="en" class="h-100{% if current_theme_id and ('dark' in current_theme_id) %} dark-mode{% endif %}"{% if current_theme_id and ('dark' in current_theme_id) %} data-bs-theme="dark" style="background:#0b0b0d;color:#e6e6e6;"{% endif %}>
+<html lang="en" class="h-100{% if current_theme_id and ('dark' in current_theme_id) %} dark-mode{% endif %}"{% if current_theme_id and ('dark' in current_theme_id) %} data-bs-theme="dark" style="background:#000000;color:#e6e6e6;"{% endif %}>
 <script>
     // **extremely early** theme detection executed before any styles are parsed.
     // This handles client-side darkMode preference stored in localStorage
@@ -37,7 +37,7 @@
                     document.body.setAttribute('data-bs-theme','dark');
                 } catch(e) { /* ignore */ }
                 // inline background ensures any unthemed elements start dark
-                document.documentElement.style.background = '#0b0b0d';
+                document.documentElement.style.background = '#000000';
                 document.documentElement.style.color = '#e6e6e6';
             } else {
                 // ANY light-mode path (explicit 'false', OS light, or no preference).
@@ -72,7 +72,7 @@
         }
         /* Dark mode â€“ controlled by html.dark-mode class set in the early <script> */
         html.dark-mode,
-        html.dark-mode body { background: #0b0b0d !important; color: #e6e6e6 !important; }
+        html.dark-mode body { background: #000000 !important; color: #e6e6e6 !important; }
     </style>
     <!-- Dark component overrides â€“ class-based ONLY, never fired by OS media query
          so light-mode users with a dark OS preference see the correct light layout. -->
@@ -93,7 +93,7 @@
         html.dark-mode .form-control,
         html.dark-mode .btn,
         html.dark-mode .badge {
-            background-color: #2d3338 !important;
+            background-color: #111111 !important;
             color: #e6e6e6 !important;
             border-color: #444 !important;
         }
@@ -128,11 +128,11 @@
             border-color: rgba(17,24,39,0.10) !important;
         }
         /* Buttons, inputs, badges */
-        html.light-mode-explicit .btn,
+        html.light-mode-explicit .btn:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info),
         html.light-mode-explicit .form-control,
         html.light-mode-explicit .form-select,
         html.light-mode-explicit .input-group-text,
-        html.light-mode-explicit .badge {
+        html.light-mode-explicit .badge:not(.bg-primary):not(.bg-success):not(.bg-danger):not(.bg-warning):not(.bg-info) {
             background-color: #ffffff !important;
             color: #111827 !important;
             border-color: rgba(17,24,39,0.12) !important;
@@ -402,6 +402,8 @@
     <!-- Button shape customization removed: ui-rounded styles no longer included -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-fixes.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-scroll-fixes.css') }}">
+    <!-- 2026 Modern Refresh: visual overhaul loaded last to override legacy dark surfaces -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-refresh.css') }}">
     <!-- Use UMD build of Chart.js for compatibility with non-module script loading -->
     <script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
     

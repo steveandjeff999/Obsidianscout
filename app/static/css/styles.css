@@ -18,12 +18,12 @@ body {
 /* Card styling */
 .card {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-8px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
 }
 
 /* Team colors */
@@ -1037,17 +1037,20 @@ body {
 
 /* Card header gradients */
 .dark-mode .bg-gradient-primary {
-    background: linear-gradient(45deg, #0d52bd, #3d8bfd) !important;
+    background: #111111 !important;
+    background-image: none !important;
     color: white !important;
 }
 
 .dark-mode .bg-gradient-success {
-    background: linear-gradient(45deg, #157347, #20c997) !important;
+    background: #111111 !important;
+    background-image: none !important;
     color: white !important;
 }
 
 .dark-mode .bg-gradient-info {
-    background: linear-gradient(45deg, #0891b2, #0dcaf0) !important;
+    background: #111111 !important;
+    background-image: none !important;
     color: white !important;
 }
 
