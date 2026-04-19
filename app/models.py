@@ -264,6 +264,7 @@ class StatboticsCache(ConcurrentModelMixin, db.Model):
     the app doesn't need to re-fetch from the Statbotics API on every
     request.  A configurable TTL (default 24 h) allows periodic refresh.
     """
+    __bind_key__ = 'statboticsepa'
     __tablename__ = 'statbotics_cache'
     __table_args__ = (
         db.UniqueConstraint('team_number', 'year', 'scouting_team_number',
