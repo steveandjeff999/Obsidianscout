@@ -2670,6 +2670,64 @@ function showKeyboardShortcutsHelp() {
  * Used in the visualization pages
  */
 function renderPlotlyGraphs() {
+    // Plotly creates temporary drag overlays while zoom/select is active.
+    // In dark mode, aggressive global style overrides can tint those overlays.
+    // Keep them transparent at runtime so the whole page doesn't dim during drag.
+    function ensurePlotlyOverlaySafety() {
+        if (window.__plotlyOverlaySafetyInstalled) return;
+        window.__plotlyOverlaySafetyInstalled = true;
+
+        function isDarkModeActive() {
+            return document.body.classList.contains('dark-mode') ||
+                   document.documentElement.classList.contains('dark-mode') ||
+                   document.body.getAttribute('data-bs-theme') === 'dark' ||
+                   document.documentElement.getAttribute('data-bs-theme') === 'dark';
+        }
+
+        function sanitizePlotlyOverlays(root) {
+            if (!isDarkModeActive()) return;
+            const scope = root && root.querySelectorAll ? root : document;
+            const overlays = [];
+
+            if (root && root.nodeType === 1 && root.matches && root.matches('.dragcover')) {
+                overlays.push(root);
+            }
+
+            scope.querySelectorAll('.dragcover').forEach(el => overlays.push(el));
+
+            overlays.forEach(function(el) {
+                try {
+                    el.style.setProperty('background', 'transparent', 'important');
+                    el.style.setProperty('background-color', 'transparent', 'important');
+                    el.style.setProperty('border-radius', '0', 'important');
+                } catch (e) {
+                    // Ignore style write failures on transient nodes
+                }
+            });
+        }
+
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node && node.nodeType === 1) sanitizePlotlyOverlays(node);
+                });
+            });
+        });
+
+        if (document.body) {
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
+
+        document.addEventListener('pointerdown', function(evt) {
+            if (evt && evt.target && evt.target.closest && evt.target.closest('.js-plotly-plot, .plotly-graph')) {
+                sanitizePlotlyOverlays(document);
+                requestAnimationFrame(function() { sanitizePlotlyOverlays(document); });
+            }
+        }, true);
+    }
+
+    ensurePlotlyOverlaySafety();
+
     // Check if Plotly is available
     if (typeof Plotly === 'undefined') {
         console.error('Plotly is not loaded. Make sure to include Plotly.js before calling renderPlotlyGraphs()');

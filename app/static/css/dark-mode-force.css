@@ -1043,6 +1043,46 @@ html body.dark-mode .dataTables_wrapper .dataTables_paginate .paginate_button {
     border: 1px solid rgba(255,255,255,0.04) !important;
 }
 
+/* Plotly drag/zoom safety: prevent global dark-mode wildcard rules from
+   styling Plotly's interaction overlays as opaque black layers. */
+html body.dark-mode .js-plotly-plot,
+html body.dark-mode .js-plotly-plot *,
+html body.modern-layout.dark-mode .js-plotly-plot,
+html body.modern-layout.dark-mode .js-plotly-plot * {
+    border-radius: 0 !important;
+}
+
+html body.dark-mode .js-plotly-plot .dragcover,
+html body.modern-layout.dark-mode .js-plotly-plot .dragcover {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+html body.dark-mode .dragcover[style*="background"],
+html body.modern-layout.dark-mode .dragcover[style*="background"],
+html body.dark-mode .js-plotly-plot .dragcover[style*="background"],
+html body.modern-layout.dark-mode .js-plotly-plot .dragcover[style*="background"] {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+/* Plotly appends a temporary .dragcover at document level during drag-zoom.
+   Keep it transparent so global dark-mode wildcard rules do not black out the page. */
+html.dark-mode .dragcover,
+body.dark-mode .dragcover,
+html[data-bs-theme="dark"] .dragcover,
+body[data-bs-theme="dark"] .dragcover {
+    background: transparent !important;
+    background-color: transparent !important;
+    border-radius: 0 !important;
+}
+
+html body.dark-mode .js-plotly-plot .draglayer .zoombox,
+html body.modern-layout.dark-mode .js-plotly-plot .draglayer .zoombox {
+    fill: rgba(59, 130, 246, 0.18) !important;
+    stroke: rgba(59, 130, 246, 0.85) !important;
+}
+
 /* Safety: ensure popovers are darker than surrounding card backgrounds */
 html body.modern-layout.dark-mode .popover { box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important; }
 

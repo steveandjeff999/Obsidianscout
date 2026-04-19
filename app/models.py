@@ -377,6 +377,119 @@ class StatboticsCache(ConcurrentModelMixin, db.Model):
         return f'<StatboticsCache team={self.team_number} year={self.year} total={self.epa_total}>'
 
 
+class StatboticsMatchCache(ConcurrentModelMixin, db.Model):
+    """Persistent cache for Statbotics per-match historical EPA rows.
+
+    Stores the raw TeamMatch payload list per team + event key so mobile/API
+    history endpoints can return quickly without re-fetching each request.
+    """
+    __tablename__ = 'statbotics_match_cache'
+    __table_args__ = (
+        db.UniqueConstraint('team_number', 'event_key', 'year',
+                            name='uq_statbotics_match_team_event_year'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    team_number = db.Column(db.Integer, nullable=False, index=True)
+    event_key = db.Column(db.String(32), nullable=False, default='', index=True)
+    year = db.Column(db.Integer, nullable=False, default=0, index=True)
+
+    # JSON-serialized list of match dict rows from Statbotics /team_matches
+    matches_json = db.Column(db.Text, nullable=True)
+
+    fetched_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    is_miss = db.Column(db.Boolean, default=False, nullable=False)
+
+    DEFAULT_TTL_MINUTES = 30
+
+    @classmethod
+    def _norm_event_key(cls, event_key):
+        return str(event_key or '').strip().lower()
+
+    @classmethod
+    def _norm_year(cls, year):
+        try:
+            return int(year) if year not in (None, '') else 0
+        except Exception:
+            return 0
+
+    @classmethod
+    def get_cached(cls, team_number, event_key=None, year=None, ttl_minutes=None,
+                   stale_ok=False):
+        """Return a cached row if it exists and hasn't expired."""
+        if ttl_minutes is None:
+            ttl_minutes = cls.DEFAULT_TTL_MINUTES
+        row = cls.query.filter_by(
+            team_number=int(team_number),
+            event_key=cls._norm_event_key(event_key),
+            year=cls._norm_year(year),
+        ).first()
+        if row is None:
+            return None
+        if stale_ok:
+            return row
+
+        from datetime import timedelta
+        cutoff = datetime.utcnow() - timedelta(minutes=ttl_minutes)
+        fetched_at = row.fetched_at.replace(tzinfo=None) if (row.fetched_at and row.fetched_at.tzinfo) else row.fetched_at
+        if fetched_at and fetched_at >= cutoff:
+            return row
+        return None
+
+    @classmethod
+    def upsert(cls, team_number, event_key=None, year=None, matches=None):
+        """Insert or update cached team match rows.
+
+        *matches* should be a list of dict rows from Statbotics /team_matches,
+        or ``None`` to record a miss.
+        """
+        row = cls.query.filter_by(
+            team_number=int(team_number),
+            event_key=cls._norm_event_key(event_key),
+            year=cls._norm_year(year),
+        ).first()
+        if row is None:
+            row = cls(
+                team_number=int(team_number),
+                event_key=cls._norm_event_key(event_key),
+                year=cls._norm_year(year),
+            )
+            db.session.add(row)
+
+        if isinstance(matches, list):
+            try:
+                payload = [m for m in matches if isinstance(m, dict)]
+                row.matches_json = json.dumps(payload)
+                row.is_miss = False
+            except Exception:
+                row.matches_json = '[]'
+                row.is_miss = True
+        else:
+            row.matches_json = None
+            row.is_miss = True
+
+        row.fetched_at = datetime.now(timezone.utc)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return row
+
+    def to_matches(self):
+        if self.is_miss:
+            return None
+        try:
+            payload = json.loads(self.matches_json or '[]')
+            if isinstance(payload, list):
+                return [m for m in payload if isinstance(m, dict)]
+        except Exception:
+            pass
+        return []
+
+    def __repr__(self):
+        return f'<StatboticsMatchCache team={self.team_number} event={self.event_key} year={self.year}>'
+
+
 class TbaOprCache(ConcurrentModelMixin, db.Model):
     """Persistent cache for TBA OPR data.
 

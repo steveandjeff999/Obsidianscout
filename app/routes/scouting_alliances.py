@@ -304,6 +304,17 @@ def create_alliance():
         )
         db.session.add(member)
         db.session.commit()
+
+        try:
+            from app.utils.analysis import refresh_opr_epa_for_event
+            team_numbers = [
+                int(t.get('teamNumber'))
+                for t in api_teams
+                if isinstance(t, dict) and t.get('teamNumber') is not None
+            ]
+            refresh_opr_epa_for_event(getattr(event, 'code', None), team_numbers=team_numbers)
+        except Exception as e:
+            current_app.logger.warning(f"Alliance team sync post-refresh skipped: {e}")
         
         return jsonify({'success': True, 'alliance_id': alliance.id})
     
@@ -643,6 +654,13 @@ def add_event(alliance_id):
         
         db.session.add(alliance_event)
         db.session.commit()
+
+        try:
+            from app.utils.analysis import refresh_opr_epa_for_event
+            team_numbers = [t.team_number for t in event.teams if getattr(t, 'team_number', None) is not None]
+            refresh_opr_epa_for_event(getattr(event, 'code', None), team_numbers=team_numbers)
+        except Exception as e:
+            current_app.logger.warning(f"Alliance match sync post-refresh skipped: {e}")
         
         flash(f'Event {event_code} added to alliance successfully!', 'success')
         
@@ -3343,6 +3361,14 @@ def perform_alliance_api_sync_for_alliance(alliance_id):
                 try:
                     from app.routes.data import merge_duplicate_events
                     merge_duplicate_events(storage_team)
+                except Exception:
+                    pass
+                try:
+                    from app.utils.analysis import refresh_opr_epa_for_event
+                    team_numbers = []
+                    if event and hasattr(event, 'teams'):
+                        team_numbers = [t.team_number for t in event.teams if getattr(t, 'team_number', None) is not None]
+                    refresh_opr_epa_for_event(getattr(event, 'code', None), team_numbers=team_numbers)
                 except Exception:
                     pass
                 result['success'] = True

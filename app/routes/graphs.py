@@ -31,6 +31,8 @@ from app.utils.alliance_data import (
 import os
 import secrets
 import copy
+import time as _time
+import re
 
 
 def get_theme_context():
@@ -38,6 +40,410 @@ def get_theme_context():
     return {
         'themes': theme_manager.get_available_themes(),
         'current_theme_id': theme_manager.current_theme
+    }
+
+
+# Short-lived route-layer cache to prevent repeated heavy metric/EPA fetches
+# when /graphs is refreshed frequently.
+_GRAPH_METRICS_CACHE = {}
+_GRAPH_METRICS_CACHE_TTL_SECONDS = 600
+_GRAPH_METRICS_CACHE_CLEANUP_EVERY = 250
+_graph_metrics_cache_access_counter = 0
+
+# Cache external EPA/OPR lookups used directly in generate-graph rendering.
+_GRAPH_EPA_CACHE = {}
+_GRAPH_EPA_CACHE_TTL_SECONDS = 600
+_GRAPH_EPA_CACHE_CLEANUP_EVERY = 250
+_graph_epa_cache_access_counter = 0
+
+
+def _graph_metrics_cache_get(key):
+    """Return cached metrics result for *key* when still fresh."""
+    global _graph_metrics_cache_access_counter
+    entry = _GRAPH_METRICS_CACHE.get(key)
+    _graph_metrics_cache_access_counter += 1
+    if _graph_metrics_cache_access_counter >= _GRAPH_METRICS_CACHE_CLEANUP_EVERY:
+        _graph_metrics_cache_cleanup()
+    if not entry:
+        return None
+    payload, ts = entry
+    if (_time.time() - ts) <= _GRAPH_METRICS_CACHE_TTL_SECONDS:
+        return payload
+    return None
+
+
+def _graph_metrics_cache_set(key, payload):
+    """Store metrics payload in short-lived graphs cache."""
+    global _graph_metrics_cache_access_counter
+    _GRAPH_METRICS_CACHE[key] = (payload, _time.time())
+    _graph_metrics_cache_access_counter += 1
+    if _graph_metrics_cache_access_counter >= _GRAPH_METRICS_CACHE_CLEANUP_EVERY:
+        _graph_metrics_cache_cleanup()
+
+
+def _graph_metrics_cache_cleanup():
+    """Evict stale entries from route-level graphs cache."""
+    global _graph_metrics_cache_access_counter
+    _graph_metrics_cache_access_counter = 0
+    now = _time.time()
+    stale = [k for k, (_, ts) in list(_GRAPH_METRICS_CACHE.items())
+             if (now - ts) > _GRAPH_METRICS_CACHE_TTL_SECONDS]
+    for key in stale:
+        del _GRAPH_METRICS_CACHE[key]
+
+
+def _graph_epa_cache_get(key):
+    """Return cached EPA/OPR payload for *key* when still fresh."""
+    global _graph_epa_cache_access_counter
+    entry = _GRAPH_EPA_CACHE.get(key)
+    _graph_epa_cache_access_counter += 1
+    if _graph_epa_cache_access_counter >= _GRAPH_EPA_CACHE_CLEANUP_EVERY:
+        _graph_epa_cache_cleanup()
+    if not entry:
+        return None
+    payload, ts = entry
+    if (_time.time() - ts) <= _GRAPH_EPA_CACHE_TTL_SECONDS:
+        return payload
+    return None
+
+
+def _graph_epa_cache_set(key, payload):
+    """Store EPA/OPR payload in short-lived cache."""
+    global _graph_epa_cache_access_counter
+    _GRAPH_EPA_CACHE[key] = (payload, _time.time())
+    _graph_epa_cache_access_counter += 1
+    if _graph_epa_cache_access_counter >= _GRAPH_EPA_CACHE_CLEANUP_EVERY:
+        _graph_epa_cache_cleanup()
+
+
+def _graph_epa_cache_cleanup():
+    """Evict stale entries from EPA/OPR cache."""
+    global _graph_epa_cache_access_counter
+    _graph_epa_cache_access_counter = 0
+    now = _time.time()
+    stale = [k for k, (_, ts) in list(_GRAPH_EPA_CACHE.items())
+             if (now - ts) > _GRAPH_EPA_CACHE_TTL_SECONDS]
+    for key in stale:
+        del _GRAPH_EPA_CACHE[key]
+
+
+def _get_epa_metrics_cached(team_number, epa_source, force_refresh=False):
+    """Cached wrapper around get_epa_metrics_for_team for graph rendering."""
+    cache_key = (int(team_number), str(epa_source or 'scouted_only'))
+    if not force_refresh:
+        cached = _graph_epa_cache_get(cache_key)
+        if cached is not None:
+            return cached
+
+    from app.utils.analysis import get_epa_metrics_for_team
+    payload = get_epa_metrics_for_team(team_number)
+    _graph_epa_cache_set(cache_key, payload)
+    return payload
+
+
+def _normalize_comp_level_for_graph_match(match_obj):
+    """Normalize a Match row into Statbotics comp level keys."""
+    level = (getattr(match_obj, 'comp_level', None) or '').lower()
+    if level in ('qm', 'ef', 'qf', 'sf', 'f'):
+        return level
+
+    mtype = (getattr(match_obj, 'match_type', None) or '').strip().lower()
+    if 'qual' in mtype:
+        return 'qm'
+    if 'playoff' in mtype or 'elim' in mtype:
+        return 'qf'
+    return ''
+
+
+def _statbotics_match_event_prefix(match_key):
+    """Extract event prefix from a Statbotics match key like 2026cabl_qm12."""
+    text = str(match_key or '').strip().lower()
+    if '_' not in text:
+        return ''
+    return text.split('_', 1)[0]
+
+
+def _parse_statbotics_match_key_for_graphs(key):
+    """Parse a Statbotics TeamMatch key into (comp_level, set_number, match_number)."""
+    text = str(key or '')
+    # Examples: 2025cabe_qm12, 2025cabe_qf1m2, 2025cabe_f1m1
+    found = re.search(r'_(qm|ef|qf|sf|f)(\d+)(?:m(\d+))?$', text)
+    if not found:
+        return None
+
+    comp = found.group(1)
+    left = int(found.group(2) or 0)
+    right = int(found.group(3) or 0)
+    if comp == 'qm':
+        return comp, 0, left
+    return comp, left, right
+
+
+def _build_statbotics_match_points_for_graphs(team_number, event_obj):
+    """Return Statbotics points keyed by match tuple and by chronological order."""
+    if not event_obj:
+        return {}, []
+
+    try:
+        from app.utils.statbotics_api_utils import get_statbotics_team_matches
+    except Exception:
+        return {}, []
+
+    event_keys = []
+    code = str(getattr(event_obj, 'code', '') or '').strip().lower()
+    year = getattr(event_obj, 'year', None)
+    if code:
+        year_str = str(year) if year else ''
+        suffix = code
+        if year_str and code.startswith(year_str):
+            suffix = code[len(year_str):].strip()
+
+        # Statbotics team_matches docs expect `event` in full key format
+        # like `2024cabl`; try multiple safe normalizations.
+        if year_str and suffix:
+            event_keys.append(f"{year_str}{suffix}")
+        if code:
+            event_keys.append(code)
+        if suffix and suffix != code:
+            event_keys.append(suffix)
+
+        # Handle malformed codes with duplicated year prefixes (e.g. 20262026tsta).
+        if year_str and code.startswith(f"{year_str}{year_str}"):
+            trimmed_once = code[len(year_str):].strip()
+            if trimmed_once:
+                event_keys.append(trimmed_once)
+
+    deduped_keys = []
+    seen = set()
+    for key in event_keys:
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped_keys.append(key)
+
+    statbotics_rows = []
+    for key in deduped_keys:
+        rows = get_statbotics_team_matches(team_number, event_key=key, limit=300)
+        if rows:
+            statbotics_rows = rows
+            break
+
+    # If event-filtered fetch returned no rows (common with malformed local
+    # event keys), fall back to year-level history and filter by match prefix.
+    if not statbotics_rows and year:
+        try:
+            year_rows = get_statbotics_team_matches(team_number, year=int(year), limit=1000)
+        except Exception:
+            year_rows = []
+
+        if year_rows:
+            prefixes = {str(k).strip().lower() for k in deduped_keys if str(k).strip()}
+            # Also include one extra de-duplicated year trim for malformed keys.
+            more_prefixes = set()
+            for p in list(prefixes):
+                if p.startswith(str(year) + str(year)):
+                    more_prefixes.add(p[len(str(year)):])
+            prefixes.update(more_prefixes)
+
+            filtered_rows = []
+            for row in year_rows:
+                mkey = row.get('match') if isinstance(row, dict) else None
+                prefix = _statbotics_match_event_prefix(mkey)
+                if prefix and prefix in prefixes:
+                    filtered_rows.append(row)
+            statbotics_rows = filtered_rows
+
+    points_by_match = {}
+    ordered_points = []
+
+    try:
+        sorted_rows = sorted(
+            statbotics_rows,
+            key=lambda r: int((r or {}).get('time') or 0)
+        )
+    except Exception:
+        sorted_rows = list(statbotics_rows)
+
+    for row in sorted_rows:
+        sb_points = (((row.get('epa') or {}).get('total_points')) if isinstance(row.get('epa'), dict) else None)
+        if sb_points is None:
+            continue
+        try:
+            ordered_points.append(round(max(float(sb_points), 0.0), 1))
+        except Exception:
+            continue
+
+    for row in statbotics_rows:
+        parsed = _parse_statbotics_match_key_for_graphs(row.get('match'))
+        if not parsed:
+            continue
+        sb_points = (((row.get('epa') or {}).get('total_points')) if isinstance(row.get('epa'), dict) else None)
+        if sb_points is None:
+            continue
+        try:
+            points_by_match[parsed] = round(max(float(sb_points), 0.0), 1)
+        except Exception:
+            continue
+
+    return points_by_match, ordered_points
+
+
+def _lookup_statbotics_points_for_graph_match(match_obj, statbotics_points_by_match):
+    """Lookup Statbotics total_points for a local Match row."""
+    if not match_obj or not statbotics_points_by_match:
+        return None
+
+    comp_level = _normalize_comp_level_for_graph_match(match_obj)
+    set_number = int(getattr(match_obj, 'set_number', 0) or 0)
+    match_number = int(getattr(match_obj, 'match_number', 0) or 0)
+    return statbotics_points_by_match.get((comp_level, set_number, match_number))
+
+
+def _calculate_team_metrics_cached(team_id, event_id=None):
+    """Cached wrapper around calculate_team_metrics for /graphs routes."""
+    try:
+        from app.utils.analysis import get_current_epa_source
+        epa_source = get_current_epa_source() or 'scouted_only'
+    except Exception:
+        epa_source = 'scouted_only'
+
+    cache_key = (int(team_id), int(event_id) if event_id is not None else 0, str(epa_source))
+    cached = _graph_metrics_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    result = calculate_team_metrics(team_id, event_id=event_id)
+    _graph_metrics_cache_set(cache_key, result)
+    return result
+
+
+def _calculate_team_metrics_cached_force(team_id, event_id=None):
+    """Force-refresh wrapper that bypasses cache lookup for a metrics key."""
+    try:
+        from app.utils.analysis import get_current_epa_source
+        epa_source = get_current_epa_source() or 'scouted_only'
+    except Exception:
+        epa_source = 'scouted_only'
+
+    cache_key = (int(team_id), int(event_id) if event_id is not None else 0, str(epa_source))
+    result = calculate_team_metrics(team_id, event_id=event_id)
+    _graph_metrics_cache_set(cache_key, result)
+    return result
+
+
+def _invalidate_graph_epa_cache_for_teams(team_numbers):
+    """Drop graph EPA cache entries only for the provided team numbers."""
+    targets = {int(tn) for tn in (team_numbers or []) if tn is not None}
+    if not targets:
+        return
+
+    stale = [
+        key for key in list(_GRAPH_EPA_CACHE.keys())
+        if isinstance(key, tuple) and len(key) >= 1 and int(key[0]) in targets
+    ]
+    for key in stale:
+        _GRAPH_EPA_CACHE.pop(key, None)
+
+
+def _invalidate_graph_metrics_cache_for_team_ids(team_ids, event_ids=None):
+    """Drop graph metrics cache entries for specific team IDs and optional event IDs."""
+    target_team_ids = {int(tid) for tid in (team_ids or []) if tid is not None}
+    target_event_ids = None
+    if event_ids is not None:
+        target_event_ids = {int(eid) for eid in event_ids if eid is not None}
+
+    if not target_team_ids:
+        return
+
+    stale = []
+    for key in list(_GRAPH_METRICS_CACHE.keys()):
+        if not isinstance(key, tuple) or len(key) < 2:
+            continue
+        key_team_id = int(key[0])
+        key_event_id = int(key[1])
+        if key_team_id not in target_team_ids:
+            continue
+        if target_event_ids is not None and key_event_id not in target_event_ids and key_event_id != 0:
+            continue
+        stale.append(key)
+
+    for key in stale:
+        _GRAPH_METRICS_CACHE.pop(key, None)
+
+
+def prewarm_graph_caches_for_sync(event_code=None, team_numbers=None):
+    """Refresh graph route caches for just-synced teams so UI reads stay local.
+
+    This is intentionally selective and only touches provided team numbers
+    (plus event-scoped variants for the supplied event code).
+    """
+    normalized_numbers = sorted({int(tn) for tn in (team_numbers or []) if tn is not None})
+    if not normalized_numbers:
+        return {'teams': 0, 'event_ids': 0, 'warmed_metrics_keys': 0}
+
+    try:
+        from app.utils.analysis import get_current_epa_source
+        epa_source = get_current_epa_source() or 'scouted_only'
+    except Exception:
+        epa_source = 'scouted_only'
+
+    # Always refresh EPA/OPR cache keys for the teams that were synced.
+    _invalidate_graph_epa_cache_for_teams(normalized_numbers)
+    for team_number in normalized_numbers:
+        try:
+            _get_epa_metrics_cached(team_number, epa_source, force_refresh=True)
+        except Exception:
+            continue
+
+    event_ids = []
+    event_code_text = str(event_code or '').strip()
+    if event_code_text:
+        try:
+            event_ids = [
+                int(eid) for (eid,) in db.session.query(Event.id)
+                .filter(Event.code == event_code_text)
+                .all()
+            ]
+        except Exception:
+            event_ids = []
+
+    try:
+        scoped_teams = Team.query.filter(Team.team_number.in_(normalized_numbers)).all()
+    except Exception:
+        scoped_teams = []
+
+    if event_ids:
+        try:
+            event_team_rows = Team.query.join(Team.events).filter(
+                Team.team_number.in_(normalized_numbers),
+                Event.id.in_(event_ids)
+            ).all()
+            if event_team_rows:
+                scoped_teams = event_team_rows
+        except Exception:
+            pass
+
+    scoped_team_ids = [t.id for t in scoped_teams if getattr(t, 'id', None) is not None]
+    _invalidate_graph_metrics_cache_for_team_ids(scoped_team_ids, event_ids=event_ids)
+
+    warmed_keys = 0
+    for team in scoped_teams:
+        try:
+            _calculate_team_metrics_cached_force(team.id)
+            warmed_keys += 1
+        except Exception:
+            pass
+        for event_id in event_ids:
+            try:
+                _calculate_team_metrics_cached_force(team.id, event_id=event_id)
+                warmed_keys += 1
+            except Exception:
+                pass
+
+    return {
+        'teams': len(normalized_numbers),
+        'event_ids': len(event_ids),
+        'warmed_metrics_keys': warmed_keys,
     }
 
 
@@ -185,7 +591,7 @@ def _build_page_context(page, scouting_team_number):
 
             team_data = {}
             if teams:
-                from app.utils.analysis import get_analysis_data_for_team, get_epa_metrics_for_team, get_current_epa_source
+                from app.utils.analysis import get_analysis_data_for_team, get_current_epa_source
                 # Pre-fetch EPA source (same for all teams, setting is per-scouting-team)
                 _epa_source = get_current_epa_source()
 
@@ -199,7 +605,7 @@ def _build_page_context(page, scouting_team_number):
                     # Fetch EPA once per team (not per data point)
                     _team_epa = None
                     if _epa_source != 'scouted_only':
-                        _team_epa = get_epa_metrics_for_team(team.team_number)
+                        _team_epa = _get_epa_metrics_cached(team.team_number, _epa_source)
 
                     has_match_data = False
                     for data in scouting_data:
@@ -228,7 +634,7 @@ def _build_page_context(page, scouting_team_number):
                     # If no scouting data but EPA is available, inject EPA baseline point
                     if not has_match_data and _epa_source != 'scouted_only':
                         if _team_epa is None:
-                            _team_epa = get_epa_metrics_for_team(team.team_number)
+                            _team_epa = _get_epa_metrics_cached(team.team_number, _epa_source)
                         epa_val = _team_epa.get('total')
                         if metric_alias not in ('tot', 'points', ''):
                             # Try mapping component metrics
@@ -355,10 +761,458 @@ def _build_page_context(page, scouting_team_number):
 
 bp = Blueprint('graphs', __name__, url_prefix='/graphs')
 
-@bp.route('/')
+
+def _build_selected_graph_plots(
+    selected_team_numbers,
+    all_teams,
+    selected_event_ids,
+    selected_event_id,
+    selected_event_obj,
+    selected_metric,
+    selected_graph_types,
+    selected_data_view,
+    selected_sort='points_desc',
+):
+    """Build graph plots using the same team/event/metric pipeline as /graphs."""
+    plots = {}
+    teams = []
+
+    if not selected_team_numbers:
+        return plots, teams
+
+    # Resolve teams directly from explicit selection to avoid dropping
+    # valid teams due to scope-filter quirks.
+    selected_set = {int(n) for n in selected_team_numbers if n is not None}
+    selected_event_ids_set = set(selected_event_ids or [])
+
+    # Candidate rows can contain duplicates by team_number (different Team.id).
+    # Pick the best row for the selected event so event-scoped queries do not
+    # miss data by using the wrong Team.id.
+    candidate_rows = Team.query.filter(Team.team_number.in_(list(selected_set))).all()
+
+    # Prefer rows that are linked to the selected event and/or have scouting
+    # data in the selected event.
+    event_team_ids = set()
+    event_data_team_ids = set()
+    if selected_event_ids:
+        try:
+            event_team_ids = {
+                t.id for t in Team.query.join(Team.events).filter(Event.id.in_(selected_event_ids)).all()
+            }
+        except Exception:
+            event_team_ids = set()
+        try:
+            event_data_team_ids = {
+                tid for (tid,) in db.session.query(ScoutingData.team_id)
+                .join(Match, Match.id == ScoutingData.match_id)
+                .filter(Match.event_id.in_(selected_event_ids))
+                .distinct()
+                .all()
+            }
+        except Exception:
+            event_data_team_ids = set()
+
+    default_by_num = {int(t.team_number): t for t in all_teams if int(t.team_number) in selected_set}
+    chosen_by_num = {}
+
+    by_num = {}
+    for t in candidate_rows:
+        by_num.setdefault(int(t.team_number), []).append(t)
+
+    for num in selected_set:
+        candidates = by_num.get(int(num), [])
+        if not candidates:
+            continue
+
+        def _score_team_row(team_row):
+            score = 0
+            if team_row.id in event_team_ids:
+                score += 100
+            if team_row.id in event_data_team_ids:
+                score += 80
+            if int(team_row.team_number) in default_by_num and default_by_num[int(team_row.team_number)].id == team_row.id:
+                score += 10
+            return score
+
+        chosen_by_num[int(num)] = sorted(candidates, key=_score_team_row, reverse=True)[0]
+
+    # Preserve user selection order.
+    teams = [chosen_by_num[int(n)] for n in selected_team_numbers if n is not None and int(n) in chosen_by_num]
+    print(f"Found {len(teams)} teams")
+
+    if not teams:
+        return plots, teams
+
+    # Create team performance graphs using shared graph helper structure
+    team_data = {}
+    from app.utils.analysis import get_analysis_data_for_team, get_current_epa_source
+    # Pre-fetch EPA source
+    _epa_source = get_current_epa_source()
+
+    for team in teams:
+        def _match_has_team(match_obj, team_number):
+            try:
+                tn = int(team_number)
+            except Exception:
+                return False
+
+            try:
+                red = getattr(match_obj, 'red_teams', None) or []
+                blue = getattr(match_obj, 'blue_teams', None) or []
+                if tn in red or tn in blue:
+                    return True
+            except Exception:
+                pass
+
+            # Fallback for unusual stored alliance formatting.
+            def _parse_alliance(text):
+                vals = []
+                for token in str(text or '').split(','):
+                    token = token.strip()
+                    if token.isdigit():
+                        vals.append(int(token))
+                return vals
+
+            return tn in _parse_alliance(getattr(match_obj, 'red_alliance', '')) or tn in _parse_alliance(getattr(match_obj, 'blue_alliance', ''))
+
+        # Use centralized data retrieval which includes synthetic starting points
+        analysis_event_id = selected_event_id if len(selected_event_ids_set) == 1 else None
+        scouting_data = get_analysis_data_for_team(team.id, event_id=analysis_event_id)
+
+        if team.team_number not in team_data:
+            team_data[team.team_number] = {
+                'team_name': team.team_name,
+                'matches': []
+            }
+
+        # Fetch EPA once per team (not per data point)
+        _team_epa = None
+        if _epa_source != 'scouted_only':
+            _team_epa = _get_epa_metrics_cached(team.team_number, _epa_source)
+
+        # For Statbotics-only match-by-match view, use historical per-match rows
+        # instead of a single team-level EPA value.
+        _statbotics_points_by_match = {}
+        _statbotics_points_ordered = []
+        if (
+            selected_data_view == 'matches'
+            and _epa_source in ('statbotics_only', 'scouted_with_statbotics')
+            and selected_event_obj is not None
+        ):
+            _statbotics_points_by_match, _statbotics_points_ordered = _build_statbotics_match_points_for_graphs(
+                team.team_number,
+                selected_event_obj
+            )
+
+        # Match alliance-team view behavior: in statbotics_only + match-by-match
+        # + total points, build rows from all real event matches for this team
+        # using historical per-match EPA (not scouting row coverage).
+        if (
+            selected_data_view == 'matches'
+            and _epa_source in ('statbotics_only', 'scouted_with_statbotics')
+            and selected_metric in ('points', '', 'tot', 'total_points')
+            and selected_event_ids
+        ):
+            try:
+                all_event_matches = Match.query.filter(
+                    Match.event_id.in_(selected_event_ids)
+                ).order_by(Match.match_type, Match.set_number, Match.match_number).all()
+                team_matches = [m for m in all_event_matches if _match_has_team(m, team.team_number)]
+            except Exception:
+                team_matches = []
+
+            projected_match_keys = set()
+            for idx, m in enumerate(team_matches):
+                match_key = (
+                    str(getattr(m, 'match_type', '') or ''),
+                    int(getattr(m, 'set_number', 0) or 0),
+                    int(getattr(m, 'match_number', 0) or 0),
+                )
+                if match_key in projected_match_keys:
+                    continue
+                projected_match_keys.add(match_key)
+
+                epa_val = _lookup_statbotics_points_for_graph_match(m, _statbotics_points_by_match)
+                if epa_val is None and idx < len(_statbotics_points_ordered):
+                    epa_val = _statbotics_points_ordered[idx]
+
+                team_data[team.team_number]['matches'].append({
+                    'match_number': int(getattr(m, 'match_number', 0) or 0),
+                    'match_type': getattr(m, 'match_type', '') or 'Match',
+                    'metric_value': epa_val,
+                    'timestamp': getattr(m, 'timestamp', None) or getattr(m, 'scheduled_time', None) or datetime.min
+                })
+
+            # If historical per-match Statbotics values are unavailable
+            # (all projected rows are None), fall back to team-level EPA
+            # so selected teams stay visible in match-by-match charts.
+            _rows = team_data[team.team_number]['matches']
+            _has_non_null = any(r.get('metric_value') is not None for r in _rows)
+            if not _has_non_null:
+                fallback_total = (_team_epa.get('total') if _team_epa else None)
+                if fallback_total is not None:
+                    if _rows:
+                        for r in _rows:
+                            r['metric_value'] = fallback_total
+                    else:
+                        team_data[team.team_number]['matches'].append({
+                            'match_number': 0,
+                            'match_type': 'EPA',
+                            'metric_value': fallback_total,
+                            'timestamp': datetime.min
+                        })
+
+            # Statbotics historical match view should be sourced from
+            # real event matches, so skip the scouting-data path.
+            continue
+
+        if scouting_data:
+            seen_external_matches = set()
+            added_match_rows = False
+            for data in scouting_data:
+                match = data.match
+
+                if (
+                    selected_event_ids_set
+                    and match is not None
+                    and int(getattr(match, 'event_id', 0) or 0) not in selected_event_ids_set
+                ):
+                    continue
+
+                # Calculate the selected metric for this match
+                if selected_metric == 'points' or selected_metric == '':
+                    metric_value = data.calculate_metric('tot')
+                else:
+                    metric_value = data.calculate_metric(selected_metric)
+
+                # In statbotics_only/tba_opr_only mode, override total metric with EPA/OPR
+                if _epa_source in ('statbotics_only', 'tba_opr_only') and selected_metric in ('points', '', 'tot', 'total_points'):
+                    if selected_data_view == 'matches' and _epa_source == 'statbotics_only' and match is not None:
+                        _hist_val = _lookup_statbotics_points_for_graph_match(match, _statbotics_points_by_match)
+                        metric_value = _hist_val
+                    elif _team_epa and _team_epa['total'] is not None:
+                        metric_value = _team_epa['total']
+
+                # In EPA/OPR match-by-match view, skip synthetic rows so we don't
+                # collapse the chart to repeated match 0 entries.
+                if (
+                    selected_data_view == 'matches'
+                    and _epa_source in ('statbotics_only', 'tba_opr_only', 'scouted_with_statbotics')
+                    and selected_metric in ('points', '', 'tot', 'total_points')
+                    and match is None
+                ):
+                    continue
+
+                # In EPA/OPR match-by-match mode, keep only one point per
+                # real match even if multiple scouting rows exist.
+                if (
+                    selected_data_view == 'matches'
+                    and _epa_source in ('statbotics_only', 'tba_opr_only')
+                    and selected_metric in ('points', '', 'tot', 'total_points')
+                    and match is not None
+                ):
+                    dedupe_key = (
+                        (getattr(match, 'id', None) or 0),
+                        str(getattr(match, 'match_type', '') or ''),
+                        int(getattr(match, 'set_number', 0) or 0),
+                        int(getattr(match, 'match_number', 0) or 0),
+                    )
+                    if dedupe_key in seen_external_matches:
+                        continue
+                    seen_external_matches.add(dedupe_key)
+
+                # Handle synthetic data
+                match_num = match.match_number if match else 0
+                match_type = match.match_type if match else 'Synthetic'
+                ts = match.timestamp if match else getattr(data, 'timestamp', datetime.min)
+
+                team_data[team.team_number]['matches'].append({
+                    'match_number': match_num,
+                    'match_type': match_type,
+                    'metric_value': metric_value,
+                    'timestamp': ts
+                })
+                added_match_rows = True
+
+            # If scouting rows existed but none were eligible for match-by-match
+            # EPA/OPR rendering, fall back to projecting external values onto real
+            # event matches so selected teams don't disappear from the chart.
+            if (
+                not added_match_rows
+                and _epa_source != 'scouted_only'
+                and selected_data_view == 'matches'
+                and selected_event_ids
+            ):
+                try:
+                    all_event_matches = Match.query.filter(
+                        Match.event_id.in_(selected_event_ids)
+                    ).order_by(Match.match_type, Match.set_number, Match.match_number).all()
+                    team_matches = [m for m in all_event_matches if _match_has_team(m, team.team_number)]
+                except Exception:
+                    team_matches = []
+
+                projected_match_keys = set()
+
+                for idx, m in enumerate(team_matches):
+                    match_key = (
+                        str(getattr(m, 'match_type', '') or ''),
+                        int(getattr(m, 'set_number', 0) or 0),
+                        int(getattr(m, 'match_number', 0) or 0),
+                    )
+                    if match_key in projected_match_keys:
+                        continue
+                    projected_match_keys.add(match_key)
+
+                    if _epa_source in ('statbotics_only', 'scouted_with_statbotics'):
+                        epa_val = _lookup_statbotics_points_for_graph_match(m, _statbotics_points_by_match)
+                        if epa_val is None and idx < len(_statbotics_points_ordered):
+                            epa_val = _statbotics_points_ordered[idx]
+                    else:
+                        epa_val = _team_epa.get('total') if _team_epa else None
+
+                    team_data[team.team_number]['matches'].append({
+                        'match_number': int(getattr(m, 'match_number', 0) or 0),
+                        'match_type': getattr(m, 'match_type', '') or 'Match',
+                        'metric_value': epa_val,
+                        'timestamp': getattr(m, 'timestamp', None) or getattr(m, 'scheduled_time', None) or datetime.min
+                    })
+
+                # For statbotics-backed match view, keep strict historical
+                # behavior where possible, but if all values are missing
+                # use team-level EPA so selected teams remain visible.
+                if team_data[team.team_number]['matches']:
+                    if _epa_source in ('statbotics_only', 'scouted_with_statbotics'):
+                        has_non_null = any(
+                            row.get('metric_value') is not None
+                            for row in team_data[team.team_number]['matches']
+                        )
+                        if not has_non_null and _team_epa and _team_epa.get('total') is not None:
+                            for row in team_data[team.team_number]['matches']:
+                                row['metric_value'] = _team_epa.get('total')
+                    continue
+
+                if _epa_source in ('statbotics_only', 'scouted_with_statbotics'):
+                    if _team_epa and _team_epa.get('total') is not None:
+                        team_data[team.team_number]['matches'].append({
+                            'match_number': 0,
+                            'match_type': 'EPA',
+                            'metric_value': _team_epa.get('total'),
+                            'timestamp': datetime.min
+                        })
+                    continue
+
+                if _team_epa and _team_epa.get('total') is not None:
+                    team_data[team.team_number]['matches'].append({
+                        'match_number': 0,
+                        'match_type': 'EPA',
+                        'metric_value': _team_epa.get('total'),
+                        'timestamp': datetime.min
+                    })
+        else:
+            # No scouting data - inject EPA baseline if EPA is enabled
+            if _epa_source != 'scouted_only':
+                if _team_epa is None:
+                    _team_epa = _get_epa_metrics_cached(team.team_number, _epa_source)
+
+                # In match-by-match EPA/OPR modes, project values onto real event
+                # match numbers instead of a single synthetic match 0 point.
+                if selected_data_view == 'matches' and selected_event_ids:
+                    try:
+                        all_event_matches = Match.query.filter(
+                            Match.event_id.in_(selected_event_ids)
+                        ).order_by(Match.match_type, Match.set_number, Match.match_number).all()
+                        team_matches = [m for m in all_event_matches if _match_has_team(m, team.team_number)]
+                    except Exception:
+                        team_matches = []
+
+                    projected_match_keys = set()
+
+                    for idx, m in enumerate(team_matches):
+                        match_key = (
+                            str(getattr(m, 'match_type', '') or ''),
+                            int(getattr(m, 'set_number', 0) or 0),
+                            int(getattr(m, 'match_number', 0) or 0),
+                        )
+                        if match_key in projected_match_keys:
+                            continue
+                        projected_match_keys.add(match_key)
+
+                        if _epa_source in ('statbotics_only', 'scouted_with_statbotics'):
+                            epa_val = _lookup_statbotics_points_for_graph_match(m, _statbotics_points_by_match)
+                            if epa_val is None and idx < len(_statbotics_points_ordered):
+                                epa_val = _statbotics_points_ordered[idx]
+                        else:
+                            epa_val = _team_epa.get('total') if _team_epa else None
+
+                        team_data[team.team_number]['matches'].append({
+                            'match_number': int(getattr(m, 'match_number', 0) or 0),
+                            'match_type': getattr(m, 'match_type', '') or 'Match',
+                            'metric_value': epa_val,
+                            'timestamp': getattr(m, 'timestamp', None) or getattr(m, 'scheduled_time', None) or datetime.min
+                        })
+
+                    # If we projected any match rows, don't add a synthetic match 0.
+                    if team_data[team.team_number]['matches']:
+                        continue
+
+                    # For statbotics-backed match view, do not fall back to current team EPA.
+                    if _epa_source in ('statbotics_only', 'scouted_with_statbotics'):
+                        continue
+
+                epa_val = _team_epa.get('total')
+                if selected_metric not in ('points', '', 'tot', 'total_points'):
+                    for _key in ('auto', 'teleop', 'endgame'):
+                        if _key in selected_metric.lower():
+                            epa_val = _team_epa.get(_key)
+                            break
+                    _alias_map = {'apt': 'auto', 'tpt': 'teleop', 'ept': 'endgame'}
+                    if selected_metric.lower() in _alias_map:
+                        epa_val = _team_epa.get(_alias_map[selected_metric.lower()])
+                if epa_val is not None:
+                    team_data[team.team_number]['matches'].append({
+                        'match_number': 0,
+                        'match_type': 'EPA',
+                        'metric_value': epa_val,
+                        'timestamp': datetime.min
+                    })
+
+    # Generate the requested graph types using helper functions
+    for graph_type in selected_graph_types:
+        if graph_type == 'bar':
+            plots.update(_create_bar_chart(team_data, selected_metric, selected_data_view, selected_sort))
+        elif graph_type == 'line':
+            plots.update(_create_line_chart(team_data, selected_metric, selected_data_view, selected_sort))
+        elif graph_type == 'scatter':
+            plots.update(_create_scatter_chart(team_data, selected_metric, selected_data_view))
+        elif graph_type == 'histogram':
+            plots.update(_create_histogram_chart(team_data, selected_metric, selected_data_view))
+        elif graph_type == 'violin':
+            plots.update(_create_violin_chart(team_data, selected_metric, selected_data_view))
+        elif graph_type == 'box':
+            plots.update(_create_box_chart(team_data, selected_metric, selected_data_view))
+        elif graph_type == 'sunburst':
+            plots.update(_create_sunburst_chart(team_data, selected_metric, selected_data_view))
+        elif graph_type == 'waterfall':
+            plots.update(_create_waterfall_chart(team_data, selected_metric, selected_data_view))
+        elif graph_type == 'heatmap':
+            plots.update(_create_heatmap_chart(team_data, selected_metric, selected_data_view))
+        elif graph_type == 'area':
+            plots.update(_create_area_chart(team_data, selected_metric, selected_data_view))
+        elif graph_type == 'radar':
+            plots.update(_create_radar_chart(team_data, selected_metric, selected_data_view))
+
+    return plots, teams
+
+@bp.route('/', methods=['GET', 'POST'])
 @analytics_required
 def index():
     """Graphs dashboard page"""
+    params = request.form if request.method == 'POST' else request.args
+
+    # Read selected teams early so we can ensure they remain visible
+    # in the selector even when current event scoping would omit them.
+    selected_team_numbers = params.getlist('teams', type=int)
+
     # Get game configuration
     game_config = get_effective_game_config()
     
@@ -399,6 +1253,16 @@ def index():
         else:
             # No current event: only show teams visible to the current scouting team
             all_teams_raw = filter_teams_by_scouting_team().order_by(Team.team_number).all()
+
+    # Always include any explicitly selected teams in the selector list so
+    # they don't disappear after generating graphs with broad selections.
+    if selected_team_numbers:
+        existing_numbers = {int(getattr(t, 'team_number', 0) or 0) for t in all_teams_raw}
+        missing_numbers = [n for n in selected_team_numbers if int(n or 0) not in existing_numbers]
+        if missing_numbers:
+            selected_team_rows = Team.query.filter(Team.team_number.in_(missing_numbers)).all()
+            if selected_team_rows:
+                all_teams_raw.extend(selected_team_rows)
     
     # Deduplicate teams by team_number.
     # Preference order when duplicate team_number found:
@@ -465,13 +1329,17 @@ def index():
     except Exception:
         all_events = []
     
-    # Calculate team metrics for sorting
+    # Calculate metrics only for explicitly selected teams to keep /graphs
+    # fast on initial load for large events.
+    selected_team_set = {int(n) for n in selected_team_numbers if n is not None}
     team_metrics = {}
-    for team in all_teams:
-        # Get metrics for the team - function returns {team_number, match_count, metrics}
-        analytics_result = calculate_team_metrics(team.id)
-        metrics = analytics_result.get('metrics', {})
-        team_metrics[team.team_number] = metrics
+    if selected_team_set:
+        for team in all_teams:
+            if int(team.team_number) not in selected_team_set:
+                continue
+            analytics_result = _calculate_team_metrics_cached(team.id)
+            metrics = analytics_result.get('metrics', {})
+            team_metrics[team.team_number] = metrics
     
     # Create team-event mapping for client-side filtering
     team_event_mapping = {}
@@ -492,17 +1360,55 @@ def index():
     all_teams_json = json.dumps(all_teams_data)
     
     # Get selected teams from query parameters if any
-    selected_team_numbers = request.args.getlist('teams', type=int)
-    selected_event_param = request.args.get('event_id')
-    selected_event_obj = resolve_event_from_param(selected_event_param, events=all_events) if selected_event_param else None
-    selected_event_id = resolve_event_id_from_param(selected_event_param, events=all_events) if selected_event_param else None
+    has_event_param = 'event_id' in params
+    selected_event_param = params.get('event_id')
+    selected_event_obj = None
+    selected_event_id = None
+
+    if has_event_param:
+        # Explicit empty event_id means "All Events" and should not default
+        # back to current_event on reload.
+        if selected_event_param:
+            selected_event_obj = resolve_event_from_param(selected_event_param, events=all_events)
+            selected_event_id = resolve_event_id_from_param(selected_event_param, events=all_events)
+    elif current_event is not None:
+        # Default /graphs to the configured current event only when no
+        # event_id query parameter was provided at all.
+        selected_event_obj = current_event
+        selected_event_id = getattr(current_event, 'id', None)
+
+    # The same event code can be represented by multiple Event IDs across
+    # alliance/member datasets; include all matching IDs for graph queries.
+    selected_event_ids = []
+    try:
+        if selected_event_obj is None and selected_event_id is not None:
+            selected_event_obj = Event.query.get(int(selected_event_id))
+
+        selected_event_code = (getattr(selected_event_obj, 'code', '') or '').strip()
+        if selected_event_code:
+            selected_event_ids = [
+                int(eid) for (eid,) in db.session.query(Event.id)
+                .filter(Event.code == selected_event_code)
+                .all()
+            ]
+    except Exception:
+        selected_event_ids = []
+
+    if not selected_event_ids and selected_event_id is not None:
+        try:
+            selected_event_ids = [int(selected_event_id)]
+        except Exception:
+            selected_event_ids = []
+
+    selected_event_ids_set = set(selected_event_ids)
+
     selected_event_value = getattr(selected_event_obj, 'id', None) if selected_event_obj else selected_event_id
-    selected_metric = request.args.get('metric', '')
-    selected_graph_types = request.args.getlist('graph_types')
-    selected_data_view = request.args.get('data_view', 'averages')
+    selected_metric = params.get('metric', '')
+    selected_graph_types = params.getlist('graph_types')
+    selected_data_view = params.get('data_view', 'averages')
     # New sort parameter: controls x-axis ordering for team-level charts
     # Supported values: 'points_desc' (default), 'points_asc', 'team_asc', 'team_desc'
-    selected_sort = request.args.get('sort', 'points_desc')
+    selected_sort = params.get('sort', 'points_desc')
     
     # Normalize metric selection: treat empty/default, legacy ids and explicit total_points
     # as the canonical 'points' metric so the default behaves like Total Points.
@@ -522,120 +1428,17 @@ def index():
     print(f"Selected graph types: {selected_graph_types}")
     print(f"Selected data view: {selected_data_view}")
     
-    # Create sample demonstration graphs
-    plots = {}
-    
-    # Only create graphs if teams are selected
-    if selected_team_numbers:
-        # Get teams for selected team_numbers - use alliance data if in alliance mode
-        if is_alliance_mode:
-            # In alliance mode, get teams from alliance data
-            all_alliance_teams, _ = get_all_teams_for_alliance(
-                event_id=selected_event_id,
-                event_code=getattr(selected_event_obj, 'code', None)
-            )
-            teams = [t for t in all_alliance_teams if t.team_number in selected_team_numbers]
-        else:
-            teams = filter_teams_by_scouting_team().filter(Team.team_number.in_(selected_team_numbers)).all()
-        print(f"Found {len(teams)} teams")
-        
-        if teams:
-            # Create team performance graphs using shared graph helper structure
-            team_data = {}
-            from app.utils.analysis import get_analysis_data_for_team, get_epa_metrics_for_team, get_current_epa_source
-            # Pre-fetch EPA source
-            _epa_source = get_current_epa_source()
-            
-            for team in teams:
-                # Use centralized data retrieval which includes synthetic starting points
-                scouting_data = get_analysis_data_for_team(team.id, event_id=selected_event_id if selected_event_id else None)
-                
-                if team.team_number not in team_data:
-                    team_data[team.team_number] = {
-                        'team_name': team.team_name, 
-                        'matches': []
-                    }
-
-                # Fetch EPA once per team (not per data point)
-                _team_epa = None
-                if _epa_source != 'scouted_only':
-                    _team_epa = get_epa_metrics_for_team(team.team_number)
-                
-                if scouting_data:
-                    for data in scouting_data:
-                        match = data.match
-                        
-                        # Calculate the selected metric for this match
-                        if selected_metric == 'points' or selected_metric == '':
-                            metric_value = data.calculate_metric('tot')
-                        else:
-                            metric_value = data.calculate_metric(selected_metric)
-
-                        # In statbotics_only/tba_opr_only mode, override total metric with EPA/OPR
-                        if _epa_source in ('statbotics_only', 'tba_opr_only') and selected_metric in ('points', '', 'tot', 'total_points'):
-                            if _team_epa and _team_epa['total'] is not None:
-                                metric_value = _team_epa['total']
-                        
-                        # Handle synthetic data
-                        match_num = match.match_number if match else 0
-                        match_type = match.match_type if match else 'Synthetic'
-                        ts = match.timestamp if match else getattr(data, 'timestamp', datetime.min)
-                        
-                        team_data[team.team_number]['matches'].append({
-                            'match_number': match_num,
-                            'match_type': match_type,
-                            'metric_value': metric_value,
-                            'timestamp': ts
-                        })
-                else:
-                    # No scouting data — inject EPA baseline if EPA is enabled
-                    if _epa_source != 'scouted_only':
-                        if _team_epa is None:
-                            _team_epa = get_epa_metrics_for_team(team.team_number)
-                        epa_val = _team_epa.get('total')
-                        if selected_metric not in ('points', '', 'tot', 'total_points'):
-                            for _key in ('auto', 'teleop', 'endgame'):
-                                if _key in selected_metric.lower():
-                                    epa_val = _team_epa.get(_key)
-                                    break
-                            _alias_map = {'apt': 'auto', 'tpt': 'teleop', 'ept': 'endgame'}
-                            if selected_metric.lower() in _alias_map:
-                                epa_val = _team_epa.get(_alias_map[selected_metric.lower()])
-                        if epa_val is not None:
-                            team_data[team.team_number]['matches'].append({
-                                'match_number': 0,
-                                'match_type': 'EPA',
-                                'metric_value': epa_val,
-                                'timestamp': datetime.min
-                            })
-        else:
-            team_data = {}
-
-        # Generate the requested graph types using helper functions
-        # Use the selected list of graph types for rendering
-        for graph_type in selected_graph_types:
-            if graph_type == 'bar':
-                plots.update(_create_bar_chart(team_data, selected_metric, selected_data_view, selected_sort))
-            elif graph_type == 'line':
-                plots.update(_create_line_chart(team_data, selected_metric, selected_data_view, selected_sort))
-            elif graph_type == 'scatter':
-                plots.update(_create_scatter_chart(team_data, selected_metric, selected_data_view))
-            elif graph_type == 'histogram':
-                plots.update(_create_histogram_chart(team_data, selected_metric, selected_data_view))
-            elif graph_type == 'violin':
-                plots.update(_create_violin_chart(team_data, selected_metric, selected_data_view))
-            elif graph_type == 'box':
-                plots.update(_create_box_chart(team_data, selected_metric, selected_data_view))
-            elif graph_type == 'sunburst':
-                plots.update(_create_sunburst_chart(team_data, selected_metric, selected_data_view))
-            elif graph_type == 'waterfall':
-                plots.update(_create_waterfall_chart(team_data, selected_metric, selected_data_view))
-            elif graph_type == 'heatmap':
-                plots.update(_create_heatmap_chart(team_data, selected_metric, selected_data_view))
-            elif graph_type == 'area':
-                plots.update(_create_area_chart(team_data, selected_metric, selected_data_view))
-            elif graph_type == 'radar':
-                plots.update(_create_radar_chart(team_data, selected_metric, selected_data_view))
+    plots, _ = _build_selected_graph_plots(
+        selected_team_numbers=selected_team_numbers,
+        all_teams=all_teams,
+        selected_event_ids=selected_event_ids,
+        selected_event_id=selected_event_id,
+        selected_event_obj=selected_event_obj,
+        selected_metric=selected_metric,
+        selected_graph_types=selected_graph_types,
+        selected_data_view=selected_data_view,
+        selected_sort=selected_sort,
+    )
 
     
     return render_template('graphs/index.html', 
@@ -1123,12 +1926,17 @@ def graphs_data():
     
     all_events = get_combined_dropdown_events()
     
-    # Calculate team metrics
+    # Calculate metrics only for selected teams to avoid expensive work for
+    # every dropdown row on each AJAX refresh.
+    selected_team_set = {int(n) for n in selected_team_numbers if n is not None}
     team_metrics = {}
-    for team in all_teams:
-        analytics_result = calculate_team_metrics(team.id)
-        metrics = analytics_result.get('metrics', {})
-        team_metrics[team.team_number] = metrics
+    if selected_team_set:
+        for team in all_teams:
+            if int(team.team_number) not in selected_team_set:
+                continue
+            analytics_result = _calculate_team_metrics_cached(team.id)
+            metrics = analytics_result.get('metrics', {})
+            team_metrics[team.team_number] = metrics
     
     # Prepare teams data for JSON
     all_teams_data = []
@@ -1255,11 +2063,9 @@ def side_by_side():
         except Exception:
             all_events = []
 
-        # Compute lightweight metrics for teams to display points and sorting
+        # Keep initial side-by-side form lightweight; detailed metrics are
+        # computed after teams are explicitly selected.
         team_metrics = {}
-        for team in teams:
-            analytics_result = calculate_team_metrics(team.id)
-            team_metrics[team.team_number] = analytics_result.get('metrics', {})
 
         # Build mapping of team -> event IDs for client-side filtering
         team_event_mapping = {team.team_number: [e.id for e in getattr(team, 'events', [])] for team in teams}
@@ -1508,14 +2314,12 @@ def view_shared(share_id):
     
     # Increment view count
     shared_graph.increment_view_count()
-    
+
     # Get game configuration (use a default/public configuration)
     game_config = get_effective_game_config()
-    
-    # Allow overriding teams and graph types via query parameters so viewers
-    # can interactively filter the shared view. Accepts either multiple
-    # occurrences (e.g. ?teams=123&teams=456) or a comma-separated string
-    # (e.g. ?teams=123,456).
+
+    # Allow overriding query parameters in shared view while keeping defaults
+    # from the stored share configuration.
     def _parse_int_list(arg_name):
         vals = request.args.getlist(arg_name)
         if len(vals) == 1 and vals[0] and ',' in vals[0]:
@@ -1550,6 +2354,16 @@ def view_shared(share_id):
     # Respect only whitelisted graph types; fall back to stored types if none provided
     selected_graph_types = [g for g in query_graph_types if g in available_graph_types] if query_graph_types else shared_graph.graph_types_list
 
+    selected_metric = request.args.get('metric') or (shared_graph.metric or 'points')
+    if not selected_metric or selected_metric.strip() == '' or selected_metric in ('total_points', 'tot'):
+        selected_metric = 'points'
+
+    selected_data_view = request.args.get('data_view') or (shared_graph.data_view or 'averages')
+    selected_sort = request.args.get('sort', 'points_desc')
+
+    if not selected_graph_types:
+        selected_graph_types = ['bar', 'line', 'scatter']
+
     # Debug logging to help diagnose cases where selections are not applied
     try:
         current_app.logger.debug(f"Shared view override - query_graph_types={query_graph_types}, selected_graph_types={selected_graph_types}")
@@ -1557,158 +2371,60 @@ def view_shared(share_id):
         # Swallow logging errors to avoid breaking view
         pass
 
-    teams = filter_teams_by_scouting_team().filter(Team.team_number.in_(team_numbers)).all()
-    
-    if not teams:
+    if not team_numbers:
         abort(404, description="No teams found for this shared graph.")
-    
-    # Generate graphs using the same logic as the main index route
-    # but without user-specific filtering
-    plots = {}
-    
-    # Get scouting data for selected teams (without team isolation)
-    # Exclude alliance-copied data - shared graphs should use original data only
-    from sqlalchemy import or_
-    if shared_graph.event_id:
-        # Get matches from selected event
-        matches = Match.query.filter_by(event_id=shared_graph.event_id).all()
-        match_ids = [match.id for match in matches]
-        
-        # Filter scouting data for these matches and teams
-        team_ids = [team.id for team in teams]
-        scouting_data = ScoutingData.query.filter(
-            ScoutingData.team_id.in_(team_ids),
-            ScoutingData.match_id.in_(match_ids)
-        ).filter(
-            or_(
-                ScoutingData.scout_name == None,
-                ~ScoutingData.scout_name.like('[Alliance-%')
-            )
-        ).all()
-    else:
-        # Get all scouting data for selected teams
-        team_ids = [team.id for team in teams]
-        scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids)).filter(
-            or_(
-                ScoutingData.scout_name == None,
-                ~ScoutingData.scout_name.like('[Alliance-%')
-            )
-        ).all()
-    
-    # Process the data and create graphs
-    if teams and scouting_data:
-        # Create team performance graphs using the selected metric and graph types
-        # Deduplicate team rows and prepare team_data
-        unique_map = {}
-        for t in teams:
-            if t.team_number not in unique_map:
-                unique_map[t.team_number] = t
-        teams = sorted(unique_map.values(), key=lambda x: x.team_number) if teams else []
-        team_data = {}
-        
-        # Group scouting data by team
-        data_by_team = {}
-        for data in scouting_data:
-            if data.team_id not in data_by_team:
-                data_by_team[data.team_id] = []
-            data_by_team[data.team_id].append(data)
 
-        # Process each team
-        from app.utils.analysis import inject_starting_points, get_epa_metrics_for_team, get_current_epa_source
-        _epa_source = get_current_epa_source()
-        for team in teams:
-            team_scouting_data = data_by_team.get(team.id, [])
-            
-            # Inject starting points
-            calc_data = inject_starting_points(team, team_scouting_data, event_id=shared_graph.event_id)
-            
-            if team.team_number not in team_data:
-                team_data[team.team_number] = {
-                    'team_name': team.team_name, 
-                    'matches': []
-                }
-
-            _has_data = False
-            for data in calc_data:
-                # Handle FakeSD
-                if hasattr(data, 'match') and data.match:
-                    match_number = data.match.match_number
-                    match_type = data.match.match_type
-                    timestamp = data.match.timestamp
-                else:
-                    match_number = 0
-                    match_type = 'SP'
-                    timestamp = getattr(data, 'timestamp', datetime.min)
-
-                # Calculate metric
-                if shared_graph.metric == 'points' or shared_graph.metric == '':
-                    metric_value = data.calculate_metric('tot')
-                else:
-                    metric_value = data.calculate_metric(shared_graph.metric)
-
-                # Override with EPA/OPR in statbotics_only/tba_opr_only mode
-                if _epa_source in ('statbotics_only', 'tba_opr_only') and shared_graph.metric in ('points', '', 'tot', 'total_points'):
-                    _team_epa = get_epa_metrics_for_team(team.team_number)
-                    if _team_epa['total'] is not None:
-                        metric_value = _team_epa['total']
-                
-                team_data[team.team_number]['matches'].append({
-                    'match_number': match_number,
-                    'match_type': match_type,
-                    'metric_value': metric_value,
-                    'timestamp': timestamp
-                })
-                _has_data = True
-
-            # Inject EPA baseline for teams with no data
-            if not _has_data and _epa_source != 'scouted_only':
-                _team_epa = get_epa_metrics_for_team(team.team_number)
-                if _team_epa['total'] is not None:
-                    team_data[team.team_number]['matches'].append({
-                        'match_number': 0,
-                        'match_type': 'EPA',
-                        'metric_value': _team_epa['total'],
-                        'timestamp': datetime.min
-                    })
-        
-        # Generate the requested graph types
-    # Use the selected/overridden list of graph types for rendering
-    for graph_type in selected_graph_types:
-            if graph_type == 'bar':
-                plots.update(_create_bar_chart(team_data, shared_graph.metric, shared_graph.data_view))
-            elif graph_type == 'line':
-                plots.update(_create_line_chart(team_data, shared_graph.metric, shared_graph.data_view))
-            elif graph_type == 'scatter':
-                plots.update(_create_scatter_chart(team_data, shared_graph.metric, shared_graph.data_view))
-            elif graph_type == 'histogram':
-                plots.update(_create_histogram_chart(team_data, shared_graph.metric, shared_graph.data_view))
-            elif graph_type == 'violin':
-                plots.update(_create_violin_chart(team_data, shared_graph.metric, shared_graph.data_view))
-            elif graph_type == 'box':
-                plots.update(_create_box_chart(team_data, shared_graph.metric, shared_graph.data_view))
-            elif graph_type == 'sunburst':
-                plots.update(_create_sunburst_chart(team_data, shared_graph.metric, shared_graph.data_view))
-
-            elif graph_type == 'waterfall':
-                plots.update(_create_waterfall_chart(team_data, shared_graph.metric, shared_graph.data_view))
-            elif graph_type == 'heatmap':
-                plots.update(_create_heatmap_chart(team_data, shared_graph.metric, shared_graph.data_view))
-            elif graph_type == 'area':
-                plots.update(_create_area_chart(team_data, shared_graph.metric, shared_graph.data_view))
-            elif graph_type == 'radar':
-                plots.update(_create_radar_chart(team_data, shared_graph.metric, shared_graph.data_view))
-    
-    # Provide the same selection UI context as the main graphs index so
-    # viewers can make selections just like regular graphs.
     try:
-        all_teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
+        all_teams = Team.query.order_by(Team.team_number).all()
     except Exception:
         all_teams = []
 
+    # Event selection follows /graphs semantics so duplicate event rows with the
+    # same code are grouped when querying scouting/match data.
     try:
         all_events = get_combined_dropdown_events()
     except Exception:
         all_events = []
+
+    has_event_param = 'event_id' in request.args
+    selected_event_param = request.args.get('event_id') if has_event_param else shared_graph.event_id
+    selected_event_obj = None
+    selected_event_id = None
+
+    if selected_event_param:
+        selected_event_obj = resolve_event_from_param(selected_event_param, events=all_events)
+        selected_event_id = resolve_event_id_from_param(selected_event_param, events=all_events)
+
+    if selected_event_obj is None and shared_graph.event_id and not has_event_param:
+        try:
+            selected_event_obj = Event.query.get(int(shared_graph.event_id))
+            selected_event_id = int(shared_graph.event_id)
+        except Exception:
+            selected_event_obj = None
+            selected_event_id = None
+
+    selected_event_ids = []
+    try:
+        if selected_event_obj is None and selected_event_id is not None:
+            selected_event_obj = Event.query.get(int(selected_event_id))
+
+        selected_event_code = (getattr(selected_event_obj, 'code', '') or '').strip()
+        if selected_event_code:
+            selected_event_ids = [
+                int(eid) for (eid,) in db.session.query(Event.id)
+                .filter(Event.code == selected_event_code)
+                .all()
+            ]
+    except Exception:
+        selected_event_ids = []
+
+    if not selected_event_ids and selected_event_id is not None:
+        try:
+            selected_event_ids = [int(selected_event_id)]
+        except Exception:
+            selected_event_ids = []
+
+    selected_event_value = getattr(selected_event_obj, 'id', None) if selected_event_obj else selected_event_id
 
     team_event_mapping = {}
     for t in all_teams:
@@ -1717,22 +2433,47 @@ def view_shared(share_id):
         except Exception:
             team_event_mapping[t.team_number] = []
 
+    # Precompute points for selected teams only (same behavior as /graphs).
+    selected_team_set = {int(n) for n in team_numbers if n is not None}
+    team_metrics = {}
+    if selected_team_set:
+        for team in all_teams:
+            if int(team.team_number) not in selected_team_set:
+                continue
+            analytics_result = _calculate_team_metrics_cached(team.id)
+            metrics = analytics_result.get('metrics', {})
+            team_metrics[team.team_number] = metrics
+
     all_teams_data = []
     for t in all_teams:
         all_teams_data.append({
             'teamNumber': t.team_number,
             'teamName': t.team_name or 'Unknown',
             'displayText': f"{t.team_number} - {t.team_name or 'Unknown'}",
-            'points': 0
+            'points': team_metrics.get(t.team_number, {}).get('total_points', 0)
         })
     all_teams_json = json.dumps(all_teams_data)
 
+    plots, teams = _build_selected_graph_plots(
+        selected_team_numbers=team_numbers,
+        all_teams=all_teams,
+        selected_event_ids=selected_event_ids,
+        selected_event_id=selected_event_id,
+        selected_event_obj=selected_event_obj,
+        selected_metric=selected_metric,
+        selected_graph_types=selected_graph_types,
+        selected_data_view=selected_data_view,
+        selected_sort=selected_sort,
+    )
+
+    if not teams:
+        abort(404, description="No teams found for this shared graph.")
+    
+    # Provide the same selection UI context as the main graphs index so
+    # viewers can make selections just like regular graphs.
     # Selected values for the UI controls: prefer query params, fall back to share settings
     selected_team_numbers = team_numbers
-    selected_event_id = request.args.get('event_id') or shared_graph.event_id
-    selected_metric = request.args.get('metric') or (shared_graph.metric or 'points')
-    selected_data_view = request.args.get('data_view') or (shared_graph.data_view or 'averages')
-    selected_sort = request.args.get('sort', 'points_desc')
+    selected_event_id = selected_event_value
 
     return render_template('graphs/shared.html',
                          shared_graph=shared_graph,
@@ -1750,6 +2491,7 @@ def view_shared(share_id):
                          selected_graph_types=selected_graph_types,
                          selected_data_view=selected_data_view,
                          selected_sort=selected_sort,
+                         team_metrics=team_metrics,
                          **get_theme_context())
 
 @bp.route('/my-shares')
@@ -2185,8 +2927,8 @@ def public_page_widget_render(token, widget_index):
                                                         event_id = int(event_filter)
                                                 except ValueError:
                                                         pass
-                                        team1_analytics = calculate_team_metrics(team1.id, event_id=event_id)
-                                        team2_analytics = calculate_team_metrics(team2.id, event_id=event_id)
+                                        team1_analytics = _calculate_team_metrics_cached(team1.id, event_id=event_id)
+                                        team2_analytics = _calculate_team_metrics_cached(team2.id, event_id=event_id)
                                         comparison_data = {
                                                 'team1': {
                                                         'team_number': team1.team_number,
@@ -2267,7 +3009,7 @@ def public_page_widget_render(token, widget_index):
                         teams_query = filter_teams_by_scouting_team().order_by(Team.team_number).all()
                         team_rankings = []
                         for team in teams_query:
-                                analytics_result = calculate_team_metrics(team.id, event_id=event_id)
+                                analytics_result = _calculate_team_metrics_cached(team.id, event_id=event_id)
                                 metrics = analytics_result.get('metrics', {})
                                 if sort_by == 'points' or sort_by == 'score':
                                         sort_value = metrics.get('total_points') or metrics.get('tot') or 0
@@ -2829,8 +3571,8 @@ def pages_widget_render(page_id, widget_index):
                         except ValueError:
                             pass
                     
-                    team1_analytics = calculate_team_metrics(team1.id, event_id=event_id)
-                    team2_analytics = calculate_team_metrics(team2.id, event_id=event_id)
+                    team1_analytics = _calculate_team_metrics_cached(team1.id, event_id=event_id)
+                    team2_analytics = _calculate_team_metrics_cached(team2.id, event_id=event_id)
                     
                     comparison_data = {
                         'team1': {
@@ -2922,7 +3664,7 @@ def pages_widget_render(page_id, widget_index):
             team_rankings = []
             for team in teams_query:
                 # Pass event_id to calculate_team_metrics to filter data by event
-                analytics_result = calculate_team_metrics(team.id, event_id=event_id)
+                analytics_result = _calculate_team_metrics_cached(team.id, event_id=event_id)
                 metrics = analytics_result.get('metrics', {})
                 
                 if sort_by == 'points' or sort_by == 'score':
@@ -3294,8 +4036,8 @@ def pages_view(page_id):
                             except ValueError:
                                 pass
                         
-                        team1_analytics = calculate_team_metrics(team1.id, event_id=event_id)
-                        team2_analytics = calculate_team_metrics(team2.id, event_id=event_id)
+                        team1_analytics = _calculate_team_metrics_cached(team1.id, event_id=event_id)
+                        team2_analytics = _calculate_team_metrics_cached(team2.id, event_id=event_id)
                         
                         # Use default metrics if none specified
                         if not metrics:
@@ -3350,7 +4092,7 @@ def pages_view(page_id):
                 team_rankings = []
                 for team in teams_query:
                     # Pass event_id to filter metrics by event
-                    analytics_result = calculate_team_metrics(team.id, event_id=event_id)
+                    analytics_result = _calculate_team_metrics_cached(team.id, event_id=event_id)
                     metrics = analytics_result.get('metrics', {})
                     
                     # Determine sort value based on sort_by parameter
@@ -3840,44 +4582,44 @@ def _create_sunburst_chart(team_data, metric, data_view):
     """Create a sunburst chart for the given team data and metric"""
     plots = {}
     
-    # Collect all values for percentile calculation
-    all_values = []
+    # Build per-team metrics first so percentile buckets are based on teams,
+    # not individual matches. This keeps match-by-match categorization accurate.
+    team_metrics = []
     for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
         team_values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
-        if team_values:
-            if data_view == 'averages':
-                all_values.append(sum(team_values) / len(team_values))
-            else:
-                all_values.extend(team_values)
+        if not team_values:
+            continue
+        if data_view == 'averages':
+            team_metric = sum(team_values) / len(team_values)
+        else:
+            team_metric = sum(team_values)
+        team_metrics.append((team_number, team_metric))
     
-    if all_values:
+    if team_metrics:
         import numpy as np
         sunburst_data = []
+        metric_values = [tm[1] for tm in team_metrics]
+        p75 = np.percentile(metric_values, 75)
+        p50 = np.percentile(metric_values, 50)
+        p25 = np.percentile(metric_values, 25)
         
-        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
-            team_values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
-            if team_values:
-                if data_view == 'averages':
-                    team_metric = sum(team_values) / len(team_values)
-                else:
-                    team_metric = sum(team_values)
-                
-                # Categorize performance
-                if team_metric >= np.percentile(all_values, 75):
-                    category = "High Performers"
-                elif team_metric >= np.percentile(all_values, 50):
-                    category = "Medium Performers"
-                elif team_metric >= np.percentile(all_values, 25):
-                    category = "Low Performers"
-                else:
-                    category = "Developing Teams"
-                
-                sunburst_data.append({
-                    'ids': f"Team {team_number}",
-                    'labels': f"Team {team_number}",
-                    'parents': category,
-                    'values': team_metric
-                })
+        for team_number, team_metric in team_metrics:
+            # Categorize performance using team-level distribution
+            if team_metric >= p75:
+                category = "High Performers"
+            elif team_metric >= p50:
+                category = "Medium Performers"
+            elif team_metric >= p25:
+                category = "Low Performers"
+            else:
+                category = "Developing Teams"
+            
+            sunburst_data.append({
+                'ids': f"Team {team_number}",
+                'labels': f"Team {team_number}",
+                'parents': category,
+                'values': team_metric
+            })
         
         # Add category parents
         categories = ["High Performers", "Medium Performers", "Low Performers", "Developing Teams"]

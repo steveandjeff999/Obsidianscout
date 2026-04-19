@@ -15,5 +15,9 @@
   "tests/test_pit_form.py::test_scouting_form_team_selector_optout": true,
   "tests/test_pit_form.py::test_pit_form_alliance_gt_image_upload_honors_shared_flag": true,
   "tests/test_alliances_api.py::test_api_toggle_alliance_mode_requires_accepted_member_and_config": true,
-  "tests/test_alliances_api.py::test_import_game_config_template_scouting_team": true
+  "tests/test_alliances_api.py::test_import_game_config_template_scouting_team": true,
+  "tests/test_mobile_data_mode.py::test_mobile_data_mode_returns_correct_mode_for_statbotics_plus_data": true,
+  "tests/test_mobile_data_mode.py::test_mobile_data_mode_defaults_to_data_when_no_team_settings": true,
+  "tests/test_mobile_data_mode.py::test_mobile_current_data_mode_match_points_returns_scouted_rows": true,
+  "tools/test_single_graph.py": true
 }
