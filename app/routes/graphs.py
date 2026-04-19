@@ -299,6 +299,108 @@ def _lookup_statbotics_points_for_graph_match(match_obj, statbotics_points_by_ma
     return statbotics_points_by_match.get((comp_level, set_number, match_number))
 
 
+def _is_external_epa_eligible_match(match_obj):
+    """Return True for match rows that external EPA/OPR should be plotted against.
+
+    External EPA sources provide qualification + playoff style matches only.
+    Practice matches should never appear in EPA-only match charts.
+    """
+    if not match_obj:
+        return False
+
+    comp_level = str(getattr(match_obj, 'comp_level', None) or '').strip().lower()
+    if comp_level in ('qm', 'ef', 'qf', 'sf', 'f'):
+        return True
+
+    mtype = str(getattr(match_obj, 'match_type', None) or '').strip().lower()
+    if 'practice' in mtype:
+        return False
+    if 'qual' in mtype:
+        return True
+    if 'playoff' in mtype or 'elim' in mtype or 'final' in mtype:
+        return True
+    return False
+
+
+_GRAPH_MATCH_TYPE_ORDER = {
+    'practice': 1,
+    'qualification': 2,
+    'playoff': 3,
+    'elimination': 3,
+}
+
+_GRAPH_COMP_LEVEL_ORDER = {
+    'qm': 0,
+    'ef': 1,
+    'qf': 2,
+    'sf': 3,
+    'f': 4,
+}
+
+
+def _graph_match_type_rank(match_type):
+    mtype = str(match_type or '').strip().lower()
+    if 'practice' in mtype:
+        return _GRAPH_MATCH_TYPE_ORDER['practice']
+    if 'qual' in mtype:
+        return _GRAPH_MATCH_TYPE_ORDER['qualification']
+    if 'playoff' in mtype or 'elim' in mtype or 'final' in mtype:
+        return _GRAPH_MATCH_TYPE_ORDER['playoff']
+    return 99
+
+
+def _graph_match_key_from_row(row):
+    comp_level = str((row or {}).get('comp_level') or '').strip().lower()
+    if not comp_level:
+        # Use the same normalization used for statbotics/local matching.
+        class _RowObj:
+            pass
+        obj = _RowObj()
+        obj.match_type = (row or {}).get('match_type')
+        obj.comp_level = ''
+        comp_level = _normalize_comp_level_for_graph_match(obj)
+    return (
+        _graph_match_type_rank((row or {}).get('match_type')),
+        _GRAPH_COMP_LEVEL_ORDER.get(comp_level, 0),
+        int((row or {}).get('set_number', 0) or 0),
+        int((row or {}).get('match_number', 0) or 0),
+    )
+
+
+def _annotate_match_orders_for_graphs(team_data):
+    """Add stable match_order values so playoff matches plot in schedule order."""
+    unique_keys = set()
+    for data in team_data.values():
+        for row in data.get('matches', []):
+            if row.get('match_number') is None:
+                continue
+            unique_keys.add(_graph_match_key_from_row(row))
+
+    ordered = sorted(unique_keys)
+    order_map = {key: idx + 1 for idx, key in enumerate(ordered)}
+
+    for data in team_data.values():
+        for row in data.get('matches', []):
+            key = _graph_match_key_from_row(row)
+            row['match_order'] = int(order_map.get(key, row.get('match_number') or 0) or 0)
+            display_num = row.get('display_match_number')
+            if display_num in (None, ''):
+                display_num = row.get('match_number')
+            mtype = row.get('match_type') or 'Match'
+            row['match_label'] = f"{mtype} {display_num}"
+
+
+def _row_x_order(row):
+    return int((row or {}).get('match_order') or (row or {}).get('match_number') or 0)
+
+
+def _row_hover_label(row):
+    label = (row or {}).get('match_label')
+    if label:
+        return label
+    return f"Match {(row or {}).get('match_number', 0)}"
+
+
 def _calculate_team_metrics_cached(team_id, event_id=None):
     """Cached wrapper around calculate_team_metrics for /graphs routes."""
     try:
@@ -917,7 +1019,10 @@ def _build_selected_graph_plots(
                 all_event_matches = Match.query.filter(
                     Match.event_id.in_(selected_event_ids)
                 ).order_by(Match.match_type, Match.set_number, Match.match_number).all()
-                team_matches = [m for m in all_event_matches if _match_has_team(m, team.team_number)]
+                team_matches = [
+                    m for m in all_event_matches
+                    if _match_has_team(m, team.team_number) and _is_external_epa_eligible_match(m)
+                ]
             except Exception:
                 team_matches = []
 
@@ -939,6 +1044,9 @@ def _build_selected_graph_plots(
                 team_data[team.team_number]['matches'].append({
                     'match_number': int(getattr(m, 'match_number', 0) or 0),
                     'match_type': getattr(m, 'match_type', '') or 'Match',
+                    'display_match_number': getattr(m, 'display_match_number', None),
+                    'set_number': int(getattr(m, 'set_number', 0) or 0),
+                    'comp_level': (getattr(m, 'comp_level', None) or ''),
                     'metric_value': epa_val,
                     'timestamp': getattr(m, 'timestamp', None) or getattr(m, 'scheduled_time', None) or datetime.min
                 })
@@ -1003,6 +1111,17 @@ def _build_selected_graph_plots(
                 ):
                     continue
 
+                # External EPA/OPR match views should only include
+                # qualification + playoff matches, never practice rows.
+                if (
+                    selected_data_view == 'matches'
+                    and _epa_source in ('statbotics_only', 'tba_opr_only', 'scouted_with_statbotics')
+                    and selected_metric in ('points', '', 'tot', 'total_points')
+                    and match is not None
+                    and not _is_external_epa_eligible_match(match)
+                ):
+                    continue
+
                 # In EPA/OPR match-by-match mode, keep only one point per
                 # real match even if multiple scouting rows exist.
                 if (
@@ -1029,6 +1148,9 @@ def _build_selected_graph_plots(
                 team_data[team.team_number]['matches'].append({
                     'match_number': match_num,
                     'match_type': match_type,
+                    'display_match_number': (getattr(match, 'display_match_number', None) if match else None),
+                    'set_number': (int(getattr(match, 'set_number', 0) or 0) if match else 0),
+                    'comp_level': ((getattr(match, 'comp_level', None) or '') if match else ''),
                     'metric_value': metric_value,
                     'timestamp': ts
                 })
@@ -1047,7 +1169,10 @@ def _build_selected_graph_plots(
                     all_event_matches = Match.query.filter(
                         Match.event_id.in_(selected_event_ids)
                     ).order_by(Match.match_type, Match.set_number, Match.match_number).all()
-                    team_matches = [m for m in all_event_matches if _match_has_team(m, team.team_number)]
+                    team_matches = [
+                        m for m in all_event_matches
+                        if _match_has_team(m, team.team_number) and _is_external_epa_eligible_match(m)
+                    ]
                 except Exception:
                     team_matches = []
 
@@ -1073,6 +1198,9 @@ def _build_selected_graph_plots(
                     team_data[team.team_number]['matches'].append({
                         'match_number': int(getattr(m, 'match_number', 0) or 0),
                         'match_type': getattr(m, 'match_type', '') or 'Match',
+                        'display_match_number': getattr(m, 'display_match_number', None),
+                        'set_number': int(getattr(m, 'set_number', 0) or 0),
+                        'comp_level': (getattr(m, 'comp_level', None) or ''),
                         'metric_value': epa_val,
                         'timestamp': getattr(m, 'timestamp', None) or getattr(m, 'scheduled_time', None) or datetime.min
                     })
@@ -1121,7 +1249,10 @@ def _build_selected_graph_plots(
                         all_event_matches = Match.query.filter(
                             Match.event_id.in_(selected_event_ids)
                         ).order_by(Match.match_type, Match.set_number, Match.match_number).all()
-                        team_matches = [m for m in all_event_matches if _match_has_team(m, team.team_number)]
+                        team_matches = [
+                            m for m in all_event_matches
+                            if _match_has_team(m, team.team_number) and _is_external_epa_eligible_match(m)
+                        ]
                     except Exception:
                         team_matches = []
 
@@ -1147,6 +1278,9 @@ def _build_selected_graph_plots(
                         team_data[team.team_number]['matches'].append({
                             'match_number': int(getattr(m, 'match_number', 0) or 0),
                             'match_type': getattr(m, 'match_type', '') or 'Match',
+                            'display_match_number': getattr(m, 'display_match_number', None),
+                            'set_number': int(getattr(m, 'set_number', 0) or 0),
+                            'comp_level': (getattr(m, 'comp_level', None) or ''),
                             'metric_value': epa_val,
                             'timestamp': getattr(m, 'timestamp', None) or getattr(m, 'scheduled_time', None) or datetime.min
                         })
@@ -1177,6 +1311,8 @@ def _build_selected_graph_plots(
                     })
 
     # Generate the requested graph types using helper functions
+    _annotate_match_orders_for_graphs(team_data)
+
     for graph_type in selected_graph_types:
         if graph_type == 'bar':
             plots.update(_create_bar_chart(team_data, selected_metric, selected_data_view, selected_sort))
@@ -4343,8 +4479,9 @@ def _create_bar_chart(team_data, metric, data_view, sort='points_desc'):
         fig = go.Figure()
         for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             if data['matches']:
-                match_numbers = [m['match_number'] for m in data['matches']]
-                values = [m['metric_value'] for m in data['matches']]
+                sorted_matches = sorted(data['matches'], key=_row_x_order)
+                match_numbers = [_row_x_order(m) for m in sorted_matches]
+                values = [m['metric_value'] for m in sorted_matches]
                 fig.add_trace(go.Bar(
                     x=match_numbers,
                     y=values,
@@ -4353,7 +4490,7 @@ def _create_bar_chart(team_data, metric, data_view, sort='points_desc'):
         
         fig.update_layout(
             title=f"{metric.replace('_', ' ').title()} per Match - All Teams (Bar Chart)",
-            xaxis_title="Match Number",
+            xaxis_title="Match Order",
             yaxis_title=metric.replace('_', ' ').title(),
             margin=dict(l=40, r=20, t=50, b=60),
             barmode='group'
@@ -4372,19 +4509,26 @@ def _create_line_chart(team_data, metric, data_view, sort='points_desc'):
         for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             if data['matches']:
                 # Sort matches by match number
-                sorted_matches = sorted(data['matches'], key=lambda x: x['match_number'])
-                match_numbers = [m['match_number'] for m in sorted_matches]
-                values = [m['metric_value'] for m in sorted_matches]
+                sorted_matches = sorted(data['matches'], key=_row_x_order)
+                valid_matches = [m for m in sorted_matches if m.get('metric_value') is not None]
+                if not valid_matches:
+                    continue
+                match_numbers = [_row_x_order(m) for m in valid_matches]
+                values = [m['metric_value'] for m in valid_matches]
+                labels = [_row_hover_label(m) for m in valid_matches]
                 fig.add_trace(go.Scatter(
                     x=match_numbers,
                     y=values,
                     mode='lines+markers',
-                    name=f"Team {team_number}"
+                    name=f"Team {team_number}",
+                    connectgaps=True,
+                    customdata=labels,
+                    hovertemplate='Team %{fullData.name}<br>%{customdata}<br>Value: %{y}<extra></extra>'
                 ))
         
         fig.update_layout(
             title=f"{metric.replace('_', ' ').title()} Trend - All Teams (Line Chart)",
-            xaxis_title="Match Number",
+            xaxis_title="Match Order",
             yaxis_title=metric.replace('_', ' ').title(),
             margin=dict(l=40, r=20, t=50, b=60)
         )
@@ -4436,8 +4580,9 @@ def _create_scatter_chart(team_data, metric, data_view):
         fig = go.Figure()
         for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             if data['matches']:
-                match_numbers = [m['match_number'] for m in data['matches']]
-                values = [m['metric_value'] for m in data['matches']]
+                sorted_matches = sorted(data['matches'], key=_row_x_order)
+                match_numbers = [_row_x_order(m) for m in sorted_matches]
+                values = [m['metric_value'] for m in sorted_matches]
                 fig.add_trace(go.Scatter(
                     x=match_numbers,
                     y=values,
@@ -4448,7 +4593,7 @@ def _create_scatter_chart(team_data, metric, data_view):
         
         fig.update_layout(
             title=f"{metric.replace('_', ' ').title()} Distribution - All Teams (Scatter Plot)",
-            xaxis_title="Match Number",
+            xaxis_title="Match Order",
             yaxis_title=metric.replace('_', ' ').title(),
             margin=dict(l=40, r=20, t=50, b=60)
         )
@@ -5051,7 +5196,7 @@ def _create_heatmap_chart(team_data, metric, data_view):
         # Get all match numbers
         for data in team_data.values():
             for match in data['matches']:
-                all_matches.add(match['match_number'])
+                all_matches.add(_row_x_order(match))
         
         sorted_matches = sorted(all_matches)
         
@@ -5063,7 +5208,7 @@ def _create_heatmap_chart(team_data, metric, data_view):
                 # Find value for this team and match
                 value = None
                 for match in team_data[team_number]['matches']:
-                    if match['match_number'] == match_num:
+                    if _row_x_order(match) == match_num:
                         value = match['metric_value']
                         break
                 team_row.append(value if value is not None else 0)
@@ -5096,8 +5241,12 @@ def _create_bubble_chart(team_data, metric, data_view):
         fig = go.Figure()
         for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             if data['matches']:
-                match_numbers = [m['match_number'] for m in data['matches']]
-                values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
+                sorted_matches = sorted(data['matches'], key=_row_x_order)
+                valid_matches = [m for m in sorted_matches if m['metric_value'] is not None]
+                if not valid_matches:
+                    continue
+                match_numbers = [_row_x_order(m) for m in valid_matches]
+                values = [m['metric_value'] for m in valid_matches]
                 sizes = [abs(v) + 5 for v in values]  # Bubble size based on absolute value
                 
                 fig.add_trace(go.Scatter(
@@ -5117,7 +5266,7 @@ def _create_bubble_chart(team_data, metric, data_view):
         theme_vals = _chart_theme()
         fig.update_layout(
             title=f"{metric.replace('_', ' ').title()} by Match (Bubble Chart)",
-            xaxis_title="Match Number",
+            xaxis_title="Match Order",
             yaxis_title=metric.replace('_', ' ').title(),
             margin=dict(l=40, r=20, t=50, b=60),
             plot_bgcolor=theme_vals['plot_bg'],
@@ -5137,9 +5286,10 @@ def _create_area_chart(team_data, metric, data_view):
         for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             if data['matches']:
                 # Sort by match number
-                sorted_matches = sorted(data['matches'], key=lambda x: x['match_number'])
-                match_numbers = [m['match_number'] for m in sorted_matches]
-                values = [m['metric_value'] for m in sorted_matches if m['metric_value'] is not None]
+                sorted_matches = sorted(data['matches'], key=_row_x_order)
+                valid_matches = [m for m in sorted_matches if m['metric_value'] is not None]
+                match_numbers = [_row_x_order(m) for m in valid_matches]
+                values = [m['metric_value'] for m in valid_matches]
                 
                 # Calculate cumulative values
                 import numpy as np
@@ -5157,7 +5307,7 @@ def _create_area_chart(team_data, metric, data_view):
         theme_vals = _chart_theme()
         fig.update_layout(
             title=f"Cumulative {metric.replace('_', ' ').title()} Over Matches (Area Chart)",
-            xaxis_title="Match Number",
+            xaxis_title="Match Order",
             yaxis_title=f"Cumulative {metric.replace('_', ' ').title()}",
             margin=dict(l=40, r=20, t=50, b=60),
             plot_bgcolor=theme_vals['plot_bg'],
