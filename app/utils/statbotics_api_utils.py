@@ -20,6 +20,7 @@ from __future__ import annotations
 import re
 from html import unescape
 from typing import Optional, Dict, Any
+import time as _time
 
 import requests
 
@@ -31,7 +32,7 @@ except Exception:  # pragma: no cover - import-time fallback
 
 STATBOTICS_BASE = "https://www.statbotics.io"
 STATBOTICS_API_BASE = "https://api.statbotics.io/v3"
-_DEFAULT_TIMEOUT = 4
+_DEFAULT_TIMEOUT = 8
 _USER_AGENT = "FRC-Scouting-Platform/1.0"
 
 # In-memory EPA cache: key -> (value, last_access_time)
@@ -42,12 +43,18 @@ _EPA_IDLE_SECONDS = 1800          # evict entries unused for 30 min
 _EPA_CLEANUP_EVERY = 200          # run eviction sweep every N accesses
 _epa_access_counter = 0
 
+# In-memory TeamMatch cache for historical per-match EPA rows.
+# key -> (value, last_access_time) where value is list[dict] | _CACHE_MISS
+_team_matches_cache: Dict[str, tuple] = {}
+_MATCHES_IDLE_SECONDS = 1800       # evict entries unused for 30 min
+_MATCHES_CLEANUP_EVERY = 200       # run eviction sweep every N accesses
+_matches_access_counter = 0
+
 
 def _epa_cache_get(key: str):
     """Read from L1 EPA cache, refreshing last-access time.
     Returns (value, found).
     """
-    import time as _time
     global _epa_access_counter
     entry = _team_epa_cache.get(key)
     if entry is None:
@@ -62,7 +69,6 @@ def _epa_cache_get(key: str):
 
 def _epa_cache_set(key: str, value) -> None:
     """Write to L1 EPA cache, recording current time as last-access."""
-    import time as _time
     global _epa_access_counter
     _team_epa_cache[key] = (value, _time.time())
     _epa_access_counter += 1
@@ -72,7 +78,6 @@ def _epa_cache_set(key: str, value) -> None:
 
 def _epa_cache_evict() -> None:
     """Remove entries idle for >30 min."""
-    import time as _time
     global _epa_access_counter
     _epa_access_counter = 0
     now = _time.time()
@@ -80,6 +85,42 @@ def _epa_cache_evict() -> None:
              if now - ts > _EPA_IDLE_SECONDS]
     for k in stale:
         del _team_epa_cache[k]
+
+
+def _matches_cache_get(key: str):
+    """Read from L1 TeamMatch cache, refreshing last-access time.
+    Returns (value, found).
+    """
+    global _matches_access_counter
+    entry = _team_matches_cache.get(key)
+    if entry is None:
+        return None, False
+    value, _ = entry
+    _team_matches_cache[key] = (value, _time.time())
+    _matches_access_counter += 1
+    if _matches_access_counter >= _MATCHES_CLEANUP_EVERY:
+        _matches_cache_evict()
+    return value, True
+
+
+def _matches_cache_set(key: str, value) -> None:
+    """Write to L1 TeamMatch cache, recording current time as last-access."""
+    global _matches_access_counter
+    _team_matches_cache[key] = (value, _time.time())
+    _matches_access_counter += 1
+    if _matches_access_counter >= _MATCHES_CLEANUP_EVERY:
+        _matches_cache_evict()
+
+
+def _matches_cache_evict() -> None:
+    """Remove TeamMatch cache entries idle for >30 min."""
+    global _matches_access_counter
+    _matches_access_counter = 0
+    now = _time.time()
+    stale = [k for k, (_, ts) in list(_team_matches_cache.items())
+             if now - ts > _MATCHES_IDLE_SECONDS]
+    for k in stale:
+        del _team_matches_cache[k]
 
 # Lazily-created Statbotics client instance (reused across calls)
 _sb_instance = None
@@ -496,39 +537,164 @@ def get_statbotics_team_total_epa(team_number: int | str) -> Optional[float]:
     return parsed.get("total") if parsed else None
 
 
+def _db_match_cache_get(team_number: int | str,
+                        event_key: Optional[str],
+                        year: Optional[int],
+                        ttl_minutes: int = 30,
+                        stale_ok: bool = False):
+    """L2 cache: read TeamMatch rows from StatboticsMatchCache table."""
+    try:
+        from flask import current_app  # noqa: F401 – ensures app context
+        from app.models import StatboticsMatchCache
+
+        row = StatboticsMatchCache.get_cached(
+            int(team_number),
+            event_key=event_key,
+            year=year,
+            ttl_minutes=ttl_minutes,
+            stale_ok=stale_ok,
+        )
+        if row is None:
+            return None
+        if row.is_miss:
+            return _CACHE_MISS
+        return row.to_matches()
+    except Exception:
+        return None
+
+
+def _db_match_cache_put(team_number: int | str,
+                        event_key: Optional[str],
+                        year: Optional[int],
+                        matches: Optional[list[dict]]) -> None:
+    """L2 cache: persist TeamMatch rows (or miss) in DB."""
+    try:
+        from app.models import StatboticsMatchCache
+        StatboticsMatchCache.upsert(
+            int(team_number),
+            event_key=event_key,
+            year=year,
+            matches=matches,
+        )
+    except Exception:
+        pass
+
+
 def get_statbotics_team_matches(team_number: int | str,
                                 event_key: Optional[str] = None,
                                 year: Optional[int] = None,
-                                limit: int = 200) -> list[Dict[str, Any]]:
+                                limit: int = 200,
+                                use_cache: bool = True) -> list[Dict[str, Any]]:
     """Return historical per-match Statbotics rows for a team.
 
     This uses the official TeamMatch endpoint so callers can use the match-time
     EPA estimate (``epa.total_points``) instead of the current team EPA.
+
+    Cache hierarchy:
+      L1 — in-memory dict (instant, per-process lifetime)
+      L2 — DB ``statbotics_match_cache`` table (persists across restarts, 30 min TTL)
+      L3 — Statbotics ``/team_matches`` API
     """
+    req_limit = max(1, min(int(limit or 200), 1000))
+    normalized_event = str(event_key or '').strip().lower()
+    normalized_year = int(year) if year not in (None, '') else 0
+    cache_key = f"{int(team_number)}:{normalized_event}:{normalized_year}"
+
+    # --- L1: in-memory cache ---
+    if use_cache:
+        cached, found = _matches_cache_get(cache_key)
+        if found:
+            if cached is _CACHE_MISS:
+                return []
+            return list(cached)[:req_limit]
+
+    # --- L2: DB cache (fresh first, stale fallback) ---
+    if use_cache:
+        db_rows = _db_match_cache_get(team_number, normalized_event, normalized_year, ttl_minutes=30)
+        if db_rows is _CACHE_MISS:
+            _matches_cache_set(cache_key, _CACHE_MISS)
+            return []
+        if isinstance(db_rows, list):
+            _matches_cache_set(cache_key, db_rows)
+            return db_rows[:req_limit]
+
+        stale_rows = _db_match_cache_get(team_number, normalized_event, normalized_year, ttl_minutes=30, stale_ok=True)
+        if stale_rows is _CACHE_MISS:
+            _matches_cache_set(cache_key, _CACHE_MISS)
+            return []
+        if isinstance(stale_rows, list):
+            _matches_cache_set(cache_key, stale_rows)
+            return stale_rows[:req_limit]
+
+    # Fetch a fuller page once, then slice for caller-specific limits.
+    fetch_limit = max(req_limit, 300)
     params: Dict[str, Any] = {
         "team": int(team_number),
-        "limit": max(1, min(int(limit or 200), 1000)),
+        "limit": max(1, min(int(fetch_limit), 1000)),
     }
-    if event_key:
-        params["event"] = str(event_key).strip().lower()
-    if year:
-        params["year"] = int(year)
+    if normalized_event:
+        params["event"] = normalized_event
+    if normalized_year:
+        params["year"] = normalized_year
 
-    try:
-        resp = requests.get(
-            f"{STATBOTICS_API_BASE}/team_matches",
-            params=params,
-            headers={"Accept": "application/json", "User-Agent": _USER_AGENT},
-            timeout=_DEFAULT_TIMEOUT,
-        )
-        if resp.status_code != 200:
-            return []
-        payload = resp.json()
-        if not isinstance(payload, list):
-            return []
-        return [row for row in payload if isinstance(row, dict)]
-    except Exception:
-        return []
+    last_response = None
+    for _attempt in range(3):
+        try:
+            resp = requests.get(
+                f"{STATBOTICS_API_BASE}/team_matches",
+                params=params,
+                headers={"Accept": "application/json", "User-Agent": _USER_AGENT},
+                timeout=_DEFAULT_TIMEOUT,
+            )
+            last_response = resp
+
+            if resp.status_code == 404:
+                if use_cache:
+                    _matches_cache_set(cache_key, _CACHE_MISS)
+                    _db_match_cache_put(team_number, normalized_event, normalized_year, None)
+                return []
+
+            if resp.status_code == 429 or resp.status_code >= 500:
+                # Transient server/rate-limit response; retry before giving up.
+                continue
+
+            if resp.status_code != 200:
+                if use_cache:
+                    _matches_cache_set(cache_key, _CACHE_MISS)
+                    _db_match_cache_put(team_number, normalized_event, normalized_year, None)
+                return []
+
+            payload = resp.json()
+            if not isinstance(payload, list):
+                if use_cache:
+                    _matches_cache_set(cache_key, _CACHE_MISS)
+                    _db_match_cache_put(team_number, normalized_event, normalized_year, None)
+                return []
+
+            rows = [row for row in payload if isinstance(row, dict)]
+            if use_cache:
+                if rows:
+                    _matches_cache_set(cache_key, rows)
+                    _db_match_cache_put(team_number, normalized_event, normalized_year, rows)
+                else:
+                    _matches_cache_set(cache_key, _CACHE_MISS)
+                    _db_match_cache_put(team_number, normalized_event, normalized_year, None)
+            return rows[:req_limit]
+
+        except requests.RequestException:
+            continue
+        except ValueError:
+            # Invalid JSON is usually transient CDN/edge behavior.
+            continue
+        except Exception:
+            break
+
+    # If we only saw transient failures, avoid writing a definitive miss.
+    if last_response is not None and last_response.status_code not in (429,) and last_response.status_code < 500:
+        if use_cache:
+            _matches_cache_set(cache_key, _CACHE_MISS)
+            _db_match_cache_put(team_number, normalized_event, normalized_year, None)
+    return []
 
 
 def clear_epa_caches() -> None:
@@ -538,6 +704,8 @@ def clear_epa_caches() -> None:
     never served.  The DB cache (StatboticsCache) is intentionally kept
     — it stores raw API data which is source-agnostic.
     """
-    global _epa_access_counter
+    global _epa_access_counter, _matches_access_counter
     _team_epa_cache.clear()
+    _team_matches_cache.clear()
     _epa_access_counter = 0
+    _matches_access_counter = 0

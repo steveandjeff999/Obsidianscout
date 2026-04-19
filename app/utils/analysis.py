@@ -400,6 +400,13 @@ def refresh_opr_epa_for_event(event_code=None, team_numbers=None):
             except Exception:
                 pass
 
+    # Keep /graphs route-layer caches aligned with freshly synced external data.
+    try:
+        from app.routes.graphs import prewarm_graph_caches_for_sync
+        prewarm_graph_caches_for_sync(event_code=event_code, team_numbers=team_numbers)
+    except Exception:
+        pass
+
 
 def _detect_outliers_adaptive(values):
     """Adaptive outlier detection that works well on both small and large datasets.

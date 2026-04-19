@@ -23,6 +23,7 @@ try:
     from app.models import User, ScoutingTeamSettings
     from app.routes import mobile_api as ma
     from app.models import Team, Event, Match, ScoutingData
+    from app.utils import statbotics_api_utils as sbu
 except Exception:
     User = None
     ScoutingTeamSettings = None
@@ -31,6 +32,7 @@ except Exception:
     Event = None
     Match = None
     ScoutingData = None
+    sbu = None
 
 
 def test_mobile_data_mode_returns_correct_mode_for_statbotics_plus_data():
@@ -160,6 +162,52 @@ def test_mobile_current_data_mode_match_points_returns_scouted_rows(monkeypatch)
             assert match_payload['external_total_points'] == 42
             assert match_payload['selected_total_points'] == 6
             assert match_payload['selected_source'] == 'scouted'
+
+
+def test_statbotics_team_matches_are_cached(monkeypatch):
+    app = create_app()
+    with app.app_context():
+        try:
+            db.create_all()
+        except Exception:
+            pass
+
+        if sbu is None:
+            pytest.skip('statbotics_api_utils not importable')
+
+        sbu.clear_epa_caches()
+
+        class _FakeResponse:
+            status_code = 200
+
+            def json(self):
+                return [
+                    {
+                        'match': '2026test_qm1',
+                        'event': '2026test',
+                        'epa': {'total_points': 41.2},
+                    }
+                ]
+
+        calls = {'count': 0}
+
+        def _fake_get(*args, **kwargs):
+            calls['count'] += 1
+            return _FakeResponse()
+
+        monkeypatch.setattr('app.utils.statbotics_api_utils.requests.get', _fake_get)
+
+        team_number = 654321
+        event_key = '2026test'
+
+        first = sbu.get_statbotics_team_matches(team_number, event_key=event_key, limit=200, use_cache=True)
+        second = sbu.get_statbotics_team_matches(team_number, event_key=event_key, limit=200, use_cache=True)
+
+        assert len(first) == 1
+        assert len(second) == 1
+        assert first[0]['match'] == '2026test_qm1'
+        assert second[0]['match'] == '2026test_qm1'
+        assert calls['count'] == 1
 
 
 def mobile_data_mode_login_ui():
