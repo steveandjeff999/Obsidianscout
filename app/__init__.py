@@ -781,6 +781,7 @@ def create_app(test_config=None, use_postgres=False):
             'pages': 'sqlite:///' + os.path.join(app.instance_path, 'pages.db'),
             'misc':  'sqlite:///' + os.path.join(app.instance_path, 'misc.db'),
             'images': 'sqlite:///' + os.path.join(app.instance_path, 'images.db'),
+            'statboticsepa': 'sqlite:///' + os.path.join(app.instance_path, 'statboticsepa.db'),
         }
         _engine_opts = {
             'pool_pre_ping': True,
@@ -843,7 +844,8 @@ def create_app(test_config=None, use_postgres=False):
                     'users': 'sqlite:///' + os.path.join(alt_instance, 'users.db'),
                     'pages': 'sqlite:///' + os.path.join(alt_instance, 'pages.db'),
                     'misc': 'sqlite:///' + os.path.join(alt_instance, 'misc.db'),
-                    'images': 'sqlite:///' + os.path.join(alt_instance, 'images.db')
+                    'images': 'sqlite:///' + os.path.join(alt_instance, 'images.db'),
+                    'statboticsepa': 'sqlite:///' + os.path.join(alt_instance, 'statboticsepa.db')
                 }
             app.config['UPLOAD_FOLDER'] = os.path.join(alt_instance, 'uploads')
             os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -1461,6 +1463,18 @@ def create_app(test_config=None, use_postgres=False):
                 except Exception as e:
                     app.logger.info('Could not create images bind tables: %s', e)
 
+            # If a dedicated Statbotics EPA bind is configured, create those tables explicitly.
+            if 'SQLALCHEMY_BINDS' in app.config and 'statboticsepa' in app.config['SQLALCHEMY_BINDS']:
+                try:
+                    try:
+                        statbotics_engine = db.get_engine(bind='statboticsepa')
+                    except TypeError:
+                        statbotics_engine = db.get_engine(app, bind='statboticsepa')
+                    from app.models import StatboticsCache
+                    StatboticsCache.__table__.create(statbotics_engine, checkfirst=True)
+                except Exception as e:
+                    app.logger.info('Could not create statboticsepa bind tables: %s', e)
+
             # Finally create all remaining tables on the default bind.
             # Skip tables that belong to other binds – they were already
             # created on their own engines above.
@@ -1476,7 +1490,7 @@ def create_app(test_config=None, use_postgres=False):
                 except TypeError:
                     default_engine = db.get_engine(app)
                 # Bind keys that have their own engines (already handled above)
-                _non_default_binds = {'users', 'pages', 'misc', 'images'}
+                _non_default_binds = {'users', 'pages', 'misc', 'images', 'statboticsepa'}
 
                 for table in db.metadata.sorted_tables:
                     # Skip tables that belong to a non-default bind

@@ -11,10 +11,12 @@ import time
 import logging
 from datetime import datetime, timezone
 
+from app import db
+
 logger = logging.getLogger(__name__)
 
-# Default interval: refresh every 5 minutes
-_DEFAULT_REFRESH_INTERVAL = 300  # seconds
+# Default interval: refresh every 10 minutes
+_DEFAULT_REFRESH_INTERVAL = 600  # seconds
 
 
 class EPARefreshScheduler:
@@ -58,54 +60,80 @@ class EPARefreshScheduler:
 
     # ------------------------------------------------------------------
     def _loop(self):
-        # Wait a short period after startup so the app is fully ready
-        time.sleep(30)
+        # Brief startup delay so DB setup/migrations complete, then warm immediately.
+        time.sleep(5)
+        try:
+            self._refresh()
+        except Exception:
+            logger.exception("EPA startup warm failed")
+
         while self.running:
-            try:
-                self._refresh()
-            except Exception:
-                logger.exception("EPA refresh cycle failed")
             # Sleep in small increments so stop() doesn't hang
             for _ in range(int(self.refresh_interval)):
                 if not self.running:
                     return
                 time.sleep(1)
+            try:
+                self._refresh()
+            except Exception:
+                logger.exception("EPA refresh cycle failed")
 
     # ------------------------------------------------------------------
     def _refresh(self):
-        """Refresh EPA data for every team currently in the database."""
+        """Refresh EPA data for teams attached to events in the active season year."""
         if not self.app:
             return
 
         with self.app.app_context():
-            # Only run if EPA is actually enabled for at least one scouting team
+            # Resolve the active season year from config when possible.
             try:
-                from app.models import ScoutingTeamSettings
-                enabled = ScoutingTeamSettings.query.filter(
-                    ScoutingTeamSettings.epa_source != 'scouted_only'
-                ).first()
-                if not enabled:
-                    logger.debug("EPA refresh skipped — no team has EPA enabled")
-                    return
+                from app.utils.config_manager import get_current_game_config
+                cfg = get_current_game_config() or {}
+                season_year = int(cfg.get('season') or cfg.get('year') or datetime.now(timezone.utc).year)
             except Exception:
-                return
+                season_year = datetime.now(timezone.utc).year
 
-            # Gather all distinct team numbers in the database
+            # Gather distinct team numbers from events in the active season.
             try:
-                from app.models import Team
-                team_numbers = [
-                    r[0] for r in
-                    Team.query.with_entities(Team.team_number).distinct().all()
-                ]
+                from app.models import Team, Event, Match, team_event
+                team_numbers = {
+                    int(r[0]) for r in (
+                        db.session.query(Team.team_number)
+                        .join(team_event, Team.id == team_event.c.team_id)
+                        .join(Event, Event.id == team_event.c.event_id)
+                        .filter(Event.year == int(season_year))
+                        .distinct()
+                        .all()
+                    ) if r and r[0] is not None
+                }
+
+                # Supplement from match alliance strings for events where team_event links are incomplete.
+                match_rows = (
+                    db.session.query(Match.red_alliance, Match.blue_alliance)
+                    .join(Event, Event.id == Match.event_id)
+                    .filter(Event.year == int(season_year))
+                    .all()
+                )
+                for red_alliance, blue_alliance in match_rows:
+                    for side in (red_alliance, blue_alliance):
+                        if not side:
+                            continue
+                        for token in str(side).split(','):
+                            token = token.strip()
+                            if token.isdigit():
+                                team_numbers.add(int(token))
             except Exception:
-                logger.exception("EPA refresh: failed to query teams")
+                logger.exception("EPA refresh: failed to query teams from %s events", season_year)
                 return
 
             if not team_numbers:
+                logger.info("EPA refresh: no teams found for %s events", season_year)
                 return
 
             logger.info(
-                "EPA refresh: updating %d teams…", len(team_numbers)
+                "EPA refresh: updating %d teams from %s events...",
+                len(team_numbers),
+                season_year,
             )
 
             from app.utils.statbotics_api_utils import (
@@ -119,7 +147,7 @@ class EPARefreshScheduler:
 
             updated = 0
             failed = 0
-            for tn in team_numbers:
+            for tn in sorted(team_numbers):
                 try:
                     result = get_statbotics_team_epa(tn, use_cache=False)
                     if result:
