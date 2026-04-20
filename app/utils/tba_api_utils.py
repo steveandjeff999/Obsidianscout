@@ -725,12 +725,12 @@ def construct_tba_event_key(event_code, year=None):
         except Exception:
             year = datetime.now(timezone.utc).year
 
-    # Strip any leading year prefix from event_code to avoid double-year keys
-    # e.g. '2026WEEK0' with year=2026 would produce '20262026week0' without this
-    code = event_code.lower()
-    year_prefix = str(year)
-    if code.startswith(year_prefix):
-        code = code[len(year_prefix):]
+    # Strip any leading year prefix from event_code to avoid double-year keys,
+    # including malformed repeated prefixes like 20262026WEEK0.
+    from app.utils.event_code_utils import split_event_code, normalize_event_code
+    normalized = normalize_event_code(event_code)
+    _, raw_code = split_event_code(normalized)
+    code = (raw_code or normalized).lower()
 
     # TBA event keys are lowercase
     return f"{year}{code}"

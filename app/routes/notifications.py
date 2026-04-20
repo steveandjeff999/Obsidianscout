@@ -22,6 +22,7 @@ from app.utils.push_notifications import register_device, get_vapid_keys, send_p
 from app.utils.emailer import send_email
 from datetime import datetime, timezone, timedelta
 from app.utils.notification_worker import get_seconds_until_next_schedule
+from app.utils.event_code_utils import build_year_prefixed_event_code, normalize_event_code
 
 bp = Blueprint('notifications', __name__, url_prefix='/notifications')
 
@@ -632,14 +633,14 @@ def refresh_schedule():
         from app.models_misc import NotificationQueue
         
         game_config = get_effective_game_config()
-        raw_event_code = game_config.get('current_event_code')
+        raw_event_code = normalize_event_code(game_config.get('current_event_code'))
         
         if not raw_event_code:
             return jsonify({'error': 'No current event configured'}), 400
         
         # Construct year-prefixed code for API call
         current_year = game_config.get('season') or game_config.get('year') or datetime.now().year
-        event_code = f"{current_year}{raw_event_code}"
+        event_code = build_year_prefixed_event_code(raw_event_code, season=current_year)
         
         # Update match times from FRC APIs (FIRST or TBA)
         updated_count = update_match_times(event_code, current_user.scouting_team_number)

@@ -10,6 +10,7 @@ from app.models import Match, Event
 from app.utils.timezone_utils import convert_utc_to_local, format_time_with_timezone
 from app.utils.api_utils import get_api_headers, get_preferred_api_source
 from app.utils.config_manager import get_current_game_config
+from app.utils.event_code_utils import build_year_prefixed_event_code, normalize_event_code
 import requests
 
 
@@ -629,7 +630,7 @@ def update_all_active_events_schedule():
     for team_number in sorted(team_numbers, key=team_sort_key):
         try:
             game_config = load_game_config(team_number=team_number)
-            event_code = game_config.get('current_event_code')
+            event_code = normalize_event_code(game_config.get('current_event_code'))
             season = game_config.get('season') or game_config.get('year') or datetime.now(timezone.utc).year
             try:
                 season = int(season)
@@ -637,12 +638,9 @@ def update_all_active_events_schedule():
                 season = datetime.now(timezone.utc).year
             
             if event_code:
-                # Construct year-prefixed code for database lookup
-                # (database stores codes like "2026OKTU", config has raw "OKTU")
-                if not (event_code[:4].isdigit() if len(event_code) > 4 else False):
-                    event_code_db = f"{season}{event_code}"
-                else:
-                    event_code_db = event_code
+                # Construct year-prefixed code for database lookup.
+                # Handles already-prefixed config values without duplicating year.
+                event_code_db = build_year_prefixed_event_code(event_code, season=season)
                 
                 # Set thread-local season override so fetch_actual_times_from_first
                 # and TBA helpers use the correct season for API calls

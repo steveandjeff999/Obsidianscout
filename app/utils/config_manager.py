@@ -4,6 +4,7 @@ from flask import current_app
 from flask_login import current_user
 import shutil
 import copy
+from app.utils.event_code_utils import normalize_current_event_code_for_config
 
 # Map of (config_name, team_number) -> error message for configs that failed to parse
 CONFIG_LOAD_ERRORS = {}
@@ -110,12 +111,16 @@ def get_current_game_config():
 
 def save_game_config(data, team_number=None):
     """Saves the game configuration for the current user's team."""
-    # Normalize event code to uppercase before saving to prevent duplicates
+    # Normalize current_event_code before saving to prevent malformed /
+    # double-prefixed values from propagating.
     try:
         if isinstance(data, dict):
             ce = data.get('current_event_code')
             if isinstance(ce, str):
-                data['current_event_code'] = ce.strip().upper()
+                data['current_event_code'] = normalize_current_event_code_for_config(
+                    ce,
+                    season=data.get('season')
+                )
     except Exception:
         pass
     
@@ -254,12 +259,16 @@ def load_config(config_name, team_number=None):
 
 def load_game_config(team_number=None):
     cfg = load_config('game_config.json', team_number)
-    # Normalize event code to uppercase for consistency across the app
+    # Normalize current_event_code for consistency and to heal malformed
+    # duplicated-year prefixes from legacy configs.
     try:
         if isinstance(cfg, dict):
             ce = cfg.get('current_event_code')
             if isinstance(ce, str):
-                cfg['current_event_code'] = ce.upper()
+                cfg['current_event_code'] = normalize_current_event_code_for_config(
+                    ce,
+                    season=cfg.get('season')
+                )
     except Exception:
         pass
     return cfg

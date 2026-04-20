@@ -16,6 +16,7 @@ from app.utils.team_isolation import (
 )
 from app.utils.team_isolation import get_combined_dropdown_events
 from app.utils.alliance_data import get_active_alliance_id, get_all_teams_for_alliance
+from app.utils.event_code_utils import build_year_prefixed_event_code, normalize_event_code
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -200,7 +201,7 @@ def sync_from_config():
     try:
         # Get event code from effective config (respects alliance mode)
         game_config = get_effective_game_config()
-        raw_event_code = game_config.get('current_event_code')
+        raw_event_code = normalize_event_code(game_config.get('current_event_code'))
         
         if not raw_event_code:
             flash("No event code found in configuration. Please add 'current_event_code' to your game_config.json file.", 'danger')
@@ -215,7 +216,7 @@ def sync_from_config():
         except (ValueError, TypeError):
             current_year = datetime.now().year
         print(f"[teams sync] Resolved season={current_year} from config (config season={game_config.get('season')!r})")
-        event_code = f"{current_year}{raw_event_code}"
+        event_code = build_year_prefixed_event_code(raw_event_code, season=current_year)
 
         # Set thread-local season override so ALL API helpers use this exact
         # season instead of re-deriving it (which can silently fall back to

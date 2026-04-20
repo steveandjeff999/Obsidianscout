@@ -911,9 +911,18 @@ def strip_year_prefix(event_code):
     differentiate the same event across different years. External APIs 
     (FIRST, TBA) don't use this prefix, so we strip it before making API calls.
     """
-    if event_code and len(event_code) > 4 and event_code[:4].isdigit():
-        return event_code[4:]
-    return event_code
+    try:
+        from app.utils.event_code_utils import normalize_event_code, split_event_code
+
+        normalized = normalize_event_code(event_code)
+        year_prefix, raw_code = split_event_code(normalized)
+        if year_prefix is not None and raw_code:
+            return raw_code
+        return normalized
+    except Exception:
+        if event_code and len(event_code) > 4 and event_code[:4].isdigit():
+            return event_code[4:]
+        return event_code
 
 def get_teams_dual_api(event_code):
     """Get teams from either FIRST API or TBA API based on configuration"""

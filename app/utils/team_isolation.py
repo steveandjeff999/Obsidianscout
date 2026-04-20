@@ -6,6 +6,12 @@ Provides helper functions to filter database queries by scouting team.
 from flask_login import current_user
 from app.models import Team, Event, Match, ScoutingData, AllianceSelection, DoNotPickEntry, AvoidEntry, PitScoutingData, User, DeclinedEntry
 from sqlalchemy import or_, func
+from app.utils.event_code_utils import (
+    normalize_event_code,
+    split_event_code,
+    build_year_prefixed_event_code,
+    event_code_variants,
+)
 
 
 def get_alliance_team_numbers():
@@ -355,12 +361,7 @@ def dedupe_events_for_display(events, current_team=None):
         from app.models import TeamAllianceStatus, ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceEvent
 
         def _normalize_code(value):
-            if not value:
-                return ''
-            try:
-                return str(value).strip().upper()
-            except Exception:
-                return ''
+            return normalize_event_code(value)
 
         def _event_year(event):
             year = getattr(event, 'year', None)
@@ -377,6 +378,37 @@ def dedupe_events_for_display(events, current_team=None):
             else:
                 code = getattr(event, 'code', None)
             return _normalize_code(code)
+
+        def _code_variants(code_value):
+            variants = set()
+            normalized = _normalize_code(code_value)
+            if not normalized:
+                return variants
+
+            variants.add(normalized)
+            code_year, raw_code = split_event_code(normalized)
+            if raw_code and raw_code != normalized:
+                variants.add(raw_code)
+            if code_year is not None and raw_code:
+                variants.add(f"{code_year}{raw_code}")
+            return variants
+
+        def _event_identity_key(event):
+            code = _event_code(event)
+            year = _event_year(event)
+            code_year, raw_code = split_event_code(code)
+            key_code = raw_code or code
+            key_year = year if year is not None else code_year
+
+            if not key_code:
+                event_id = None
+                if isinstance(event, dict):
+                    event_id = event.get('id')
+                else:
+                    event_id = getattr(event, 'id', None)
+                key_code = f"__id_{event_id}"
+
+            return key_code, key_year
 
         def _event_team_number(event):
             if isinstance(event, dict):
@@ -462,21 +494,12 @@ def dedupe_events_for_display(events, current_team=None):
                     event_code = _normalize_code(getattr(row, 'event_code', None))
                     if not event_code:
                         continue
-                    code_set.add(event_code)
                     current_added_at = _added_at_value(getattr(row, 'added_at', None))
-                    existing_added_at = added_at_by_code.get(event_code)
-                    if existing_added_at is None or current_added_at > existing_added_at:
-                        added_at_by_code[event_code] = current_added_at
-                    try:
-                        from app.utils.api_utils import strip_year_prefix
-                        stripped_code = _normalize_code(strip_year_prefix(event_code))
-                        if stripped_code and stripped_code != event_code:
-                            code_set.add(stripped_code)
-                            existing_stripped = added_at_by_code.get(stripped_code)
-                            if existing_stripped is None or current_added_at > existing_stripped:
-                                added_at_by_code[stripped_code] = current_added_at
-                    except Exception:
-                        pass
+                    for variant in _code_variants(event_code):
+                        code_set.add(variant)
+                        existing_added_at = added_at_by_code.get(variant)
+                        if existing_added_at is None or current_added_at > existing_added_at:
+                            added_at_by_code[variant] = current_added_at
 
                 alliance_codes_by_id[alliance.id] = code_set
                 alliance_added_at_by_id[alliance.id] = added_at_by_code
@@ -492,14 +515,10 @@ def dedupe_events_for_display(events, current_team=None):
             if current_team is None:
                 return False
 
-            try:
-                from app.utils.api_utils import strip_year_prefix
-                stripped_code = _normalize_code(strip_year_prefix(code_upper))
-            except Exception:
-                stripped_code = code_upper
+            code_candidates = _code_variants(code_upper)
 
             for alliance_id, code_set in alliance_codes_by_id.items():
-                if code_upper not in code_set and stripped_code not in code_set:
+                if not code_candidates.intersection(code_set):
                     continue
 
                 team_numbers = alliance_team_numbers_by_id.get(alliance_id, set())
@@ -516,15 +535,12 @@ def dedupe_events_for_display(events, current_team=None):
 
         def _alliance_rank(event, code_upper):
             event_team = _event_team_number(event)
-            try:
-                from app.utils.api_utils import strip_year_prefix
-                stripped_code = _normalize_code(strip_year_prefix(code_upper))
-            except Exception:
-                stripped_code = code_upper
+            code_candidates = _code_variants(code_upper)
 
             best_rank = None
             for alliance_id, code_set in alliance_codes_by_id.items():
-                if code_upper not in code_set and stripped_code not in code_set:
+                matching_codes = code_candidates.intersection(code_set)
+                if not matching_codes:
                     continue
 
                 team_numbers = alliance_team_numbers_by_id.get(alliance_id, set())
@@ -532,7 +548,12 @@ def dedupe_events_for_display(events, current_team=None):
                     continue
 
                 priority = 2 if active_alliance and alliance_id == active_alliance.id else 1
-                recency = alliance_added_at_by_id.get(alliance_id, {}).get(code_upper) or alliance_added_at_by_id.get(alliance_id, {}).get(stripped_code)
+                recency_candidates = [
+                    alliance_added_at_by_id.get(alliance_id, {}).get(match_code)
+                    for match_code in matching_codes
+                    if alliance_added_at_by_id.get(alliance_id, {}).get(match_code) is not None
+                ]
+                recency = max(recency_candidates) if recency_candidates else None
                 recency = _added_at_value(recency)
                 candidate_rank = (priority, recency, _event_score(event), alliance_id)
                 if best_rank is None or candidate_rank > best_rank:
@@ -543,8 +564,7 @@ def dedupe_events_for_display(events, current_team=None):
         grouped_events = {}
         for event in events:
             code_upper = _event_code(event)
-            year = _event_year(event)
-            key = (code_upper, year)
+            key = _event_identity_key(event)
             bucket = grouped_events.setdefault(key, {'team': None, 'alliance': None})
 
             if _is_alliance_candidate(event, code_upper):
@@ -924,139 +944,176 @@ def get_event_by_code(event_code):
     if not event_code:
         return None
 
-    # Normalize to uppercase and strip whitespace for comparison
-    event_code_upper = str(event_code).strip().upper()
+    event_code_upper = normalize_event_code(event_code)
+    if not event_code_upper:
+        return None
 
-    # Try to construct year-prefixed code if the code appears to be raw (no year prefix)
-    # Year-prefixed codes start with 4 digits (e.g., "2026OKTU")
+    season_hint = None
+    try:
+        from app.utils.config_manager import get_effective_game_config
+        game_config = get_effective_game_config()
+        if isinstance(game_config, dict):
+            season_hint = game_config.get('season')
+    except Exception:
+        season_hint = None
+
+    try:
+        season_hint = int(season_hint) if season_hint is not None else None
+    except (TypeError, ValueError):
+        season_hint = None
+
+    input_year, input_raw = split_event_code(event_code_upper)
     year_prefixed_code = event_code_upper
-    if not (len(event_code_upper) >= 4 and event_code_upper[:4].isdigit()):
-        # Code doesn't start with year, try to add year prefix from the team's game_config
-        # Use the team-specific config (not global) to get the correct season
-        try:
-            from app.utils.config_manager import get_effective_game_config
-            game_config = get_effective_game_config()
-            if isinstance(game_config, dict):
-                season = game_config.get('season')
-                if season:
-                    year_prefixed_code = f"{season}{event_code_upper}"
-        except Exception:
-            # Fallback: try to get season from current user's team config directly
+    if input_year is None:
+        year_prefixed_code = build_year_prefixed_event_code(event_code_upper, season=season_hint)
+
+    candidate_codes = event_code_variants(event_code_upper, season=season_hint)
+    if year_prefixed_code and year_prefixed_code not in candidate_codes:
+        candidate_codes.insert(0, year_prefixed_code)
+    if not candidate_codes:
+        return None
+
+    expected_year = input_year
+    if expected_year is None:
+        expected_year, _ = split_event_code(year_prefixed_code)
+
+    current_team = get_current_scouting_team_number()
+
+    def _completeness_score(evt):
+        score = 0
+        if getattr(evt, 'name', None):
+            score += 10
+        if getattr(evt, 'location', None):
+            score += 5
+        if getattr(evt, 'start_date', None):
+            score += 5
+        if getattr(evt, 'end_date', None):
+            score += 3
+        if getattr(evt, 'timezone', None):
+            score += 2
+        if getattr(evt, 'year', None):
+            score += 1
+        return score
+
+    def _event_match_score(evt):
+        evt_code = normalize_event_code(getattr(evt, 'code', None))
+        if evt_code == year_prefixed_code:
+            return 300
+        if evt_code == event_code_upper:
+            return 250
+        if input_raw and evt_code == input_raw:
+            return 220
+        _, evt_raw = split_event_code(evt_code)
+        if input_raw and evt_raw and evt_raw == input_raw:
+            return 200
+        return 0
+
+    def _pick_best(events):
+        if not events:
+            return None
+
+        def _rank(evt):
+            score = _event_match_score(evt)
+            if current_team is not None and getattr(evt, 'scouting_team_number', None) == current_team:
+                score += 80
+            if expected_year is not None and getattr(evt, 'year', None) == expected_year:
+                score += 60
+            if expected_year is not None and getattr(evt, 'year', None) is None:
+                score += 10
+            score += _completeness_score(evt)
             try:
-                from app.utils.config_manager import load_game_config
-                from flask_login import current_user
-                team_number = None
-                if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
-                    team_number = getattr(current_user, 'scouting_team_number', None)
-                game_config = load_game_config(team_number=team_number)
-                if isinstance(game_config, dict):
-                    season = game_config.get('season')
-                    if season:
-                        year_prefixed_code = f"{season}{event_code_upper}"
+                score += (getattr(evt, 'id', 0) or 0) * 0.000001
             except Exception:
                 pass
+            return score
 
-    # First try to find with year-prefixed code in current user's events (scoped by scouting team)
-    event = filter_events_by_scouting_team().filter(func.upper(Event.code) == year_prefixed_code).first()
-    
-    # If not found with year prefix, try with the original code (backward compat with
-    # events stored without year prefix).  BUT validate the matched event's year against
-    # the expected season so we don't accidentally return a different year's event (e.g.
-    # returning 2026's OKOK when the config says season=2025).
-    if not event and year_prefixed_code != event_code_upper:
-        candidate = filter_events_by_scouting_team().filter(func.upper(Event.code) == event_code_upper).first()
-        if candidate:
-            # Determine expected season from year_prefixed_code (first 4 digits)
-            expected_year = None
-            if len(year_prefixed_code) >= 4 and year_prefixed_code[:4].isdigit():
-                expected_year = int(year_prefixed_code[:4])
-            # Accept the candidate if its year matches the expected season, or if
-            # we can't determine the expected season (fallback/backward compat)
-            if expected_year is None or getattr(candidate, 'year', None) == expected_year or not getattr(candidate, 'year', None):
-                event = candidate
-            else:
-                print(f"  get_event_by_code: Skipping event '{candidate.code}' (year={getattr(candidate, 'year', None)}) "
-                      f"because it doesn't match expected season {expected_year}")
+        return sorted(events, key=_rank, reverse=True)[0]
 
-    # Determine if we are in an active alliance that shares this code
-    current_team = get_current_scouting_team_number()
+    event = None
+    try:
+        scoped_candidates = filter_events_by_scouting_team().filter(
+            func.upper(Event.code).in_(candidate_codes)
+        ).all()
+        event = _pick_best(scoped_candidates)
+    except Exception:
+        event = None
+
     try:
         from app.models import TeamAllianceStatus, ScoutingAllianceEvent
         active_alliance = TeamAllianceStatus.get_active_alliance_for_team(current_team) if current_team else None
     except Exception:
         active_alliance = None
 
-    # If alliance is active and the code is a shared alliance event (or present in ScoutingAllianceEvent table),
-    # prefer returning a synthetic alliance entry so UI dropdowns select the alliance copy.
+    # If alliance is active and the code is shared, prefer a synthetic alliance
+    # object so dropdowns/pages select the alliance copy consistently.
     try:
         is_shared_by_alliance = False
         if active_alliance:
-            shared_codes = [c.strip().upper() for c in (active_alliance.get_shared_events() or []) if c]
-            # Check both raw code and year-prefixed code
-            if event_code_upper in shared_codes or year_prefixed_code in shared_codes:
+            shared_codes = {
+                normalize_event_code(code)
+                for code in (active_alliance.get_shared_events() or [])
+                if code
+            }
+            if shared_codes.intersection(set(candidate_codes)):
                 is_shared_by_alliance = True
-        # Also check ScoutingAllianceEvent table for an active mapping (try both codes)
+            elif input_raw and input_raw in shared_codes:
+                is_shared_by_alliance = True
+
         sae_exists = False
-        try:
+        if active_alliance:
+            sae_candidates = set(candidate_codes)
+            if input_raw:
+                sae_candidates.add(input_raw)
             sae_exists = ScoutingAllianceEvent.query.filter(
-                or_(func.upper(ScoutingAllianceEvent.event_code) == event_code_upper,
-                    func.upper(ScoutingAllianceEvent.event_code) == year_prefixed_code),
+                func.upper(ScoutingAllianceEvent.event_code).in_(list(sae_candidates)),
                 ScoutingAllianceEvent.is_active == True
             ).first() is not None
-        except Exception:
-            sae_exists = False
 
-        if (is_shared_by_alliance or (active_alliance and sae_exists)):
-            # Find a local event copy to borrow display attributes if available (any member's event)
-            # Try year-prefixed code first
-            local = Event.query.filter(func.upper(Event.code) == year_prefixed_code).first()
-            if not local and year_prefixed_code != event_code_upper:
-                local = Event.query.filter(func.upper(Event.code) == event_code_upper).first()
+        if is_shared_by_alliance or (active_alliance and sae_exists):
+            local_candidates = Event.query.filter(func.upper(Event.code).in_(candidate_codes)).all()
+            local = _pick_best(local_candidates)
+
+            synthetic_code = year_prefixed_code or event_code_upper
+            if expected_year is not None:
+                _, synthetic_raw = split_event_code(synthetic_code)
+                if synthetic_raw:
+                    synthetic_code = f"{expected_year}{synthetic_raw}"
+
             from types import SimpleNamespace
             obj = SimpleNamespace()
-            obj.id = f'alliance_{year_prefixed_code}'
-            obj.name = getattr(local, 'name', None) or year_prefixed_code
-            obj.code = year_prefixed_code
+            obj.id = f'alliance_{synthetic_code}'
+            obj.name = getattr(local, 'name', None) or synthetic_code
+            obj.code = synthetic_code
             obj.location = getattr(local, 'location', None) if local else None
-            obj.year = getattr(local, 'year', None) if local else None
+            obj.year = getattr(local, 'year', None) if local else expected_year
             obj.scouting_team_number = None
             obj.is_alliance = True
             return obj
     except Exception:
-        # On error, fall back to DB results
         pass
 
-    # If we found an event scoped to current user's team, return it
     if event:
         return event
 
-    # Otherwise, if alliance mode is active, search alliance member events
     alliance_team_numbers = get_alliance_team_numbers()
     if alliance_team_numbers:
-        # Try year-prefixed code first
-        event = Event.query.filter(
-            func.upper(Event.code) == year_prefixed_code,
-            Event.scouting_team_number.in_(alliance_team_numbers)
-        ).first()
-        # If not found, try original code
-        if not event and year_prefixed_code != event_code_upper:
-            event = Event.query.filter(
-                func.upper(Event.code) == event_code_upper,
+        try:
+            alliance_candidates = Event.query.filter(
+                func.upper(Event.code).in_(candidate_codes),
                 Event.scouting_team_number.in_(alliance_team_numbers)
-            ).first()
+            ).all()
+            event = _pick_best(alliance_candidates)
+            if event:
+                return event
+        except Exception:
+            pass
+
+    # Final fallback: search globally by canonical candidate variants.
+    try:
+        fallback_candidates = Event.query.filter(func.upper(Event.code).in_(candidate_codes)).all()
+        event = _pick_best(fallback_candidates)
         if event:
             return event
-
-    # Final fallback: find any event with this code (case-insensitive) regardless of scouting_team_number.
-    # This helps cases where the configured current_event_code refers to an event imported by another team.
-    try:
-        # Try year-prefixed code first
-        fallback_event = Event.query.filter(func.upper(Event.code) == year_prefixed_code).first()
-        # If not found, try original code
-        if not fallback_event and year_prefixed_code != event_code_upper:
-            fallback_event = Event.query.filter(func.upper(Event.code) == event_code_upper).first()
-        if fallback_event:
-            return fallback_event
     except Exception:
         pass
 

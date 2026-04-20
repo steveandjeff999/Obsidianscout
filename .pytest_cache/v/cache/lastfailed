@@ -18,5 +18,6 @@
   "tests/test_alliances_api.py::test_import_game_config_template_scouting_team": true,
   "tests/test_mobile_data_mode.py::test_mobile_data_mode_returns_correct_mode_for_statbotics_plus_data": true,
   "tests/test_mobile_data_mode.py::test_mobile_data_mode_defaults_to_data_when_no_team_settings": true,
-  "tests/test_mobile_data_mode.py::test_mobile_current_data_mode_match_points_returns_scouted_rows": true
+  "tests/test_mobile_data_mode.py::test_mobile_current_data_mode_match_points_returns_scouted_rows": true,
+  "tests/test_pit_event_resolution.py::test_get_event_by_code_returns_alliance_object_when_alliance_mode_active": true
 }

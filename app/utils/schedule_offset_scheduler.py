@@ -102,6 +102,7 @@ class ScheduleOffsetScheduler:
         from app import db
         from app.models import Event, Match
         from app.utils.config_manager import load_game_config
+        from app.utils.event_code_utils import build_year_prefixed_event_code, normalize_event_code
         from app.utils.schedule_adjuster import ScheduleAdjuster
 
         try:
@@ -122,16 +123,14 @@ class ScheduleOffsetScheduler:
         for team_number in sorted(team_numbers):
             try:
                 game_config = load_game_config(team_number=team_number)
-                event_code = game_config.get('current_event_code')
+                event_code = normalize_event_code(game_config.get('current_event_code'))
                 season = game_config.get('season') or game_config.get('year') or datetime.now(timezone.utc).year
                 if not event_code:
                     continue
 
-                # DB stores codes like "2026OKTU"; config may store bare "OKTU"
-                if not (len(event_code) > 4 and event_code[:4].isdigit()):
-                    event_code_db = f"{season}{event_code}"
-                else:
-                    event_code_db = event_code
+                # DB stores codes like "2026OKTU". This helper safely handles
+                # both raw and already-prefixed config values.
+                event_code_db = build_year_prefixed_event_code(event_code, season=season)
 
                 event = Event.query.filter_by(
                     code=event_code_db,
