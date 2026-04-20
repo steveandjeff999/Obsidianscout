@@ -6176,6 +6176,11 @@ def mobile_trigger_sync():
     
     # Generate unique sync ID
     sync_id = str(uuid.uuid4())
+
+    # Capture request-scoped identity before starting a background thread.
+    _user_id = user.id
+    _scouting_team = getattr(user, 'scouting_team_number', None)
+    _app = current_app._get_current_object()
     
     # Initialize sync status
     with active_syncs_lock:
@@ -6194,8 +6199,17 @@ def mobile_trigger_sync():
     def run_sync_background():
         """Background thread function to perform the actual sync"""
         try:
-            # Create app context for background thread
-            with current_app.app_context():
+            # Recreate request context so sync_from_config() resolves current_user/g scope correctly.
+            with _app.test_request_context('/api/mobile/sync/trigger', method='POST'):
+                from flask import g, get_flashed_messages
+                from flask_login import login_user as _login_user
+
+                _user = User.query.get(_user_id)
+                if not _user:
+                    raise RuntimeError('Mobile sync user no longer exists')
+                _login_user(_user, remember=False)
+                g.scouting_team_number = _scouting_team
+
                 results = active_syncs[sync_id]['results']
                 
                 # Check if alliance mode is active
@@ -6217,7 +6231,7 @@ def mobile_trigger_sync():
                         results['alliance_sync']['matches_added'] = sync_result.get('matches_added', 0)
                         results['alliance_sync']['matches_updated'] = sync_result.get('matches_updated', 0)
                     except Exception as e:
-                        current_app.logger.exception('Alliance sync failed')
+                        _app.logger.exception('Alliance sync failed')
                         results['alliance_sync']['triggered'] = True
                         results['alliance_sync']['success'] = False
                         results['alliance_sync']['message'] = str(e)
@@ -6228,11 +6242,25 @@ def mobile_trigger_sync():
                 
                 from app.routes import teams as teams_bp
                 try:
-                    teams_resp = teams_bp.sync_from_config()
-                    results['teams_sync']['success'] = True
-                    results['teams_sync']['message'] = 'Teams sync completed'
+                    teams_bp.sync_from_config()
+                    team_flashes = get_flashed_messages(with_categories=True)
+                    team_has_errors = any((cat or '').lower() in ('danger', 'error') for cat, _ in team_flashes)
+                    results['teams_sync']['success'] = not team_has_errors
+                    results['teams_sync']['message'] = 'Teams sync completed' if not team_has_errors else 'Teams sync completed with errors'
+                    results['teams_sync']['flashes'] = [
+                        {'category': cat, 'message': msg} for cat, msg in team_flashes
+                    ]
+                    if team_has_errors:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
                 except Exception as e:
-                    current_app.logger.exception('Teams sync failed')
+                    _app.logger.exception('Teams sync failed')
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
                     results['teams_sync']['success'] = False
                     results['teams_sync']['message'] = str(e)
                 
@@ -6242,13 +6270,32 @@ def mobile_trigger_sync():
                 
                 from app.routes import matches as matches_bp
                 try:
-                    matches_resp = matches_bp.sync_from_config()
-                    results['matches_sync']['success'] = True
-                    results['matches_sync']['message'] = 'Matches sync completed'
+                    matches_bp.sync_from_config()
+                    match_flashes = get_flashed_messages(with_categories=True)
+                    match_has_errors = any((cat or '').lower() in ('danger', 'error') for cat, _ in match_flashes)
+                    results['matches_sync']['success'] = not match_has_errors
+                    results['matches_sync']['message'] = 'Matches sync completed' if not match_has_errors else 'Matches sync completed with errors'
+                    results['matches_sync']['flashes'] = [
+                        {'category': cat, 'message': msg} for cat, msg in match_flashes
+                    ]
+                    if match_has_errors:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
                 except Exception as e:
-                    current_app.logger.exception('Matches sync failed')
+                    _app.logger.exception('Matches sync failed')
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
                     results['matches_sync']['success'] = False
                     results['matches_sync']['message'] = str(e)
+
+                try:
+                    db.session.remove()
+                except Exception:
+                    pass
                 
                 # Mark as complete
                 with active_syncs_lock:
@@ -6274,7 +6321,7 @@ def mobile_trigger_sync():
                 print(f"Mobile background sync {sync_id} completed")
                 
         except Exception as e:
-            current_app.logger.exception(f'Mobile background sync {sync_id} failed')
+            _app.logger.exception(f'Mobile background sync {sync_id} failed')
             with active_syncs_lock:
                 active_syncs[sync_id]['status'] = 'error'
                 active_syncs[sync_id]['progress'] = f'Error: {str(e)}'

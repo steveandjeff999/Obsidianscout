@@ -620,6 +620,10 @@ def sync_from_config():
                 )
             db.session.flush()  # Get the ID without committing yet
         
+        # Ensure we resolved a concrete local event before importing matches.
+        if not event or not getattr(event, 'id', None):
+            raise ValueError(f"Unable to resolve a local event record for {event_code}")
+
         # Fetch matches from the dual API using raw event code (external APIs don't use year-prefixed codes)
         match_data_list = get_matches_dual_api(raw_event_code)
         
@@ -639,11 +643,11 @@ def sync_from_config():
             # Process each match from the API inside SAVEPOINTs so one
             # failure doesn't kill the whole sync.
             for match_data in match_data_list:
+                if not match_data or not isinstance(match_data, dict):
+                    continue
+
                 # Set the event_id for the match
                 match_data['event_id'] = event.id
-                
-                if not match_data:
-                    continue
                     
                 match_number = match_data.get('match_number')
                 match_type = match_data.get('match_type')

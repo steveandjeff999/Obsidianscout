@@ -208,10 +208,15 @@ def get_all_teams_at_event(event_id=None, event_code=None):
             continue
     
     # Add teams from matches that aren't already in the list
+    current_scope_team = get_current_scouting_team_number()
     existing_team_numbers = {t.team_number for t in all_teams}
     for tn in team_numbers_from_matches:
         if tn not in existing_team_numbers:
-            team = Team.query.filter_by(team_number=tn).first()
+            team = None
+            if current_scope_team is not None:
+                team = Team.query.filter_by(team_number=tn, scouting_team_number=current_scope_team).first()
+            if not team:
+                team = Team.query.filter_by(team_number=tn).order_by(Team.id.asc()).first()
             if team:
                 all_teams.append(team)
                 existing_team_numbers.add(tn)

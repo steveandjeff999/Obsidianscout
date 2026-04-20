@@ -25,7 +25,8 @@ from app.utils.config_manager import get_effective_game_config
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
     filter_events_by_scouting_team, filter_scouting_data_by_scouting_team, filter_pit_scouting_data_by_scouting_team,
-    get_event_by_code, get_all_teams_at_event, resolve_event_from_param
+    get_event_by_code, get_all_teams_at_event, resolve_event_from_param,
+    assign_scouting_team_to_model, get_current_scouting_team_number
 )
 from app.utils.team_isolation import get_combined_dropdown_events
 from app.utils.alliance_data import get_active_alliance_id, get_all_teams_for_alliance, get_all_matches_for_alliance
@@ -56,6 +57,44 @@ def get_theme_context():
         'themes': theme_manager.get_available_themes(),
         'current_theme_id': theme_manager.current_theme
     }
+
+
+def _get_active_import_scope_team_number():
+    """Resolve current scouting-team scope for import/QR operations."""
+    scope_team = None
+    try:
+        scope_team = get_current_scouting_team_number()
+    except Exception:
+        scope_team = None
+
+    if scope_team is None and hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+        scope_team = getattr(current_user, 'scouting_team_number', None)
+    return scope_team
+
+
+def _find_team_for_scope(team_number, scouting_team_number):
+    if team_number is None:
+        return None
+
+    query = Team.query.filter(Team.team_number == team_number)
+    if scouting_team_number is not None:
+        return query.filter(Team.scouting_team_number == scouting_team_number).order_by(Team.id.asc()).first()
+    return query.order_by(Team.id.asc()).first()
+
+
+def _find_match_for_scope(match_number, match_type, scouting_team_number, event_id=None):
+    if match_number is None or not match_type:
+        return None
+
+    query = Match.query.filter(
+        Match.match_number == match_number,
+        Match.match_type == match_type,
+    )
+    if event_id is not None:
+        query = query.filter(Match.event_id == event_id)
+    if scouting_team_number is not None:
+        query = query.filter(Match.scouting_team_number == scouting_team_number)
+    return query.order_by(Match.id.asc()).first()
 
 
 def merge_duplicate_events(scouting_team_number=None):
@@ -502,6 +541,33 @@ def _sanitize_date(val):
         return None
 
 
+def _normalize_local_id(local_id):
+    """Normalize imported local_id values to a non-empty string or None.
+
+    Excel imports can surface missing values as NaN, which is truthy and can
+    bypass simple `if not local_id` checks.
+    """
+    if local_id is None:
+        return None
+
+    try:
+        if pd.isna(local_id):
+            return None
+    except Exception:
+        pass
+
+    try:
+        normalized = str(local_id).strip()
+    except Exception:
+        return None
+
+    if not normalized:
+        return None
+    if normalized.lower() in {'nan', 'none', 'null'}:
+        return None
+    return normalized
+
+
 def _process_portable_data(export_data):
     """Shared logic to import portable-export-style dict into DB.
 
@@ -677,14 +743,24 @@ def _process_portable_data(export_data):
                     return None
 
         # TEAMS — wrap each team in a SAVEPOINT so one failure doesn't kill the batch
+        default_scope_team = _get_active_import_scope_team_number()
         for t in export_data.get('teams', []):
             try:
                 nested = db.session.begin_nested()  # SAVEPOINT
-                existing = Team.query.filter_by(team_number=t.get('team_number')).first()
+                team_scope = t.get('scouting_team_number')
+                if team_scope is None:
+                    team_scope = default_scope_team
+
+                existing_query = Team.query.filter(Team.team_number == t.get('team_number'))
+                if team_scope is not None:
+                    existing_query = existing_query.filter(Team.scouting_team_number == team_scope)
+                existing = existing_query.order_by(Team.id.asc()).first()
+
                 if existing:
                     existing.team_name = t.get('team_name')
                     existing.location = t.get('location')
-                    existing.scouting_team_number = t.get('scouting_team_number')
+                    if existing.scouting_team_number is None and team_scope is not None:
+                        existing.scouting_team_number = team_scope
                     db.session.add(existing)
                     mapping['teams'][t['id']] = existing.id
                     report['updated']['teams'] = report['updated'].get('teams', 0) + 1 if report['updated'].get('teams') else 1
@@ -693,7 +769,7 @@ def _process_portable_data(export_data):
                         team_number=t.get('team_number'),
                         team_name=t.get('team_name'),
                         location=t.get('location'),
-                        scouting_team_number=t.get('scouting_team_number')
+                        scouting_team_number=team_scope
                     )
                     db.session.add(new_t)
                     db.session.flush()
@@ -719,6 +795,14 @@ def _process_portable_data(export_data):
                 new_e = _resolve_event(old_e)
             if new_t and new_e:
                 try:
+                    team_row = Team.query.get(new_t)
+                    event_row = Event.query.get(new_e)
+                    if team_row and event_row:
+                        team_scope = getattr(team_row, 'scouting_team_number', None)
+                        event_scope = getattr(event_row, 'scouting_team_number', None)
+                        if team_scope is not None and event_scope is not None and team_scope != event_scope:
+                            report['skipped']['team_event'] = report['skipped'].get('team_event', 0) + 1
+                            continue
                     db.session.execute(team_event.insert().values(team_id=new_t, event_id=new_e))
                 except Exception:
                     pass
@@ -990,12 +1074,18 @@ def _process_portable_data(export_data):
             if not new_team:
                 report['skipped']['pit_scouting'] = report['skipped'].get('pit_scouting', 0) + 1 if report['skipped'].get('pit_scouting') else 1
                 continue
+            local_id = _normalize_local_id(p.get('local_id'))
+            if not local_id:
+                local_id = str(uuid4())
+            p['local_id'] = local_id
+
+            nested = None
             try:
+                nested = db.session.begin_nested()
                 new_p = PitScoutingData.from_dict(p)
                 new_p.team_id = new_team
                 new_p.event_id = new_event
                 db.session.add(new_p)
-                nested = db.session.begin_nested()
                 try:
                     db.session.flush()
                     nested.commit()
@@ -1004,6 +1094,11 @@ def _process_portable_data(export_data):
                     raise
                 mapping['pit_scouting'][p['id']] = new_p.id
             except Exception:
+                try:
+                    if nested is not None:
+                        nested.rollback()
+                except Exception:
+                    pass
                 report['errors'].append(f'Failed to import pit scouting entry for team {p.get("team_id")}')
 
         db.session.commit()
@@ -1498,6 +1593,12 @@ def import_excel():
                         # Normalize datetime fields to isoformat strings
                         for r in records:
                             for k, v in list(r.items()):
+                                try:
+                                    if pd.isna(v):
+                                        r[k] = None
+                                        continue
+                                except Exception:
+                                    pass
                                 if hasattr(v, 'isoformat'):
                                     r[k] = v.isoformat()
                         return records
@@ -1589,6 +1690,7 @@ def import_excel():
 
                 match_col = find_col('match_number')
                 team_col = find_col('team_number')
+                scope_team_number = _get_active_import_scope_team_number()
 
                 for _, row in df.iterrows():
                     # Extract basic information
@@ -1610,20 +1712,30 @@ def import_excel():
                         alliance = row.get('alliance', 'unknown')
                         
                         # Find or create team
-                        team = Team.query.filter_by(team_number=team_number).first()
+                        team = _find_team_for_scope(team_number, scope_team_number)
                         if not team:
                             team = Team(team_number=team_number, team_name=f'Team {team_number}')
+                            if scope_team_number is not None:
+                                team.scouting_team_number = scope_team_number
                             db.session.add(team)
                             db.session.flush()
                             
-                        # Find or create match
                         match_type = row.get('match_type', 'Qualification')
-                        match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
+                        event_name = row.get('event_name', 'Unknown Event')
+                        event = get_or_create_event(
+                            name=event_name,
+                            year=game_config['season'],
+                            scouting_team_number=scope_team_number,
+                        )
+
+                        # Find or create match
+                        match = _find_match_for_scope(
+                            match_number,
+                            match_type,
+                            scope_team_number,
+                            event_id=event.id,
+                        )
                         if not match:
-                            # Need to find or create an event first
-                            event_name = row.get('event_name', 'Unknown Event')
-                            event = get_or_create_event(name=event_name, year=game_config['season'])
-                                
                             # Create the match
                             match = Match(
                                 match_number=match_number,
@@ -1632,6 +1744,8 @@ def import_excel():
                                 red_alliance=str(team_number) if alliance == 'red' else '',
                                 blue_alliance=str(team_number) if alliance == 'blue' else ''
                             )
+                            if scope_team_number is not None:
+                                match.scouting_team_number = scope_team_number
                             db.session.add(match)
                             db.session.flush()
                         
@@ -1739,6 +1853,7 @@ def import_qr():
                 return {'success': False, 'message': 'Invalid QR code data format. Expected JSON.'}
 
             try:
+                scope_team_number = _get_active_import_scope_team_number()
                 # Check if this is qualitative scouting data
                 if scouting_data_json.get('qualitative') is True:
                     from app.models import QualitativeScoutingData
@@ -1767,21 +1882,35 @@ def import_qr():
                             return {'success': False, 'message': 'Invalid qualitative QR data: missing match or alliance'}
                     
                     # Find or create match
-                    match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
+                    game_config = get_effective_game_config()
+                    event = None
+                    if event_code:
+                        event_query = Event.query.filter(Event.code == event_code)
+                        if scope_team_number is not None:
+                            event_query = event_query.filter(Event.scouting_team_number == scope_team_number)
+                        event = event_query.order_by(Event.id.asc()).first()
+                    if not event:
+                        event = get_or_create_event(
+                            name=event_code or 'Unknown Event',
+                            year=game_config['season'],
+                            code=event_code,
+                            scouting_team_number=scope_team_number,
+                        )
+
+                    match = _find_match_for_scope(
+                        match_number,
+                        match_type,
+                        scope_team_number,
+                        event_id=event.id,
+                    )
                     if not match:
-                        # Find or create event
-                        game_config = get_effective_game_config()
-                        event = None
-                        if event_code:
-                            event = Event.query.filter_by(code=event_code).first()
-                        if not event:
-                            event = get_or_create_event(name=event_code or 'Unknown Event', year=game_config['season'], code=event_code)
-                        
                         match = Match(
                             match_number=match_number,
                             match_type=match_type,
                             event_id=event.id
                         )
+                        if scope_team_number is not None:
+                            match.scouting_team_number = scope_team_number
                         db.session.add(match)
                         db.session.flush()
                     
@@ -1836,6 +1965,11 @@ def import_qr():
                     match = Match.query.get(match_id)
                     if not team or not match:
                         return {'success': False, 'message': 'Team or match not found in database'}
+                    if scope_team_number is not None:
+                        team_scope = getattr(team, 'scouting_team_number', None)
+                        match_scope = getattr(match, 'scouting_team_number', None)
+                        if (team_scope is not None and team_scope != scope_team_number) or (match_scope is not None and match_scope != scope_team_number):
+                            return {'success': False, 'message': 'Team or match is outside your scouting-team scope'}
                     data = {}
                     for key, value in scouting_data_json.items():
                         if key not in ['team_id', 'match_id', 'scout_name', 'alliance', 'generated_at', 'offline_generated']:
@@ -1846,16 +1980,29 @@ def import_qr():
                     scout_name = scouting_data_json.get('s', 'QR Import')
                     alliance = scouting_data_json.get('a', 'unknown')
                     match_type = scouting_data_json.get('mt', 'Qualification')
-                    team = Team.query.filter_by(team_number=team_number).first()
+                    team = _find_team_for_scope(team_number, scope_team_number)
                     if not team:
                         team = Team(team_number=team_number, team_name=f'Team {team_number}')
+                        if scope_team_number is not None:
+                            team.scouting_team_number = scope_team_number
                         db.session.add(team)
                         db.session.flush()
-                    match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
+
+                    game_config = get_effective_game_config()
+                    event_name = scouting_data_json.get('event_name', 'Unknown Event')
+                    event = get_or_create_event(
+                        name=event_name,
+                        year=game_config['season'],
+                        scouting_team_number=scope_team_number,
+                    )
+
+                    match = _find_match_for_scope(
+                        match_number,
+                        match_type,
+                        scope_team_number,
+                        event_id=event.id,
+                    )
                     if not match:
-                        game_config = get_effective_game_config()
-                        event_name = scouting_data_json.get('event_name', 'Unknown Event')
-                        event = get_or_create_event(name=event_name, year=game_config['season'])
                         match = Match(
                             match_number=match_number,
                             match_type=match_type,
@@ -1863,6 +2010,8 @@ def import_qr():
                             red_alliance=str(team_number) if alliance == 'red' else '',
                             blue_alliance=str(team_number) if alliance == 'blue' else ''
                         )
+                        if scope_team_number is not None:
+                            match.scouting_team_number = scope_team_number
                         db.session.add(match)
                         db.session.flush()
                     data = scouting_data_json.get('d', {})
@@ -1874,16 +2023,29 @@ def import_qr():
                     scout_name = scouting_data_json.get('scout_name', 'QR Import')
                     alliance = scouting_data_json.get('alliance', 'unknown')
                     match_type = scouting_data_json.get('match_type', 'Qualification')
-                    team = Team.query.filter_by(team_number=team_number).first()
+                    team = _find_team_for_scope(team_number, scope_team_number)
                     if not team:
                         team = Team(team_number=team_number, team_name=f'Team {team_number}')
+                        if scope_team_number is not None:
+                            team.scouting_team_number = scope_team_number
                         db.session.add(team)
                         db.session.flush()
-                    match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
+
+                    game_config = get_effective_game_config()
+                    event_name = scouting_data_json.get('event_name', 'Unknown Event')
+                    event = get_or_create_event(
+                        name=event_name,
+                        year=game_config['season'],
+                        scouting_team_number=scope_team_number,
+                    )
+
+                    match = _find_match_for_scope(
+                        match_number,
+                        match_type,
+                        scope_team_number,
+                        event_id=event.id,
+                    )
                     if not match:
-                        game_config = get_effective_game_config()
-                        event_name = scouting_data_json.get('event_name', 'Unknown Event')
-                        event = get_or_create_event(name=event_name, year=game_config['season'])
                         match = Match(
                             match_number=match_number,
                             match_type=match_type,
@@ -1891,6 +2053,8 @@ def import_qr():
                             red_alliance=str(team_number) if alliance == 'red' else '',
                             blue_alliance=str(team_number) if alliance == 'blue' else ''
                         )
+                        if scope_team_number is not None:
+                            match.scouting_team_number = scope_team_number
                         db.session.add(match)
                         db.session.flush()
                     if 'scouting_data' in scouting_data_json:
@@ -1958,6 +2122,7 @@ def import_qr():
         try:
             # Parse QR data (assuming it's JSON)
             scouting_data_json = json.loads(qr_data)
+            scope_team_number = _get_active_import_scope_team_number()
             
             # Detect the format of the QR code
             if 'offline_generated' in scouting_data_json:
@@ -1977,6 +2142,15 @@ def import_qr():
                         return {'success': False, 'message': error_msg}
                     flash(error_msg, 'error')
                     return redirect(request.url)
+                if scope_team_number is not None:
+                    team_scope = getattr(team, 'scouting_team_number', None)
+                    match_scope = getattr(match, 'scouting_team_number', None)
+                    if (team_scope is not None and team_scope != scope_team_number) or (match_scope is not None and match_scope != scope_team_number):
+                        error_msg = 'Team or match is outside your scouting-team scope'
+                        if request.is_json:
+                            return {'success': False, 'message': error_msg}
+                        flash(error_msg, 'error')
+                        return redirect(request.url)
                 
                 # Extract all form data, excluding metadata fields
                 data = {}
@@ -1995,20 +2169,30 @@ def import_qr():
                 match_type = scouting_data_json.get('mt', 'Qualification')  # match_type
                 
                 # Find or create team
-                team = Team.query.filter_by(team_number=team_number).first()
+                team = _find_team_for_scope(team_number, scope_team_number)
                 if not team:
                     team = Team(team_number=team_number, team_name=f'Team {team_number}')
+                    if scope_team_number is not None:
+                        team.scouting_team_number = scope_team_number
                     db.session.add(team)
                     db.session.flush()
                 
+                game_config = get_effective_game_config()
+                event_name = scouting_data_json.get('event_name', 'Unknown Event')
+                event = get_or_create_event(
+                    name=event_name,
+                    year=game_config['season'],
+                    scouting_team_number=scope_team_number,
+                )
+
                 # Find or create match
-                match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
+                match = _find_match_for_scope(
+                    match_number,
+                    match_type,
+                    scope_team_number,
+                    event_id=event.id,
+                )
                 if not match:
-                    # Need to find or create an event first
-                    game_config = get_effective_game_config()
-                    event_name = scouting_data_json.get('event_name', 'Unknown Event')
-                    event = get_or_create_event(name=event_name, year=game_config['season'])
-                    
                     # Create the match
                     match = Match(
                         match_number=match_number,
@@ -2017,6 +2201,8 @@ def import_qr():
                         red_alliance=str(team_number) if alliance == 'red' else '',
                         blue_alliance=str(team_number) if alliance == 'blue' else ''
                     )
+                    if scope_team_number is not None:
+                        match.scouting_team_number = scope_team_number
                     db.session.add(match)
                     db.session.flush()
                 
@@ -2042,20 +2228,30 @@ def import_qr():
                 match_type = scouting_data_json.get('match_type', 'Qualification')
                 
                 # Find or create team
-                team = Team.query.filter_by(team_number=team_number).first()
+                team = _find_team_for_scope(team_number, scope_team_number)
                 if not team:
                     team = Team(team_number=team_number, team_name=f'Team {team_number}')
+                    if scope_team_number is not None:
+                        team.scouting_team_number = scope_team_number
                     db.session.add(team)
                     db.session.flush()
                 
+                game_config = get_effective_game_config()
+                event_name = scouting_data_json.get('event_name', 'Unknown Event')
+                event = get_or_create_event(
+                    name=event_name,
+                    year=game_config['season'],
+                    scouting_team_number=scope_team_number,
+                )
+
                 # Find or create match
-                match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
+                match = _find_match_for_scope(
+                    match_number,
+                    match_type,
+                    scope_team_number,
+                    event_id=event.id,
+                )
                 if not match:
-                    # Need to find or create an event first
-                    game_config = get_effective_game_config()
-                    event_name = scouting_data_json.get('event_name', 'Unknown Event')
-                    event = get_or_create_event(name=event_name, year=game_config['season'])
-                    
                     # Create the match
                     match = Match(
                         match_number=match_number,
@@ -2064,6 +2260,8 @@ def import_qr():
                         red_alliance=str(team_number) if alliance == 'red' else '',
                         blue_alliance=str(team_number) if alliance == 'blue' else ''
                     )
+                    if scope_team_number is not None:
+                        match.scouting_team_number = scope_team_number
                     db.session.add(match)
                     db.session.flush()
                 
@@ -3039,12 +3237,22 @@ def import_status():
         db.session.commit()
 
         # TEAMS
+        default_scope_team = _get_active_import_scope_team_number()
         for t in teams:
-            existing = Team.query.filter_by(team_number=t.get('team_number')).first()
+            team_scope = t.get('scouting_team_number')
+            if team_scope is None:
+                team_scope = default_scope_team
+
+            existing_query = Team.query.filter(Team.team_number == t.get('team_number'))
+            if team_scope is not None:
+                existing_query = existing_query.filter(Team.scouting_team_number == team_scope)
+            existing = existing_query.order_by(Team.id.asc()).first()
+
             if existing:
                 existing.team_name = t.get('team_name')
                 existing.location = t.get('location')
-                existing.scouting_team_number = t.get('scouting_team_number')
+                if existing.scouting_team_number is None and team_scope is not None:
+                    existing.scouting_team_number = team_scope
                 db.session.add(existing)
                 mapping['teams'][t['id']] = existing.id
                 report['updated']['teams'] = report['updated'].get('teams', 0) + 1 if report['updated'].get('teams') else 1
@@ -3053,7 +3261,7 @@ def import_status():
                     team_number=t.get('team_number'),
                     team_name=t.get('team_name'),
                     location=t.get('location'),
-                    scouting_team_number=t.get('scouting_team_number')
+                    scouting_team_number=team_scope
                 )
                 db.session.add(new_t)
                 db.session.flush()
@@ -3070,6 +3278,14 @@ def import_status():
             new_e = mapping['events'].get(old_e)
             if new_t and new_e:
                 try:
+                    team_row = Team.query.get(new_t)
+                    event_row = Event.query.get(new_e)
+                    if team_row and event_row:
+                        team_scope = getattr(team_row, 'scouting_team_number', None)
+                        event_scope = getattr(event_row, 'scouting_team_number', None)
+                        if team_scope is not None and event_scope is not None and team_scope != event_scope:
+                            report['skipped']['team_event'] = report['skipped'].get('team_event', 0) + 1
+                            continue
                     db.session.execute(team_event.insert().values(team_id=new_t, event_id=new_e))
                 except Exception:
                     # ignore duplicates
@@ -3244,7 +3460,6 @@ def import_status():
         db.session.commit()
 
         # PIT SCOUTING
-        import uuid as _uuid
         for p in pit_scouting:
             new_team = mapping['teams'].get(p.get('team_id'))
             new_event = mapping['events'].get(p.get('event_id'))
@@ -3252,7 +3467,9 @@ def import_status():
                 report['skipped']['pit_scouting'] = report['skipped'].get('pit_scouting', 0) + 1 if report['skipped'].get('pit_scouting') else 1
                 continue
 
-            local_id = p.get('local_id')
+            local_id = _normalize_local_id(p.get('local_id'))
+            if local_id:
+                p['local_id'] = local_id
             # If local_id exists in target DB, update that record instead of inserting to avoid UNIQUE constraint errors
             existing = None
             try:
@@ -3303,16 +3520,15 @@ def import_status():
                 nested = db.session.begin_nested()
                 # Ensure a unique local_id exists
                 if not local_id:
-                    local_id = str(_uuid.uuid4())
-                    p['local_id'] = local_id
+                    local_id = str(uuid4())
+                p['local_id'] = local_id
 
                 new_p = PitScoutingData.from_dict(p)
                 # Remap ids
                 new_p.team_id = new_team
                 new_p.event_id = new_event
                 # Ensure local_id is set
-                if not getattr(new_p, 'local_id', None):
-                    new_p.local_id = str(_uuid.uuid4())
+                new_p.local_id = _normalize_local_id(getattr(new_p, 'local_id', None)) or str(uuid4())
                 db.session.add(new_p)
                 db.session.flush()
                 mapping['pit_scouting'][p['id']] = new_p.id
@@ -3325,7 +3541,11 @@ def import_status():
                 except Exception:
                     pass
                 # If UNIQUE local_id caused a failure, try to find the conflicting record and update it instead
-                if 'UNIQUE constraint failed' in str(e) and local_id:
+                err_text = str(e).lower()
+                if (
+                    ('unique constraint failed' in err_text or 'duplicate key value violates unique constraint' in err_text)
+                    and local_id
+                ):
                     try:
                         nested2 = db.session.begin_nested()
                         conflict = PitScoutingData.query.filter_by(local_id=local_id).first()

@@ -788,7 +788,8 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
     margin: 0 auto;
 }
 
-.qr-container #qrcode {
+.qr-container #qrcode,
+.qr-container #qualitative-qrcode {
     position: relative;
     width: 100%;
     max-width: 420px;
@@ -797,13 +798,15 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
     box-sizing: border-box;
 }
 
-.qr-container #qrcode canvas {
+.qr-container #qrcode canvas,
+.qr-container #qualitative-qrcode canvas {
     /* Support canvas output from QR generator. Sizing rules are applied in the shared
        selector below so this block is purposely minimal; the canvas will be sized via
        the combined canvas/img rule to keep them visually identical. */
 } 
 
-.qr-container #qrcode::before {
+.qr-container #qrcode::before,
+.qr-container #qualitative-qrcode::before {
     /* White backing plate for the QR image so it reads well in dark mode. It sits behind the
        generated <img> and the canvas (canvas is hidden). Adjusted to provide a small inset to
        create a rounded white surround and allow a subtle cutout look. */
@@ -821,7 +824,9 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
 }
 
 .qr-container #qrcode canvas,
-.qr-container #qrcode img {
+.qr-container #qrcode img,
+.qr-container #qualitative-qrcode canvas,
+.qr-container #qualitative-qrcode img {
     /* Support either canvas or emitted <img>. Keep sizes responsive while enforcing a usable minimum
        so the QR doesn't become too small on narrow screens. The QR remains square via aspect-ratio. */
     position: relative;
@@ -851,7 +856,8 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
         box-shadow: 0 12px 40px rgba(0,0,0,0.7);
     }
 
-    .qr-container #qrcode::before {
+    .qr-container #qrcode::before,
+    .qr-container #qualitative-qrcode::before {
         background: #ffffff;
         box-shadow: 0 8px 26px rgba(0,0,0,0.6) inset;
     }

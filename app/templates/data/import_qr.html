@@ -103,6 +103,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let availableCameras = [];
     let selectedCameraId = null;
     let scannedItems = []; // Array to hold multiple scanned QR payloads
+    let fallbackDecodeInProgress = false;
 
     // Local storage helpers to persist scanned queue across reloads
     const SCAN_STORAGE_KEY = 'qr_scanned_items';
@@ -358,10 +359,80 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function invertImageForQRDetection(imageData) {
+        const invertedData = processingCtx.createImageData(imageData.width, imageData.height);
+        const src = imageData.data;
+        const dst = invertedData.data;
+
+        for (let i = 0; i < src.length; i += 4) {
+            dst[i] = 255 - src[i];
+            dst[i + 1] = 255 - src[i + 1];
+            dst[i + 2] = 255 - src[i + 2];
+            dst[i + 3] = src[i + 3];
+        }
+
+        return invertedData;
+    }
+
+    function decodeImageDataWithScanner(imageData) {
+        return new Promise((resolve, reject) => {
+            try {
+                processingCtx.putImageData(imageData, 0, 0);
+                const dataUrl = processingCanvas.toDataURL('image/jpeg', 0.95);
+                const image = new Image();
+
+                image.onload = () => {
+                    html5QrCode.scanImage(image, true)
+                        .then(resolve)
+                        .catch(reject);
+                };
+
+                image.onerror = () => {
+                    reject(new Error('Failed to load fallback scan image'));
+                };
+
+                image.src = dataUrl;
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
+
+    async function tryFallbackDecodeVariants(imageData) {
+        const variants = [
+            { name: 'enhanced', data: enhanceImageForQRDetection(imageData) },
+            { name: 'inverted', data: invertImageForQRDetection(imageData) },
+            { name: 'enhanced+inverted', data: invertImageForQRDetection(enhanceImageForQRDetection(imageData)) }
+        ];
+
+        for (const variant of variants) {
+            try {
+                const decodedText = await decodeImageDataWithScanner(variant.data);
+                console.log(`Fallback scan successful using ${variant.name} variant`);
+                return decodedText;
+            } catch (variantError) {
+                console.warn(`Fallback variant failed (${variant.name})`, variantError);
+            }
+        }
+
+        return null;
+    }
+
     // Modified scan failure handler with UI feedback
     function onScanFailure(error) {
         // Only process when we have an active scanning session
         if (!html5QrCode || !html5QrCode._isScanning) return;
+
+        // Avoid overlapping expensive fallback decode passes.
+        if (fallbackDecodeInProgress) return;
+
+        const errorText = typeof error === 'string' ? error : String(error || '');
+        const noCodeDetected = errorText.includes('No MultiFormat Readers were able to detect') ||
+            errorText.includes('No barcode or QR code detected') ||
+            errorText.includes('NotFoundException');
+
+        // Only process meaningful "code not found" failures.
+        if (!noCodeDetected) return;
         
         // Track scan attempts to avoid infinite processing
         scanAttempts++;
@@ -371,62 +442,50 @@ document.addEventListener('DOMContentLoaded', function() {
             hideProcessingIndicator();
             return; // Skip processing to avoid excessive CPU usage
         }
-        
-        // Only process meaningful failures
-        if (error && error.includes("No MultiFormat Readers were able to detect")) {
-            console.warn("QR code detection failed, applying image enhancement...");
-            showProcessingIndicator();
-            
-            try {
-                // Get current video element for frame capture
-                const videoElement = document.querySelector('#qr-reader video');
-                if (!videoElement || videoElement.paused || videoElement.ended || 
-                    !videoElement.videoWidth || !videoElement.videoHeight) {
-                    hideProcessingIndicator();
-                    return;
-                }
-                
-                // Set canvas dimensions to match video
-                processingCanvas.width = videoElement.videoWidth;
-                processingCanvas.height = videoElement.videoHeight;
-                
-                // Draw current video frame to canvas
-                processingCtx.drawImage(videoElement, 0, 0);
-                
-                // Get image data for processing
-                const imageData = processingCtx.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
-                
-                // Apply our custom image enhancement
-                const enhancedData = enhanceImageForQRDetection(imageData);
-                
-                // Create a data URL for the enhanced image
-                processingCtx.putImageData(enhancedData, 0, 0);
-                const enhancedDataUrl = processingCanvas.toDataURL('image/jpeg', 0.95);
-                
-                // Create an image from the enhanced data for QR detection
-                const enhancedImage = new Image();
-                enhancedImage.onload = function() {
-                    // Try to decode the enhanced image
-                    html5QrCode.scanImage(enhancedImage, true)
-                        .then(decodedText => {
-                            // Success! Stop scanning and call success handler
-                            console.log("Enhanced scan successful!");
-                            scanAttempts = 0;
-                            hideProcessingIndicator();
-                            onScanSuccess(decodedText, null);
-                        })
-                        .catch(error => {
-                            // Enhanced image processing failed, continue normal scanning
-                            console.warn("Enhanced processing failed:", error);
-                            hideProcessingIndicator();
-                        });
-                };
-                enhancedImage.src = enhancedDataUrl;
-                
-            } catch (processingError) {
-                console.error("Error during image enhancement:", processingError);
+
+        console.warn('QR detection failed, trying enhanced and inverted fallback decoding...');
+        showProcessingIndicator();
+        fallbackDecodeInProgress = true;
+
+        try {
+            // Get current video element for frame capture
+            const videoElement = document.querySelector('#qr-reader video');
+            if (!videoElement || videoElement.paused || videoElement.ended ||
+                !videoElement.videoWidth || !videoElement.videoHeight) {
+                fallbackDecodeInProgress = false;
                 hideProcessingIndicator();
+                return;
             }
+
+            // Set canvas dimensions to match video
+            processingCanvas.width = videoElement.videoWidth;
+            processingCanvas.height = videoElement.videoHeight;
+
+            // Draw current video frame to canvas
+            processingCtx.drawImage(videoElement, 0, 0);
+
+            // Get image data for processing
+            const imageData = processingCtx.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
+
+            // Try enhanced + inverted variants to handle dark-mode / inverted QR visuals.
+            tryFallbackDecodeVariants(imageData)
+                .then(decodedText => {
+                    if (decodedText) {
+                        scanAttempts = 0;
+                        onScanSuccess(decodedText, null);
+                    }
+                })
+                .catch(processingError => {
+                    console.error('Error during fallback decoding:', processingError);
+                })
+                .finally(() => {
+                    fallbackDecodeInProgress = false;
+                    hideProcessingIndicator();
+                });
+        } catch (processingError) {
+            console.error('Error during image enhancement:', processingError);
+            fallbackDecodeInProgress = false;
+            hideProcessingIndicator();
         }
     }
     

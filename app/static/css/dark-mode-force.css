@@ -846,6 +846,44 @@ html.dark-mode canvas {
     background-color: transparent !important;
 }
 
+/* Keep QR visuals identical to light mode for reliable cross-device scanning. */
+html body.modern-layout.dark-mode .qr-container,
+html body.dark-mode .qr-container,
+html.dark-mode .qr-container,
+html body.modern-layout.dark-mode #qrcode,
+html body.dark-mode #qrcode,
+html.dark-mode #qrcode,
+html body.modern-layout.dark-mode #qualitative-qrcode,
+html body.dark-mode #qualitative-qrcode,
+html.dark-mode #qualitative-qrcode {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+}
+
+html body.modern-layout.dark-mode .qr-container img,
+html body.dark-mode .qr-container img,
+html.dark-mode .qr-container img,
+html body.modern-layout.dark-mode .qr-container canvas,
+html body.dark-mode .qr-container canvas,
+html.dark-mode .qr-container canvas,
+html body.modern-layout.dark-mode #qrcode img,
+html body.dark-mode #qrcode img,
+html.dark-mode #qrcode img,
+html body.modern-layout.dark-mode #qrcode canvas,
+html body.dark-mode #qrcode canvas,
+html.dark-mode #qrcode canvas,
+html body.modern-layout.dark-mode #qualitative-qrcode img,
+html body.dark-mode #qualitative-qrcode img,
+html.dark-mode #qualitative-qrcode img,
+html body.modern-layout.dark-mode #qualitative-qrcode canvas,
+html body.dark-mode #qualitative-qrcode canvas,
+html.dark-mode #qualitative-qrcode canvas {
+    background-color: #ffffff !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+    opacity: 1 !important;
+}
+
 /* Constrain tutorial preview canvases so they don't expand the page vertically */
 #analyticsPreview canvas,
 #analyticsPreviewPanel canvas,
