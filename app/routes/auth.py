@@ -1990,9 +1990,10 @@ def epa_settings_save():
     try:
         from app.utils.analysis import refresh_opr_epa_for_event
         from app.utils.config_manager import get_current_game_config
+        from app.utils.event_code_utils import build_year_prefixed_event_code, normalize_event_code
 
         game_config = get_current_game_config() or {}
-        raw_event_code = (game_config.get('current_event_code') or '').strip()
+        raw_event_code = normalize_event_code(game_config.get('current_event_code'))
         if raw_event_code:
             current_year = game_config.get('season') or game_config.get('year')
             try:
@@ -2001,10 +2002,7 @@ def epa_settings_save():
                 from datetime import datetime as _dt
                 current_year = _dt.now().year
 
-            if not raw_event_code.startswith(str(current_year)):
-                event_code = f"{current_year}{raw_event_code}"
-            else:
-                event_code = raw_event_code
+            event_code = build_year_prefixed_event_code(raw_event_code, season=current_year)
 
             refresh_opr_epa_for_event(event_code)
     except Exception as e:

@@ -18,6 +18,7 @@ from app.routes.auth import admin_required
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import load_game_config, load_pit_config
 from app.utils.team_isolation import get_current_scouting_team_number, dedupe_events_for_display
+from app.utils.event_code_utils import build_year_prefixed_event_code, normalize_event_code
 from datetime import datetime, timezone, timedelta
 from app.utils.timezone_utils import utc_now_iso, iso_utc
 import json
@@ -3220,7 +3221,7 @@ def perform_alliance_api_sync_for_alliance(alliance_id):
             return result
         
         # Get event code and resolve season
-        raw_event_code = (game_config.get('current_event_code') or '').strip()
+        raw_event_code = normalize_event_code(game_config.get('current_event_code'))
         if not raw_event_code:
             result['message'] = 'No event code configured for alliance'
             return result
@@ -3232,8 +3233,9 @@ def perform_alliance_api_sync_for_alliance(alliance_id):
         except (ValueError, TypeError):
             alliance_season = datetime.now().year
 
-        # Year-prefix the event code so each season is a distinct event
-        event_code = f"{alliance_season}{raw_event_code}"
+        # Year-prefix the event code so each season is a distinct event.
+        # Handles already-prefixed config values without duplicating year.
+        event_code = build_year_prefixed_event_code(raw_event_code, season=alliance_season)
 
         # Set thread-local season override so ALL API helpers use the correct season
         from app.utils.api_utils import set_season_override, clear_season_override
@@ -3450,7 +3452,7 @@ def perform_periodic_alliance_api_sync():
                         continue
 
                     # Determine event_code and season from alliance game config
-                    raw_event_code = (game_config.get('current_event_code') or '').strip()
+                    raw_event_code = normalize_event_code(game_config.get('current_event_code'))
                     if not raw_event_code:
                         # Nothing to sync
                         continue
@@ -3462,8 +3464,9 @@ def perform_periodic_alliance_api_sync():
                     except (ValueError, TypeError):
                         alliance_season = datetime.now(timezone.utc).year
 
-                    # Year-prefix the event code so each season is a distinct event
-                    event_code = f"{alliance_season}{raw_event_code}"
+                    # Year-prefix the event code so each season is a distinct event.
+                    # Handles already-prefixed config values without duplicating year.
+                    event_code = build_year_prefixed_event_code(raw_event_code, season=alliance_season)
 
                     # Set thread-local season override so ALL API helpers use the
                     # alliance's configured season instead of falling through to

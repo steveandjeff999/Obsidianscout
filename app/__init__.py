@@ -1649,9 +1649,13 @@ def create_app(test_config=None, use_postgres=False):
                 try:
                     raw_event_code = cfg.get('current_event_code') if isinstance(cfg, dict) else None
                     if raw_event_code:
+                        from app.utils.event_code_utils import build_year_prefixed_event_code, normalize_event_code
                         # Prepend year to event code to match new storage format (e.g., 2026OKTU)
                         event_year = cfg.get('season') or cfg.get('year') or datetime.now().year
-                        event_code = f"{event_year}{raw_event_code}"
+                        event_code = build_year_prefixed_event_code(
+                            normalize_event_code(raw_event_code),
+                            season=event_year
+                        )
                         
                         # Use the team-isolation helper which handles case-insensitive
                         # lookup, alliance synthetic entries, and cross-team fallbacks.

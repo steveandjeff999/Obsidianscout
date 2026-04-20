@@ -25,6 +25,7 @@ from app.utils.team_isolation import (
     get_all_teams_at_event, resolve_event_from_param, resolve_event_id_from_param
 )
 from app.utils.team_isolation import get_combined_dropdown_events
+from app.utils.event_code_utils import build_year_prefixed_event_code, normalize_event_code
 from sqlalchemy import or_
 
 def get_theme_context():
@@ -477,7 +478,7 @@ def sync_from_config():
     try:
         # Get event code from config
         game_config = get_effective_game_config()
-        raw_event_code = game_config.get('current_event_code')
+        raw_event_code = normalize_event_code(game_config.get('current_event_code'))
         
         if not raw_event_code:
             flash("No event code found in configuration. Please add 'current_event_code' to your game_config.json file.", 'danger')
@@ -492,7 +493,7 @@ def sync_from_config():
         except (ValueError, TypeError):
             current_year = datetime.now().year
         print(f"[sync_from_config] Resolved season={current_year} from config (config season={game_config.get('season')!r}, year={game_config.get('year')!r})")
-        event_code = f"{current_year}{raw_event_code}"
+        event_code = build_year_prefixed_event_code(raw_event_code, season=current_year)
 
         # Set thread-local season override so ALL API helpers (get_event_details,
         # get_matches, construct_tba_event_key, etc.) use this exact season
@@ -818,7 +819,7 @@ def update_times():
     try:
         # Get event code from config
         game_config = get_effective_game_config()
-        raw_event_code = game_config.get('current_event_code')
+        raw_event_code = normalize_event_code(game_config.get('current_event_code'))
         
         if not raw_event_code:
             flash("No event code found in configuration.", 'danger')
@@ -830,7 +831,7 @@ def update_times():
             current_year = int(current_year)
         except (ValueError, TypeError):
             current_year = datetime.now().year
-        event_code = f"{current_year}{raw_event_code}"
+        event_code = build_year_prefixed_event_code(raw_event_code, season=current_year)
 
         # Set thread-local season override for API calls
         from app.utils.api_utils import set_season_override, clear_season_override
