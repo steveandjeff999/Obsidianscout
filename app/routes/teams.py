@@ -12,7 +12,7 @@ from app.utils.config_manager import get_current_game_config, get_effective_game
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_events_by_scouting_team, 
     assign_scouting_team_to_model, get_event_by_code, filter_scouting_data_by_scouting_team,
-    resolve_event_from_param
+    resolve_event_from_param, get_current_scouting_team_number
 )
 from app.utils.team_isolation import get_combined_dropdown_events
 from app.utils.alliance_data import get_active_alliance_id, get_all_teams_for_alliance
@@ -24,6 +24,35 @@ def get_theme_context():
         'themes': theme_manager.get_available_themes(),
         'current_theme_id': theme_manager.current_theme
     }
+
+
+def _ensure_team_associated_with_event_for_scope(team, event, scouting_team_number):
+    """Ensure a team is associated with an event for the active scouting-team scope.
+
+    Returns a tuple: (linked_now, already_linked, canonical_team)
+    """
+    if not team or not event or not hasattr(event, 'teams'):
+        return False, False, team
+
+    # If this event already has a row for the same team_number and scope,
+    # prefer that event-linked row as the canonical one.
+    same_scope_linked_team = next(
+        (
+            existing_team
+            for existing_team in event.teams
+            if existing_team.team_number == team.team_number
+            and existing_team.scouting_team_number == scouting_team_number
+        ),
+        None,
+    )
+    if same_scope_linked_team and same_scope_linked_team.id != team.id:
+        team = same_scope_linked_team
+
+    if event in team.events:
+        return False, True, team
+
+    team.events.append(event)
+    return True, False, team
 
 bp = Blueprint('teams', __name__, url_prefix='/teams')
 
@@ -202,6 +231,8 @@ def sync_from_config():
         # Get event code from effective config (respects alliance mode)
         game_config = get_effective_game_config()
         raw_event_code = normalize_event_code(game_config.get('current_event_code'))
+        from app.utils.team_isolation import get_current_scouting_team_number
+        current_scouting_team = get_current_scouting_team_number()
         
         if not raw_event_code:
             flash("No event code found in configuration. Please add 'current_event_code' to your game_config.json file.", 'danger')
@@ -227,10 +258,8 @@ def sync_from_config():
         # Merge any duplicate events BEFORE looking up the event
         try:
             from app.routes.data import merge_duplicate_events, merge_duplicate_matches
-            from app.utils.team_isolation import get_current_scouting_team_number as _get_team
-            _merge_team = _get_team()
-            merge_duplicate_events(_merge_team)
-            merge_duplicate_matches(scouting_team_number=_merge_team)
+            merge_duplicate_events(current_scouting_team)
+            merge_duplicate_matches(scouting_team_number=current_scouting_team)
         except Exception as merge_err:
             print(f"[teams sync] Warning: pre-sync merge failed: {merge_err}")
 
@@ -262,10 +291,8 @@ def sync_from_config():
         # Event record under the current scouting team so dropdowns and counts include it.
         try:
             from sqlalchemy import func
-            from app.utils.team_isolation import get_current_scouting_team_number
             from app.routes.data import get_or_create_event
             from app.utils.api_utils import get_event_details_dual_api
-            current_scouting_team = get_current_scouting_team_number()
 
             # Handle synthetic alliance entry (id like 'alliance_<CODE>') by creating a
             # local event record under the current scouting team if needed.
@@ -363,8 +390,6 @@ def sync_from_config():
             except Exception:
                 # If API call fails, create minimal event using get_or_create_event
                 from app.routes.data import get_or_create_event
-                from app.utils.team_isolation import get_current_scouting_team_number
-                current_scouting_team = get_current_scouting_team_number()
                 event = get_or_create_event(
                     name=f"Event {raw_event_code}",
                     code=event_code,
@@ -376,10 +401,19 @@ def sync_from_config():
 
         # Fetch teams from the dual API using raw event code (external APIs don't use year-prefixed codes)
         team_data_list = get_teams_dual_api(raw_event_code)
+        api_team_numbers = sorted({
+            int(t.get('team_number'))
+            for t in team_data_list
+            if t and t.get('team_number')
+        })
         
         # Track metrics for user feedback
         teams_added = 0
         teams_updated = 0
+        teams_associated = 0
+        teams_already_associated = 0
+        teams_recovered_associations = 0
+        final_linked_count = 0
         
         # Import DisableReplication to prevent queue issues during bulk operations
         from app.utils.real_time_replication import DisableReplication
@@ -401,8 +435,11 @@ def sync_from_config():
                 try:
                     nested = db.session.begin_nested()  # SAVEPOINT
                     
-                    # Check if the team already exists for this scouting team
-                    team = filter_teams_by_scouting_team().filter(Team.team_number == team_number).first()
+                    # Sync against the concrete current scouting-team scope.
+                    team = Team.query.filter_by(
+                        team_number=team_number,
+                        scouting_team_number=current_scouting_team,
+                    ).order_by(Team.id.asc()).first()
                     
                     if team:
                         # Update existing team
@@ -417,18 +454,23 @@ def sync_from_config():
                         db.session.flush()  # Flush to get the team ID
                         teams_added += 1
                     
-                    # Associate this team with the current event if not already associated
-                    # Prevent two different Team rows with the same team_number from being associated
-                    # with the same Event. Check existing teams on the event with the same team_number.
-                    conflict = False
-                    for existing_team in event.teams:
-                        if existing_team.team_number == team.team_number and existing_team.id != team.id:
-                            conflict = True
-                            break
+                    # Associate this team with the current event. Allow the same
+                    # team_number across different scouting-team scopes.
+                    linked_now, already_linked, canonical_team = _ensure_team_associated_with_event_for_scope(
+                        team,
+                        event,
+                        current_scouting_team,
+                    )
+                    if canonical_team is not None and canonical_team is not team:
+                        canonical_team.team_name = team_data.get('team_name', canonical_team.team_name)
+                        canonical_team.location = team_data.get('location', canonical_team.location)
+                        team = canonical_team
 
-                    if not conflict and event not in team.events:
-                        team.events.append(event)
+                    if linked_now:
+                        teams_associated += 1
                         db.session.flush()  # Flush after team-event association
+                    elif already_linked:
+                        teams_already_associated += 1
 
                     nested.commit()  # Release SAVEPOINT
                 except Exception as e:
@@ -445,12 +487,54 @@ def sync_from_config():
             
             # Final commit for remaining items
             db.session.commit()
+
+            # Reconcile any missing links for this sync scope so the event view
+            # reflects all API teams even when legacy duplicates existed.
+            if current_scouting_team is not None and api_team_numbers:
+                from sqlalchemy import func
+
+                linked_team_numbers = {
+                    int(row[0])
+                    for row in db.session.query(Team.team_number)
+                    .join(Team.events)
+                    .filter(
+                        Event.id == event.id,
+                        Team.scouting_team_number == current_scouting_team,
+                        Team.team_number.in_(api_team_numbers),
+                    )
+                    .all()
+                }
+                missing_team_numbers = [tn for tn in api_team_numbers if tn not in linked_team_numbers]
+
+                for missing_team_number in missing_team_numbers:
+                    scoped_team = Team.query.filter_by(
+                        team_number=missing_team_number,
+                        scouting_team_number=current_scouting_team,
+                    ).order_by(Team.id.asc()).first()
+                    if not scoped_team:
+                        continue
+                    if event not in scoped_team.events:
+                        scoped_team.events.append(event)
+                        teams_recovered_associations += 1
+
+                if teams_recovered_associations > 0:
+                    db.session.commit()
+
+                final_linked_count = (
+                    db.session.query(func.count(func.distinct(Team.team_number)))
+                    .join(Team.events)
+                    .filter(
+                        Event.id == event.id,
+                        Team.scouting_team_number == current_scouting_team,
+                        Team.team_number.in_(api_team_numbers),
+                    )
+                    .scalar()
+                    or 0
+                )
         
         # Merge any duplicate events that may have been created
         try:
             from app.routes.data import merge_duplicate_events
-            from app.utils.team_isolation import get_current_scouting_team_number
-            current_scouting_team = get_current_scouting_team_number()
             merge_duplicate_events(current_scouting_team)
         except Exception as merge_err:
             print(f"  Warning: Could not merge duplicate events: {merge_err}")
@@ -465,6 +549,10 @@ def sync_from_config():
                     'event_code': event_code,
                     'teams_added': teams_added,
                     'teams_updated': teams_updated,
+                    'teams_associated': teams_associated,
+                    'teams_already_associated': teams_already_associated,
+                    'teams_recovered_associations': teams_recovered_associations,
+                    'event_linked_team_count': final_linked_count,
                     'total_teams': len(team_data_list),
                     'sync_type': 'bulk_sync',
                     'sync_timestamp': datetime.now(timezone.utc).isoformat()
@@ -480,8 +568,23 @@ def sync_from_config():
         except Exception as e:
             print(f"Warning: Failed to refresh OPR/EPA after team sync: {e}")
 
-        # Show success message
-        flash(f"Teams sync complete! Added {teams_added} new teams and updated {teams_updated} existing teams.", 'success')
+        # Show success message with explicit event-link counts.
+        recovery_note = (
+            f" Recovered {teams_recovered_associations} missing event links."
+            if teams_recovered_associations
+            else ""
+        )
+        event_count_note = (
+            f" Event now has {final_linked_count} API teams linked for your scouting team."
+            if final_linked_count
+            else ""
+        )
+        flash(
+            f"Teams sync complete! Added {teams_added} new teams, updated {teams_updated} existing teams, "
+            f"associated {teams_associated} teams to this event ({teams_already_associated} already linked)."
+            f"{recovery_note}{event_count_note}",
+            'success'
+        )
         
     except ApiError as e:
         msg = str(e)
@@ -551,7 +654,11 @@ def add():
                             # Prevent conflict: ensure no other Team row with same team_number is already attached
                             conflict = False
                             for et in event.teams:
-                                if et.team_number == existing_team.team_number and et.id != existing_team.id:
+                                if (
+                                    et.team_number == existing_team.team_number
+                                    and et.id != existing_team.id
+                                    and et.scouting_team_number == existing_team.scouting_team_number
+                                ):
                                     conflict = True
                                     break
 
@@ -589,7 +696,11 @@ def add():
                         # Prevent conflict: if the event already has a different team row with this team_number, skip
                         conflict = False
                         for et in event.teams:
-                            if et.team_number == team.team_number and et.id != team.id:
+                            if (
+                                et.team_number == team.team_number
+                                and et.id != team.id
+                                and et.scouting_team_number == team.scouting_team_number
+                            ):
                                 conflict = True
                                 break
 
@@ -633,7 +744,11 @@ def add():
 @bp.route('/<int:team_number>/edit', methods=['GET', 'POST'])
 def edit(team_number):
     """Edit a team"""
-    team = Team.query.filter_by(team_number=team_number).first_or_404()
+    current_scouting_team = get_current_scouting_team_number()
+    team_query = Team.query.filter(Team.team_number == team_number)
+    if current_scouting_team is not None:
+        team_query = team_query.filter(Team.scouting_team_number == current_scouting_team)
+    team = team_query.order_by(Team.id.asc()).first_or_404()
     
     # Get all events for the form (combined/deduped like /events)
     events = get_combined_dropdown_events()
@@ -655,20 +770,26 @@ def edit(team_number):
         
         try:
             # Update team-event associations
-            # First, remove all existing associations
-            team.events = []
+            new_events = []
 
-            # Then add the selected events, skipping any that would create a duplicate logical team
+            # Add selected events scoped to the same scouting team as this team row.
             if event_ids:
                 for event_id in event_ids:
-                    event = Event.query.get(event_id)
+                    event = Event.query.filter(
+                        Event.id == event_id,
+                        Event.scouting_team_number == team.scouting_team_number,
+                    ).first()
                     if not event:
                         continue
 
-                    # Check for conflict: another Team row with same team_number attached to this event
+                    # Check for conflict: another same-scope Team row with same team_number attached to this event.
                     conflict = False
                     for et in event.teams:
-                        if et.team_number == team.team_number and et.id != team.id:
+                        if (
+                            et.team_number == team.team_number
+                            and et.id != team.id
+                            and et.scouting_team_number == team.scouting_team_number
+                        ):
                             conflict = True
                             break
 
@@ -676,7 +797,11 @@ def edit(team_number):
                         flash(f"Skipped associating Event {event.name} — another team entry with number {team.team_number} is already associated with that event.", 'warning')
                         continue
 
-                    team.events.append(event)
+                    if event not in new_events:
+                        new_events.append(event)
+
+            # Replace associations only after processing all selected events.
+            team.events = new_events
 
             # Read team-level starting points settings from the form and set on the Team model
             try:
@@ -709,7 +834,11 @@ def edit(team_number):
 @bp.route('/<int:team_number>/delete', methods=['POST'])
 def delete(team_number):
     """Delete a team"""
-    team = Team.query.filter_by(team_number=team_number).first_or_404()
+    current_scouting_team = get_current_scouting_team_number()
+    team_query = Team.query.filter(Team.team_number == team_number)
+    if current_scouting_team is not None:
+        team_query = team_query.filter(Team.scouting_team_number == current_scouting_team)
+    team = team_query.order_by(Team.id.asc()).first_or_404()
     
     try:
         db.session.delete(team)
@@ -724,7 +853,6 @@ def delete(team_number):
 @bp.route('/<int:team_number>/view')
 def view(team_number):
     """View team details"""
-    from app.utils.team_isolation import get_current_scouting_team_number
     from app.utils.alliance_data import (
         get_scouting_data_for_team,
         get_active_alliance_id,
@@ -734,6 +862,7 @@ def view(team_number):
     
     # Determine optional event filter used when collecting qualitative entries.
     # If no event is requested we leave it as None which means "show everything".
+    current_scouting_team = get_current_scouting_team_number()
     event = None
     event_id = request.args.get('event_id', type=int)
     if event_id:
@@ -742,15 +871,16 @@ def view(team_number):
 
             event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
         except Exception:
-            # fallback to unfiltered lookup in case isolation helper fails
-            event = Event.query.get(event_id)
+            event_query = Event.query.filter(Event.id == event_id)
+            if current_scouting_team is not None:
+                event_query = event_query.filter(Event.scouting_team_number == current_scouting_team)
+            event = event_query.first()
 
     # Check if we're in alliance mode
     alliance_id = get_active_alliance_id()
     is_alliance_mode = alliance_id is not None
-    
+
     # Find the team entry that belongs to the current scouting team or has scouting data
-    current_scouting_team = get_current_scouting_team_number()
     
     # First, try to find a team with the number that has scouting data for current scouting team
     team = None
@@ -763,7 +893,11 @@ def view(team_number):
     
     # Fallback to any team with that number if no team found with scouting data
     if team is None:
-        team = Team.query.filter_by(team_number=team_number).first_or_404()
+        scoped_team_query = Team.query.filter(Team.team_number == team_number)
+        if current_scouting_team is not None:
+            team = scoped_team_query.filter(Team.scouting_team_number == current_scouting_team).order_by(Team.id.asc()).first()
+        if team is None:
+            team = scoped_team_query.order_by(Team.id.asc()).first_or_404()
     
     # Get scouting data for this specific team - use alliance data if in alliance mode
     scouting_data, is_from_alliance = get_scouting_data_for_team(team.id)

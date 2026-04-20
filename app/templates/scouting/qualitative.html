@@ -409,6 +409,11 @@
             <div class="modal-body qr-modal-body">
                 <div class="qr-container">
                     <div id="qualitative-qrcode"></div>
+                    <div id="qrDownloadContainer" class="text-center d-none">
+                        <button type="button" class="btn btn-primary">
+                            <i class="fas fa-download me-2"></i> Download QR Code
+                        </button>
+                    </div>
                     <!-- helper text removed per user request -->
                 </div>
             </div>
@@ -1970,10 +1975,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to generate QR code from qualitative form data
     function generateQualitativeQRCode(formData) {
         const qrcodeContainer = document.getElementById('qualitative-qrcode');
+        const downloadContainer = document.getElementById('qrDownloadContainer');
         
         if (!qrcodeContainer) {
             console.error('QR code container not found');
             return;
+        }
+
+        if (downloadContainer) {
+            downloadContainer.classList.add('d-none');
         }
         
         // Show loading animation
@@ -2078,6 +2088,38 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (qrImg) {
                             qrImg.style.cssText = 'width: 100% !important; height: 100% !important; max-width: ' + (qrSize - 32) + 'px !important; max-height: ' + (qrSize - 32) + 'px !important; display: block !important; margin: 0 auto !important; object-fit: contain !important; image-rendering: -webkit-optimize-contrast !important; image-rendering: -moz-crisp-edges !important; image-rendering: crisp-edges !important; image-rendering: pixelated !important;';
                             console.log('iOS/Desktop: Using image for QR display');
+                        }
+                    }
+
+                    // Show download button and wire click handler.
+                    if (downloadContainer) {
+                        downloadContainer.classList.remove('d-none');
+
+                        const downloadButton = downloadContainer.querySelector('button');
+                        if (downloadButton) {
+                            const newButton = downloadButton.cloneNode(true);
+                            downloadButton.parentNode.replaceChild(newButton, downloadButton);
+
+                            newButton.addEventListener('click', () => {
+                                const qrNode = qrcodeContainer.querySelector('div');
+                                const img = qrNode ? qrNode.querySelector('img') : null;
+                                const canvas = qrNode ? qrNode.querySelector('canvas') : null;
+
+                                const link = document.createElement('a');
+                                link.download = 'qualitative_qr_match_' + (formData.match_id || formData.match_number || 'unknown') + '.png';
+
+                                if (img && img.src) {
+                                    link.href = img.src;
+                                } else if (canvas) {
+                                    link.href = canvas.toDataURL('image/png');
+                                } else {
+                                    return;
+                                }
+
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            });
                         }
                     }
                 }, 150);

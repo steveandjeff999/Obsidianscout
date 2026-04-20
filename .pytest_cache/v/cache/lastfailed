@@ -19,5 +19,20 @@
   "tests/test_mobile_data_mode.py::test_mobile_data_mode_returns_correct_mode_for_statbotics_plus_data": true,
   "tests/test_mobile_data_mode.py::test_mobile_data_mode_defaults_to_data_when_no_team_settings": true,
   "tests/test_mobile_data_mode.py::test_mobile_current_data_mode_match_points_returns_scouted_rows": true,
-  "tests/test_pit_event_resolution.py::test_get_event_by_code_returns_alliance_object_when_alliance_mode_active": true
+  "tests/test_pit_event_resolution.py::test_get_event_by_code_returns_alliance_object_when_alliance_mode_active": true,
+  "tests/test_teams_filter.py::test_teams_event_param_honored": true,
+  "tests/test_teams_view_matches.py::test_matches_card_uses_config_event": true,
+  "tests/test_teams_view_matches.py::test_matches_card_falls_back_to_recent_event_if_not_in_config": true,
+  "tests/test_import_portable_zip.py::test_import_from_bundle_file": true,
+  "cleanup/tests/test_merge_duplicate_matches.py::MergeDuplicateMatchesTests::test_merge_simple_duplicates": true,
+  "tests/test_mobile_data_mode.py::test_statbotics_team_matches_are_cached": true,
+  "tests/test_import_event_code_map.py::test_import_maps_event_by_code_when_local_event_exists": true,
+  "tests/test_qualitative_label.py::test_qualitative_form_includes_moving_label": true,
+  "tests/test_qualitative_label.py::test_team_view_shows_qualitative": true,
+  "tests/test_qualitative_label.py::test_leaderboard_includes_qualitative_predictions": true,
+  "tests/test_qualitative_label.py::test_qualitative_leaderboard_sorting": true,
+  "tests/test_qualitative_label.py::test_data_property_unwraps_legacy_structure": true,
+  "tests/test_qualitative_label.py::test_prediction_disabled_respected": true,
+  "tests/test_qualitative_label.py::test_team_settings_control_qualitative_climb": true,
+  "tests/test_qualitative_label.py::test_alliance_qualitative_view": true
 }

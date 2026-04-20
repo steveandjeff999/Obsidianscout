@@ -11,6 +11,9 @@
   "tests/test_event_code_prefix_guard.py::test_construct_tba_event_key_never_double_prefixes_year",
   "tests/test_event_code_prefix_guard.py::test_event_code_normalization_and_variants_cover_legacy_and_modern",
   "tests/test_event_code_prefix_guard.py::test_strip_year_prefix_handles_malformed_duplicates",
+  "tests/test_import_event_code_map.py::test_import_maps_event_by_code_when_local_event_exists",
+  "tests/test_import_portable_zip.py::test_import_from_bundle_file",
+  "tests/test_import_portable_zip.py::test_import_from_separate_files",
   "tests/test_mobile_data_mode.py::test_mobile_current_data_mode_match_points_returns_scouted_rows",
   "tests/test_mobile_data_mode.py::test_mobile_current_data_mode_statbotics_only_uses_match_time_epa",
   "tests/test_mobile_data_mode.py::test_mobile_current_data_mode_team_only_uses_team_history",
@@ -52,5 +55,11 @@
   "tests/test_statbotics_api_utils.py::test_prefers_official_client_statbotics_class",
   "tests/test_statbotics_api_utils.py::test_refresh_opr_epa_for_event_calls_backends",
   "tests/test_statbotics_api_utils.py::test_rest_api_500_raises_transient_error",
-  "tests/test_statbotics_api_utils.py::test_rest_api_fallback"
+  "tests/test_statbotics_api_utils.py::test_rest_api_fallback",
+  "tests/test_teams_filter.py::test_teams_event_param_honored",
+  "tests/test_teams_sync_association_scope.py::test_ensure_association_allows_same_team_number_cross_scope",
+  "tests/test_teams_sync_association_scope.py::test_ensure_association_prefers_existing_same_scope_linked_row",
+  "tests/test_teams_view_matches.py::test_matches_card_falls_back_to_recent_event_if_not_in_config",
+  "tests/test_teams_view_matches.py::test_matches_card_uses_config_event",
+  "tests/test_teams_view_year.py::test_participating_events_year_from_config"
 ]
