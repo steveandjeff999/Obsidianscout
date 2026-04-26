@@ -34,5 +34,6 @@
   "tests/test_qualitative_label.py::test_data_property_unwraps_legacy_structure": true,
   "tests/test_qualitative_label.py::test_prediction_disabled_respected": true,
   "tests/test_qualitative_label.py::test_team_settings_control_qualitative_climb": true,
-  "tests/test_qualitative_label.py::test_alliance_qualitative_view": true
+  "tests/test_qualitative_label.py::test_alliance_qualitative_view": true,
+  "tools/test_single_graph.py": true
 }

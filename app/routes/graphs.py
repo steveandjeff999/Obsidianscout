@@ -5322,6 +5322,7 @@ def _create_radar_chart(team_data, metric, data_view):
     """Create a radar chart for the given team data and metric"""
     plots = {}
 
+
     # Build radar-friendly summary series for each team (allow 2+ teams to render)
     import numpy as np
 
@@ -5355,9 +5356,11 @@ def _create_radar_chart(team_data, metric, data_view):
 
     # Require at least 2 teams with data to render a useful radar chart
     if len(team_series) >= 2:
+        from math import ceil
         max_total = max(all_totals) if all_totals else 1
         max_avg = max(all_averages) if all_averages else 1
         max_peak = max(all_peaks) if all_peaks else 1
+
 
         fig = go.Figure()
 
@@ -5377,13 +5380,19 @@ def _create_radar_chart(team_data, metric, data_view):
                 hovertemplate=f'<b>Team %{{fullData.name}}</b><br>%{{theta}}: %{{r:.1f}}<extra></extra>'
             ))
 
-        # Height and layout
         base_height = 380
         extra_per_team = 16
         calculated_height = base_height + len(team_series) * extra_per_team
         height = min(calculated_height, 520)
 
         theme_vals = _chart_theme()
+
+        legend_items_per_row = 8
+        legend_rows = max(1, ceil(len(team_series) / legend_items_per_row))
+        legend_row_px = 18
+        legend_padding_px = 10
+        legend_reserved_px = legend_rows * legend_row_px + legend_padding_px
+        bottom_margin = 40 + legend_reserved_px
 
         fig.update_layout(
             polar=dict(
@@ -5392,13 +5401,13 @@ def _create_radar_chart(team_data, metric, data_view):
             ),
             showlegend=True,
             title=f"Team {metric.replace('_', ' ').title()} Performance Comparison (Radar)",
-            margin=dict(l=20, r=20, t=60, b=40),
+            margin=dict(l=20, r=20, t=60, b=bottom_margin),
             height=height,
             autosize=True,
             plot_bgcolor=theme_vals['plot_bg'],
             paper_bgcolor=theme_vals['paper_bg'],
             font=dict(color=theme_vals['text_main']),
-            legend=dict(orientation='h', yanchor='bottom', y=-0.12, xanchor='center', x=0.5)
+            legend=dict(orientation='h', yanchor='top', y=-0.18, xanchor='center', x=0.5)
         )
 
         plots[f'{metric}_radar'] = pio.to_json(fig)

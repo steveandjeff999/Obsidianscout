@@ -2462,24 +2462,82 @@ def view_qualitative_data(entry_id):
 @bp.route('/qualitative/delete/<int:entry_id>', methods=['POST'])
 @login_required
 def delete_qualitative_data(entry_id):
-    """Delete a Qualitative scouting entry"""
+    """Delete a qualitative scouting entry, including alliance-shared entries."""
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    payload = request.get_json(silent=True) if request.is_json else {}
+    shared_id = (payload or {}).get('shared_id') or request.form.get('shared_id')
+    wants_json = request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    def _permission_denied_response():
+        message = 'Only alliance admins or the original scout can delete this qualitative data.'
+        if wants_json:
+            return jsonify({'success': False, 'error': message}), 403
+        flash(message, 'danger')
+        return redirect(request.referrer or url_for('scouting.list_data'))
+
+    def _missing_entry_response():
+        message = 'Qualitative scouting entry not found.'
+        if wants_json:
+            return jsonify({'success': False, 'error': message}), 404
+        flash(message, 'danger')
+        return redirect(request.referrer or url_for('scouting.list_data'))
+
     try:
-        entry = QualitativeScoutingData.query.filter_by(
-            id=entry_id,
-            scouting_team_number=current_user.scouting_team_number
-        ).first_or_404()
-        
-        db.session.delete(entry)
-        db.session.commit()
-        
-        flash('Qualitative scouting data deleted successfully', 'success')
-        return redirect(url_for('scouting.qualitative_scouting'))
-        
+        if is_alliance_mode and shared_id:
+            entry = AllianceSharedQualitativeData.query.filter_by(
+                id=shared_id,
+                alliance_id=alliance_id,
+                is_active=True
+            ).first()
+            if not entry:
+                return _missing_entry_response()
+
+            if not can_delete_scouting_entry(entry, is_alliance_mode, alliance_id):
+                return _permission_denied_response()
+
+            from app.models import AllianceDeletedData
+            AllianceDeletedData.mark_deleted(
+                alliance_id=alliance_id,
+                data_type='qualitative',
+                match_id=entry.match_id,
+                team_id=None,
+                alliance_color=entry.alliance_scouted,
+                source_team=entry.source_scouting_team_number,
+                deleted_by=current_user.scouting_team_number
+            )
+
+            db.session.delete(entry)
+            db.session.commit()
+            message = 'Qualitative scouting data deleted successfully.'
+        else:
+            entry = QualitativeScoutingData.query.filter_by(
+                id=entry_id,
+                scouting_team_number=current_user.scouting_team_number
+            ).first()
+            if not entry:
+                return _missing_entry_response()
+
+            if is_alliance_mode and not can_delete_scouting_entry(entry, is_alliance_mode, alliance_id):
+                return _permission_denied_response()
+
+            db.session.delete(entry)
+            db.session.commit()
+            message = 'Qualitative scouting data deleted successfully.'
+
+        if wants_json:
+            return jsonify({'success': True, 'message': message})
+
+        flash(message, 'success')
+        return redirect(request.referrer or url_for('scouting.list_data'))
+
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting Qualitative scouting data: {str(e)}")
+        if wants_json:
+            return jsonify({'success': False, 'error': str(e)}), 500
         flash(f'Error deleting data: {str(e)}', 'danger')
-        return redirect(url_for('scouting.qualitative_scouting'))
+        return redirect(request.referrer or url_for('scouting.list_data'))
 
 
 @bp.route('/qualitative/list')
