@@ -5822,7 +5822,21 @@ def mobile_graphs_image():
                 fig = go.Figure()
 
             # Apply a minimal layout
-            fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), template='plotly_white')
+            n_traces = len(getattr(fig, 'data', []) or [])
+            if n_traces > 6:
+                from math import ceil
+                legend_items_per_row = 6
+                legend_rows = max(1, ceil(n_traces / legend_items_per_row))
+                legend_row_px = 18
+                legend_padding_px = 10
+                legend_reserved_px = legend_rows * legend_row_px + legend_padding_px
+                fig.update_layout(
+                    legend=dict(orientation='h', yanchor='top', y=-0.20, xanchor='center', x=0.5),
+                    margin=dict(l=20, r=20, t=30, b=20 + legend_reserved_px),
+                    template='plotly_white'
+                )
+            else:
+                fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), template='plotly_white')
 
             # Convert to PNG using plotly.io if available
             try:

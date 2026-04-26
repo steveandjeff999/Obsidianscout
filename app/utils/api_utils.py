@@ -357,6 +357,43 @@ def get_teams(event_code):
             if response.status_code == 200:
                 # print("Success! API returned team data.")
                 data = response.json()
+
+                # Some FIRST API team endpoints are paginated and return a wrapper
+                # like: { teamCountTotal, teamCountPage, pageCurrent, pageTotal, teams: [...] }
+                # If we only return the first page, we can silently drop teams.
+                try:
+                    if isinstance(data, dict) and data.get('teamCountTotal') is not None:
+                        page_total = data.get('pageTotal')
+                        page_current = data.get('pageCurrent')
+                        teams_first = data.get('teams') or data.get('Teams')
+
+                        if isinstance(page_total, int) and page_total > 1 and isinstance(teams_first, list):
+                            all_teams = list(teams_first)
+
+                            # Re-request remaining pages using the same endpoint and add page=N.
+                            # Only certain endpoints support paging; if paging fails, we fall back
+                            # to returning the first page rather than erroring the whole sync.
+                            for page in range(int(page_current or 1) + 1, int(page_total) + 1):
+                                try:
+                                    joiner = '&' if '?' in api_url else '?'
+                                    page_url = f"{api_url}{joiner}page={page}"
+                                    resp_page = requests.get(page_url, headers=headers, timeout=15)
+                                    if resp_page.status_code != 200:
+                                        break
+                                    page_data = resp_page.json()
+                                    page_teams = None
+                                    if isinstance(page_data, dict):
+                                        page_teams = page_data.get('teams') or page_data.get('Teams')
+                                    if isinstance(page_teams, list) and page_teams:
+                                        all_teams.extend(page_teams)
+                                    else:
+                                        break
+                                except Exception:
+                                    break
+
+                            return all_teams
+                except Exception:
+                    pass
                 
                 # Check different response formats
                 if 'teams' in data:

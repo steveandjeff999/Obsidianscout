@@ -31,6 +31,8 @@
 </div>
 {% endif %}
 
+<div id="scouting-list-feedback" class="mb-3"></div>
+
 {% if show_match %}
 <div class="card mb-4">
     <div class="card-header bg-primary text-white">
@@ -102,7 +104,7 @@
                                     {% endif %}
                                     {% set can_delete = user_is_alliance_admin or (current_user.username and current_user.username|lower in (data.scout_name|lower if data.scout_name else '')) or (not is_alliance_mode) %}
                                     {% if can_delete %}
-                                    <button type="button" class="btn btn-sm btn-danger double-confirm-delete" title="Delete" data-entry-id="{{ data.id }}" {% if is_alliance_mode %}data-shared-id="{{ data.id }}"{% endif %}><i class="fas fa-trash"></i></button>
+                                    <button type="button" class="btn btn-sm btn-danger scouting-list-delete" title="Delete" data-form-id="delete-form-{{ data.id }}"><i class="fas fa-trash"></i></button>
                                     {% else %}
                                     <button type="button" class="btn btn-sm btn-secondary" title="Only alliance admins or the original scout can delete" disabled><i class="fas fa-trash"></i></button>
                                     {% endif %}
@@ -158,12 +160,13 @@
                                 {% endif %}
                                 {% set can_delete = user_is_alliance_admin or (current_user.username and current_user.username|lower in (entry.scout_name|lower if entry.scout_name else '')) or (not is_alliance_mode) %}
                                 {% if can_delete %}
-                                <form action="{{ url_for('pit_scouting.delete', id=entry.id) }}" method="post" class="d-inline" onsubmit="return confirm('Delete pit entry?');">
-                                    <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
-                                    <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
-                                </form>
+                                <button type="button" class="btn btn-sm btn-danger scouting-list-delete" title="Delete" data-form-id="delete-pit-form-{{ entry.id }}"><i class="fas fa-trash"></i></button>
                                 {% endif %}
                             </div>
+                            <form id="delete-pit-form-{{ entry.id }}" action="{{ url_for('pit_scouting.delete', id=entry.id) }}" method="post" class="d-none">
+                                <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
+                                {% if is_alliance_mode %}<input type="hidden" name="shared_id" value="{{ entry.id }}">{% endif %}
+                            </form>
                         </td>
                     </tr>
                     {% endfor %}
@@ -225,12 +228,13 @@
                                 {% endif %}
                                 {% set can_delete = user_is_alliance_admin or (current_user.username and current_user.username|lower in (entry.scout_name|lower if entry.scout_name else '')) or (not is_alliance_mode) %}
                                 {% if can_delete %}
-                                <form action="{{ url_for('scouting.delete_qualitative_data', entry_id=entry.id) }}" method="post" class="d-inline" onsubmit="return confirm('Delete qualitative entry?');">
-                                    <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
-                                    <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
-                                </form>
+                                <button type="button" class="btn btn-sm btn-danger scouting-list-delete" title="Delete" data-form-id="delete-qual-form-{{ entry.id }}"><i class="fas fa-trash"></i></button>
                                 {% endif %}
                             </div>
+                            <form id="delete-qual-form-{{ entry.id }}" action="{{ url_for('scouting.delete_qualitative_data', entry_id=entry.id) }}" method="post" class="d-none">
+                                <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
+                                {% if entry.source_scouting_team_number is defined and entry.source_scouting_team_number %}<input type="hidden" name="shared_id" value="{{ entry.id }}">{% endif %}
+                            </form>
                         </td>
                     </tr>
                     {% endfor %}
@@ -276,8 +280,16 @@
     document.addEventListener('DOMContentLoaded', function() {
         const dataRows = document.querySelectorAll('tbody tr');
         const matchFilterButtons = document.querySelectorAll('.match-filter-btn');
+        const deleteButtons = document.querySelectorAll('.scouting-list-delete');
+        const feedbackContainer = document.getElementById('scouting-list-feedback');
         let currentEventFilter = 'all';
         let currentMatchFilter = 'all';
+
+        function showFeedback(message, level) {
+            if (!feedbackContainer || !message) return;
+            const severity = level || 'success';
+            feedbackContainer.innerHTML = `<div class="alert alert-${severity} alert-dismissible fade show mb-0" role="alert">${message}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>`;
+        }
 
         function updateVisibility() {
             dataRows.forEach(row => {
@@ -298,6 +310,95 @@
             if (footerSpan) footerSpan.textContent = `Filtered records: ${visibleRows.length}`;
         }
 
+        function resetDeleteButton(button) {
+            if (!button) return;
+            if (button._confirmTimeout) {
+                clearTimeout(button._confirmTimeout);
+                button._confirmTimeout = null;
+            }
+            button.dataset.confirmed = 'false';
+            button.classList.remove('btn-warning');
+            button.classList.add('btn-danger');
+            button.innerHTML = '<i class="fas fa-trash"></i>';
+            button.setAttribute('title', 'Delete');
+            button.disabled = false;
+        }
+
+        function armDeleteButton(button) {
+            button.dataset.confirmed = 'true';
+            button.classList.remove('btn-danger');
+            button.classList.add('btn-warning');
+            button.innerHTML = '<i class="fas fa-check"></i>';
+            button.setAttribute('title', 'Click again to confirm delete');
+            button._confirmTimeout = setTimeout(() => {
+                resetDeleteButton(button);
+            }, 5000);
+        }
+
+        function resetOtherDeleteButtons(activeButton) {
+            deleteButtons.forEach(btn => {
+                if (btn !== activeButton && btn.dataset.confirmed === 'true') {
+                    resetDeleteButton(btn);
+                }
+            });
+        }
+
+        async function submitDelete(button) {
+            const formId = button.dataset.formId;
+            const form = formId ? document.getElementById(formId) : null;
+            if (!form) {
+                showFeedback('Delete form is missing for this entry.', 'danger');
+                resetDeleteButton(button);
+                return;
+            }
+
+            if (button._confirmTimeout) {
+                clearTimeout(button._confirmTimeout);
+                button._confirmTimeout = null;
+            }
+
+            const payload = {};
+            form.querySelectorAll('input[name]').forEach(input => {
+                payload[input.name] = input.value;
+            });
+
+            button.disabled = true;
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload)
+                });
+
+                const contentType = response.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    throw new Error('Unexpected server response. Please refresh and try again.');
+                }
+
+                const body = await response.json();
+
+                if (!response.ok || body.success !== true) {
+                    const errorMessage = body && (body.error || body.message) ? (body.error || body.message) : 'Delete failed. Please try again.';
+                    throw new Error(errorMessage);
+                }
+
+                const row = button.closest('tr');
+                if (row) {
+                    row.remove();
+                }
+
+                updateVisibility();
+                showFeedback((body && body.message) || 'Entry deleted.', 'success');
+            } catch (error) {
+                showFeedback(error.message || 'Delete failed. Please try again.', 'danger');
+                resetDeleteButton(button);
+            }
+        }
+
         const eventFilterSelect = document.getElementById('event-filter-select');
         if (eventFilterSelect) {
             eventFilterSelect.addEventListener('change', function() {
@@ -314,6 +415,19 @@
                 this.classList.add('active');
                 currentMatchFilter = this.getAttribute('data-filter');
                 updateVisibility();
+            });
+        });
+
+        deleteButtons.forEach(button => {
+            button.dataset.confirmed = 'false';
+            button.addEventListener('click', async function() {
+                if (button.dataset.confirmed === 'true') {
+                    await submitDelete(button);
+                    return;
+                }
+
+                resetOtherDeleteButtons(button);
+                armDeleteButton(button);
             });
         });
     });
